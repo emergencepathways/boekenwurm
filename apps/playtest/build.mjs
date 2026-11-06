@@ -28,6 +28,18 @@ execFileSync("tsc", [join(here, "..", "..", "packages", "dutch", "src", "lemma.t
 const dutchJs = readFileSync(join(dutchOut, "lemma.js"), "utf8").replace(/^export\s+(function|const)/gm, "$1");
 rmSync(dutchOut, { recursive: true, force: true });
 const irregular = readFileSync(join(here, "..", "..", "data", "nl", "irregular-verbs.json"), "utf8");
+
+// packages/ai: prompts, parsing and checks for level work
+const aiOut = mkdtempSync(join(tmpdir(), "boekenwurm-ai-"));
+execFileSync("tsc", [join(here, "..", "..", "packages", "ai", "src", "level.ts"), "--outDir", aiOut, "--target", "ES2022",
+  "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", "--types", ""], { stdio: "inherit" });
+const aiNames = [];
+const aiJs = readFileSync(join(aiOut, "level.js"), "utf8").replace(/^export\s+(function|const)\s+([A-Za-z_$][\w$]*)/gm, (_, k, n) => {
+  aiNames.push(n);
+  return `${k} ${n}`;
+});
+rmSync(aiOut, { recursive: true, force: true });
+const ai = `const AI = (() => {\n${aiJs}\nreturn { ${aiNames.join(", ")} };\n})();`;
 const dutch = `const Dutch = (() => {\n${dutchJs}\nconst IRREGULAR = ${irregular};\nreturn { createLemmatizer, IRREGULAR };\n})();`;
 
 const body = MODULES.map((m) => {
@@ -42,13 +54,42 @@ const body = MODULES.map((m) => {
 }).join("\n");
 rmSync(out, { recursive: true, force: true });
 
-const bundle = `const Engine = (() => {\n${body}\nreturn { ${exported.join(", ")} };\n})();\n${dutch}`;
+const bundle = `const Engine = (() => {\n${body}\nreturn { ${exported.join(", ")} };\n})();\n${dutch}\n${ai}`;
 const html = readFileSync(join(here, "src", "index.html"), "utf8")
   .replace("/*__ENGINE__*/", () => bundle)
   .replace("/*__SAMPLE__*/", () => readFileSync(join(here, "src", "sample.js"), "utf8")
     + `\nSAMPLE.paragraphs = ${JSON.stringify(readFileSync(join(here, "src", "story.txt"), "utf8").trim().split("\n"))};`)
   .replace("/*__APP__*/", () => readFileSync(join(here, "src", "app.js"), "utf8"));
 
-mkdirSync(join(here, "dist"), { recursive: true });
+mkdirSync(join(here, "dist", "site"), { recursive: true });
 writeFileSync(join(here, "dist", "boekenwurm-playtest.html"), html);
-console.log(`built dist/boekenwurm-playtest.html (${(html.length / 1024).toFixed(0)} KB, engine exports: ${exported.length})`);
+
+// The hosted site: a full document with a strict content-security policy. Scripts only from this page and
+// cdnjs (JSZip); network calls only to Anthropic's API. Book text can't be sent anywhere else.
+const CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline' https://cdnjs.cloudflare.com",
+  "style-src 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com",
+  "connect-src https://api.anthropic.com",
+  "img-src data: blob:",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join("; ");
+const site = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="${CSP}">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Boekenwurm: read Dutch books you own at your level.">
+<style>[hidden]{display:none!important} body{margin:0} img{max-width:100%}</style>
+</head>
+<body>
+${html}
+</body>
+</html>
+`;
+writeFileSync(join(here, "dist", "site", "index.html"), site);
+console.log(`built dist/boekenwurm-playtest.html and dist/site/index.html (${(html.length / 1024).toFixed(0)} KB; engine ${exported.length}, ai ${aiNames.length} exports)`);

@@ -22,7 +22,15 @@ const S = {
   summary: null,        // { kind, streakLength, list }
   cards: null,          // flashcard queue
   importNote: null,
+  matched: new Map(),   // pos -> { status: "pending"|"done"|"failed", text, tokens, changed, originalLevel, note }
+  explained: new Map(), // "pos|i|mode" -> { status, data, error }
+  waiting: false,       // the current paragraph is being matched to the reader's level
+  showOriginal: false,
 };
+const KEY_STORE = "boekenwurm-claude-key";
+S.settings.models = Object.assign({ match: "claude-sonnet-5-5", words: "claude-sonnet-5-5" }, S.settings.models);
+function claudeKey() { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } }
+function setClaudeKey(k) { try { k ? localStorage.setItem(KEY_STORE, k) : localStorage.removeItem(KEY_STORE); } catch { /* ignore */ } }
 
 function load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } }
 function persist() {
@@ -92,6 +100,7 @@ function sampleBook() {
   const names = new Set(SAMPLE.names);
   return {
     title: SAMPLE.title, source: "sample", verdict: { kind: "accept", text: "Sample story, written for Boekenwurm (A1–A2)." },
+    isName: (w) => names.has(w.toLowerCase()), mode: "original",
     paragraphs: SAMPLE.paragraphs.map((text) => ({ text, tokens: tokenize(text, (w) => names.has(w.toLowerCase())) })),
   };
 }
@@ -148,12 +157,17 @@ function gate({ title, blocks }) {
   const lower = new Set();
   for (const p of paras) for (const w of words(p)) if (w[0] === w[0].toLowerCase()) lower.add(w.toLowerCase());
   const isName = (w, start) => !start && w[0] !== w[0].toLowerCase() && !lower.has(w.toLowerCase());
-  return { title, source: "epub", verdict, paragraphs: paras.map((text) => ({ text, tokens: tokenize(text, isName) })) };
+  return { title, source: "epub", verdict, isName, paragraphs: paras.map((text) => ({ text, tokens: tokenize(text, isName) })) };
 }
 
 // ---------------------------------------------------------------- session flow
 const rules = () => E.rulesFor(S.settings.preset);
-const para = () => S.book.paragraphs[S.pos];
+const original = () => S.book.paragraphs[S.pos];
+/** The paragraph as the reader sees it: matched to their level when that's on and ready, otherwise the original. */
+function para() {
+  const m = S.book.mode === "match" ? S.matched.get(S.pos) : null;
+  return m && m.status === "done" && m.changed ? { text: m.text, tokens: m.tokens, matched: true } : original();
+}
 const lemmasOf = (p) => p.tokens.filter((t) => t.k === "word").map((t) => lookup(t.t).lemma);
 
 function startNewSession() {
@@ -163,8 +177,24 @@ function startNewSession() {
 }
 function beginCurrent() {
   if (S.pos >= S.book.paragraphs.length) S.pos = 0;
+  S.sel = null; S.showOriginal = false;
+  if (S.book.mode === "match") {
+    for (const ahead of [1, 2]) ensureMatched(S.pos + ahead); // prepare the next pages while this one is read
+    const m = S.matched.get(S.pos);
+    if (!m || m.status === "pending") {
+      S.waiting = true;
+      const pos = S.pos;
+      ensureMatched(pos).then(() => {
+        if (S.pos !== pos || !S.waiting) return;
+        S.waiting = false;
+        S.session = E.beginParagraph(S.session, `p${pos}`, lemmasOf(para()));
+        render();
+      });
+      return;
+    }
+  }
+  S.waiting = false;
   S.session = E.beginParagraph(S.session, `p${S.pos}`, lemmasOf(para()));
-  S.sel = null;
 }
 
 function sentenceAround(text, word) {
@@ -180,6 +210,7 @@ function tap(i) {
     const before = E.status(S.session).used;
     S.session = E.reveal(S.session, { lemma: d.lemma, surface: tok.t, at: Date.now() });
     if (E.status(S.session).used > before) S.sentences[d.lemma] ??= sentenceAround(para().text, tok.t);
+    explain(i);
   }
   render();
 }
@@ -219,6 +250,158 @@ function finish(kind, streakLength) {
   if (S.progress.offer) showOffer();
 }
 
+// ---------------------------------------------------------------- Claude: book level, level matching, words in context
+// The reader's own Claude key, sent only to api.anthropic.com from this browser.
+class AiError extends Error {}
+async function claude(prompt, model) {
+  const key = claudeKey();
+  if (!key) throw new AiError("Add your Claude API key under Profile to use this.");
+  let res;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({ model, max_tokens: prompt.maxTokens, system: prompt.system, messages: [{ role: "user", content: prompt.user }] }),
+    });
+  } catch {
+    throw new AiError("Couldn't reach Claude from this page. Level matching works on the hosted Boekenwurm site, or check your connection.");
+  }
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json())?.error?.message || ""; } catch { /* no body */ }
+    if (res.status === 401 || res.status === 403) throw new AiError("Claude refused your API key. Check it under Profile.");
+    if (res.status === 404) throw new AiError(`Claude doesn't know the model "${model}". Pick another under Profile.`);
+    if (res.status === 429) throw new AiError("Too many requests to Claude right now, or your spending limit was reached. Try again in a minute.");
+    if (res.status === 529 || res.status >= 500) throw new AiError("Claude is busy. Try again in a moment.");
+    throw new AiError(`Claude returned an error (${res.status}). ${detail}`);
+  }
+  const body = await res.json();
+  return (body.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
+}
+
+// IndexedDB cache: matched paragraphs and explanations stay in this browser, for this reader only.
+const idb = (() => {
+  let dbp = null;
+  const open = () => (dbp ??= new Promise((resolve) => {
+    try {
+      const req = indexedDB.open("boekenwurm", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("cache");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch { resolve(null); }
+  }));
+  const run = async (mode, fn) => {
+    const db = await open(); if (!db) return undefined;
+    return new Promise((resolve) => {
+      try { const r = fn(db.transaction("cache", mode).objectStore("cache")); r.onsuccess = () => resolve(r.result); r.onerror = () => resolve(undefined); }
+      catch { resolve(undefined); }
+    });
+  };
+  return { get: (k) => run("readonly", (st) => st.get(k)), set: (k, v) => run("readwrite", (st) => st.put(v, k)) };
+})();
+
+function hash(s) { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return (x >>> 0).toString(36); }
+const bookId = (b) => b.id ??= hash(b.title + "|" + b.paragraphs.length + "|" + (b.paragraphs[0]?.text || "").slice(0, 300));
+
+/** Words the reader knows: the word list plus words met often and rarely revealed. */
+function knownLemmas() {
+  const known = new Set(S.userGloss ? Object.keys(S.userGloss.entries) : []);
+  for (const w of Object.values(S.wordbook)) if (w.encounters >= 3 && E.revealRate(w) < 0.5) known.add(w.lemma);
+  return known;
+}
+function knownShare(text, known = knownLemmas()) {
+  if (!known.size) return null;
+  const toks = tokenize(text, S.book.isName).filter((t) => t.k === "word");
+  if (!toks.length) return null;
+  return toks.filter((t) => known.has(lookup(t.t).lemma)).length / toks.length;
+}
+
+const inflight = new Map();
+function ensureMatched(pos) {
+  if (!S.book || pos >= S.book.paragraphs.length || S.book.mode !== "match") return Promise.resolve();
+  const have = S.matched.get(pos);
+  if (have && have.status !== "pending") return Promise.resolve();
+  if (inflight.has(pos)) return inflight.get(pos);
+  const book = S.book, target = S.progress.level, model = S.settings.models.match;
+  const orig = book.paragraphs[pos];
+  const key = `m|${bookId(book)}|${pos}|${target}|${model}`;
+  S.matched.set(pos, { status: "pending" });
+  const job = (async () => {
+    const cached = await idb.get(key);
+    if (cached) return cached;
+    const names = orig.tokens.filter((t) => t.k === "name").map((t) => t.t);
+    const checks = { names, language: (t) => langOf(t).lang, isOldForm: isOld, knownShare: (t) => knownShare(t) };
+    let prompt = AI.matchPrompt(orig.text, target, names), problems = [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = AI.parseMatch(await claude(prompt, model), orig.text);
+      problems = AI.validateMatch(orig.text, result, checks);
+      if (!problems.length) {
+        const value = { status: "done", changed: result.changed, text: result.text, originalLevel: result.originalLevel };
+        await idb.set(key, value);
+        return value;
+      }
+      prompt = { ...prompt, user: prompt.user + `\n\nYour previous version had these problems: ${problems.join(" ")} Fix them.` };
+    }
+    return { status: "failed", note: `Couldn't match this paragraph to ${target}: ${problems.join(" ")} Showing the original.` };
+  })().catch((e) => ({ status: "failed", note: e instanceof AiError ? e.message : "Something went wrong while matching this paragraph. Showing the original." }))
+    .then((v) => {
+      if (S.book !== book) return;
+      if (v.status === "done" && v.changed) v.tokens = tokenize(v.text, book.isName);
+      S.matched.set(pos, v);
+      inflight.delete(pos);
+      if (v.status === "failed" && pos === S.pos) toast(v.note);
+    });
+  inflight.set(pos, job);
+  return job;
+}
+
+/** Grade the book from paragraphs spread through it; combine with the local word match. */
+async function scanBook(book) {
+  const known = knownLemmas();
+  const shares = book.paragraphs.map((p) => knownShare(p.text, known));
+  const valid = shares.filter((x) => x != null);
+  const wordMatch = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+  book.scan = { wordMatch, level: null, status: claudeKey() ? "grading" : "local" };
+  render(); showScan(book);
+  if (!claudeKey()) return;
+  const cacheKey = `g|${bookId(book)}|${S.settings.models.match}`;
+  try {
+    let grades = await idb.get(cacheKey);
+    if (!grades) {
+      const picks = AI.samplePositions(book.paragraphs.length, 12).map((i) => ({ id: `p${i}`, text: book.paragraphs[i].text, wordMatch: shares[i] }));
+      grades = AI.parseGrades(await claude(AI.gradePrompt(picks), S.settings.models.match), picks.map((p) => p.id));
+      await idb.set(cacheKey, grades);
+    }
+    book.scan = { ...book.scan, status: "done", ...AI.bookLevel(grades, S.progress.level, wordMatch) };
+  } catch (e) {
+    book.scan = { ...book.scan, status: "error", error: e instanceof AiError ? e.message : "Couldn't grade this book." };
+  }
+  if (S.book === book) { render(); showScan(book); }
+}
+
+function explain(i) {
+  const tok = para().tokens[i];
+  const k = `${S.pos}|${i}|${para().matched ? "m" : "o"}`;
+  if (!claudeKey() || tok.k !== "word" || S.explained.has(k)) return;
+  const sentence = sentenceAround(para().text, tok.t);
+  const cacheKey = `x|${hash(sentence)}|${tok.t.toLowerCase()}|${S.progress.level}|${S.settings.models.words}`;
+  S.explained.set(k, { status: "pending" });
+  (async () => {
+    const cached = await idb.get(cacheKey);
+    if (cached) return cached;
+    const data = AI.parseExplanation(await claude(AI.explainPrompt(tok.t, sentence, S.progress.level), S.settings.models.words), tok.t);
+    await idb.set(cacheKey, data);
+    return data;
+  })().then((data) => S.explained.set(k, { status: "done", data }))
+    .catch((e) => S.explained.set(k, { status: "error", error: e instanceof AiError ? e.message : "Couldn't explain this word." }))
+    .finally(() => { if (S.view === "read") render(); });
+}
+
 // ---------------------------------------------------------------- rendering
 function render() {
   document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === S.view)));
@@ -238,6 +421,11 @@ function tokensPips() {
 }
 
 function viewRead() {
+  if (S.waiting || !S.session?.current) {
+    return `<article class="sheet"><div class="folio"><span>${h(S.book.title)}</span><span class="num">${S.pos + 1} / ${S.book.paragraphs.length}</span></div>
+      <p class="para muted" aria-live="polite">Matching this paragraph to ${h(S.progress.level)}…</p>
+      <div class="actions"><button class="btn ghost small" data-act="read-original-now">Read the original instead</button></div></article>`;
+  }
   const st = E.status(S.session);
   const r = S.session.rules;
   const lastStrike = r.failWhen === "reaches";
@@ -262,7 +450,9 @@ function viewRead() {
   ${st.strikesLeft === 0 && lastStrike ? `<div class="warn">No strikes left: one more reveal ends the run at the page turn.</div>` : ""}
   <article class="sheet" id="sheet">
     <div class="folio"><span>${h(S.book.title)}</span><span class="num">${S.pos + 1} / ${S.book.paragraphs.length}</span></div>
+    ${S.book.mode === "match" ? matchedLine(p) : ""}
     <p class="para" lang="nl">${text}</p>
+    ${S.showOriginal && p.matched ? `<div class="original"><span class="label">Original</span><p lang="nl">${h(original().text)}</p></div>` : ""}
     <div class="def" aria-live="polite">${defPanel(onStreak)}</div>
     <div class="actions">
       <button class="btn ghost small" data-act="library">Change book</button>
@@ -271,6 +461,28 @@ function viewRead() {
   </article>
   <p class="muted" style="margin:0;font-size:.82rem">Tap a word to see its meaning. Swipe left, press → or Space to turn the page.</p>
   ${S.importNote ? libraryPanel() : ""}`;
+}
+
+function matchedLine(p) {
+  const m = S.matched.get(S.pos);
+  if (p.matched) return `<div class="matched"><span class="chip">Matched to ${h(S.progress.level)}</span>
+    ${m?.originalLevel ? `<span class="muted">original about ${h(m.originalLevel)}</span>` : ""}
+    <button class="btn small ghost" data-act="toggle-original">${S.showOriginal ? "Hide original" : "Show original"}</button></div>`;
+  if (m?.status === "done") return `<div class="matched"><span class="chip ok">Already at your level</span></div>`;
+  if (m?.status === "failed") return `<div class="matched"><span class="chip warn">Original</span><span class="muted">${h(m.note)}</span></div>`;
+  return "";
+}
+
+function contextPanel(i, lang) {
+  const x = S.explained.get(`${S.pos}|${i}|${para().matched ? "m" : "o"}`);
+  if (!x) return claudeKey() ? "" : `<span class="note">Add your Claude key under Profile to see what this word means in this sentence.</span>`;
+  if (x.status === "pending") return `<span class="note">Checking this sentence…</span>`;
+  if (x.status === "error") return `<span class="note">${h(x.error)}</span>`;
+  const d = x.data;
+  const meaning = lang === "nl" && d.meaningNl ? `<span lang="nl">${h(d.meaningNl)}</span>` : h(d.meaningEn || d.meaningNl);
+  return `<div class="ctx-meaning"><span class="label">In this sentence</span>
+    <div class="meaning ${lang === "nl" && d.meaningNl ? "nl" : ""}">${d.lemma ? `<b lang="nl">${h(d.lemma)}</b>: ` : ""}${meaning}</div>
+    ${d.note ? `<span class="note">${h(d.note)}</span>` : ""}</div>`;
 }
 
 function defPanel(onStreak) {
@@ -291,7 +503,8 @@ function defPanel(onStreak) {
       ${d.lemma !== tok.t.toLowerCase() ? `<span class="lemma">${h(d.article ? d.article + " " : "")}${h(d.lemma)}</span>` : d.article ? `<span class="lemma">${h(d.article)}</span>` : ""}
       ${lifetime ? `<span class="lemma">revealed ${lifetime}× before</span>` : ""}
       ${canUndo ? `<button class="btn small ghost undo" data-act="undo">Undo tap</button>` : ""}</div>
-    ${meaning}${why ? `<span class="note">${why}</span>` : ""}`;
+    ${meaning}${why ? `<span class="note">${why}</span>` : ""}
+    ${contextPanel(S.sel, lang)}`;
 }
 
 function viewSummary() {
@@ -372,11 +585,27 @@ function viewProfile() {
       <span class="muted">Changing it by hand gives placement badges.</span></div>
     <p>Preset changes apply from your next session.</p>
   </section>
+  <section class="panel"><h2>Claude</h2>
+    <p>Book levels, matching paragraphs to your level, and word meanings in their sentence use your own Claude API key. It's stored in this browser only and sent only to Anthropic. Use a key with a spending limit (console.anthropic.com → Limits).</p>
+    <div class="row"><label for="set-key">API key</label>
+      <input id="set-key" type="password" autocomplete="off" spellcheck="false" placeholder="${claudeKey() ? "••••••••  saved" : "sk-ant-…"}" style="flex:1;min-width:0">
+      <button class="btn small" data-act="save-key">Save</button>${claudeKey() ? `<button class="btn small ghost" data-act="forget-key">Remove</button><button class="btn small ghost" data-act="test-key">Test</button>` : ""}</div>
+    <div class="row"><label for="set-model-match">Book level and matching</label><select id="set-model-match">${modelOptions(S.settings.models.match)}</select></div>
+    <div class="row"><label for="set-model-words">Words in context</label><select id="set-model-words">${modelOptions(S.settings.models.words)}</select></div>
+    <p>Sonnet is the default: accurate Dutch at a moderate cost. Opus is the most careful and slowest; Haiku is the fastest and cheapest.</p>
+  </section>
   <section class="panel"><h3>Playtest tools</h3>
     <p>Shortcuts for trying the level-up flow without reading 30 paragraphs.</p>
     <div class="actions"><button class="btn small" data-act="sim-token">Add a streak token</button>
       <button class="btn small ghost" data-act="reset">Reset all progress</button></div>
   </section>`;
+}
+
+const MODELS = [["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-opus-5-5", "Claude Opus 5.5"], ["claude-haiku-5-5", "Claude Haiku 5.5"]];
+function modelOptions(current) { return MODELS.map(([id, name]) => `<option value="${id}" ${id === current ? "selected" : ""}>${name}</option>`).join(""); }
+async function testKey() {
+  try { await claude({ system: "Reply with the single word: ok", user: "ok?", maxTokens: 5 }, S.settings.models.words); toast("Your Claude key works."); }
+  catch (e) { toast(e.message); }
 }
 
 function libraryPanel() {
@@ -389,6 +618,7 @@ function libraryPanel() {
     <p>Your book is read in this browser only and never uploaded. It goes through the same check as the app: Dutch text only, and no spelling from before 1955.</p>
     ${n?.verdict ? `<div class="verdict ${n.verdict.kind === "reject" ? "bad" : ""}"><b>${h(n.title)}</b><span>${h(n.verdict.text)}</span></div>` : ""}
     ${n?.error ? `<div class="verdict bad"><b>Couldn't open that file</b><span>${h(n.error)}</span></div>` : ""}
+    ${S.book?.scan ? `<p><button class="btn small ghost" data-act="rescan">Show this book's level again</button></p>` : ""}
     <h3>Definitions for your own books</h3>
     <p>${S.userGloss ? `Using <b>${h(S.userGloss.name)}</b>: ${Object.keys(S.userGloss.entries).length.toLocaleString()} words.` : "Load the word list made by the textbook tool (wordlist.json) to get meanings for your own books."}</p>
     <div class="actions"><label class="file btn" for="f-gloss">${S.userGloss ? "Replace word list…" : "Load word list…"}<input id="f-gloss" type="file" accept=".json,application/json"></label>
@@ -406,6 +636,28 @@ function toast(msg) {
 }
 function modal(html) { $("#overlay").innerHTML = `<div class="scrim"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`; $("#overlay .btn")?.focus(); }
 function closeModal() { $("#overlay").innerHTML = ""; }
+function showScan(book) {
+  const sc = book.scan, lvl = S.progress.level;
+  const wm = sc.wordMatch == null ? "" : `<div class="stat"><span class="label">Words you know</span><b class="num">${Math.round(sc.wordMatch * 100)}%</b></div>`;
+  let body;
+  if (sc.status === "grading") body = `<p class="muted">Ranking this book's level with Claude: vocabulary, grammar and context in 12 paragraphs from across the book…</p>`;
+  else if (sc.status === "local") body = `<p class="muted">Add your Claude API key under Profile to rank this book's level and read it matched to yours.</p>`;
+  else if (sc.status === "error") body = `<p class="muted">${h(sc.error)}</p>`;
+  else {
+    const above = E.LEVELS.indexOf(sc.level) > E.LEVELS.indexOf(lvl);
+    body = `<div class="stats">
+        <div class="stat"><span class="label">Book level</span><b>About ${h(sc.level)}</b></div>${wm}
+        <div class="stat"><span class="label">At your level</span><b class="num">${Math.round(sc.withinReach * 100)}%</b></div></div>
+      ${sc.grammar.length ? `<p><span class="label">Grammar</span> ${h(sc.grammar.join(", "))}</p>` : ""}
+      ${sc.context.length ? `<p class="muted">${h(sc.context[0])}</p>` : ""}
+      ${above ? `<p>You're reading at ${h(lvl)}. Boekenwurm can match each paragraph above ${h(lvl)} to your level when you reach it, using your Claude key: about one request per paragraph. The original is always one tap away.</p>` : `<p>This book is within your level. Enjoy the original.</p>`}`;
+    return modal(`<span class="label">${h(book.title)}</span>${body}
+      <div class="actions">${above ? `<button class="btn primary" data-act="mode-match">Match my level</button><button class="btn" data-act="mode-original">Read the original</button>` : `<button class="btn primary" data-act="mode-original">Start reading</button>`}</div>`);
+  }
+  modal(`<span class="label">${h(book.title)}</span>${sc.status === "grading" ? "" : `<div class="stats">${wm}</div>`}${body}
+    <div class="actions">${sc.status === "grading" ? `<button class="btn" data-act="mode-original">Read the original while I wait</button>` : `<button class="btn primary" data-act="mode-original">Read the original</button>`}</div>`);
+}
+
 function showOffer() {
   const o = S.progress.offer;
   modal(`<div class="medal">${o.to}</div><h2 class="big" style="font-size:1.4rem">Move up from ${o.from} to ${o.to}?</h2>
@@ -429,16 +681,24 @@ document.addEventListener("click", (ev) => {
   const now = Date.now();
   switch (a) {
     case "turn": return turn();
+    case "toggle-original": S.showOriginal = !S.showOriginal; return render();
+    case "mode-match": closeModal(); S.book.mode = "match"; S.matched.clear(); startNewSession(); return render();
+    case "mode-original": closeModal(); if (S.book.mode !== "original") { S.book.mode = "original"; startNewSession(); } return render();
+    case "read-original-now": S.book.mode = "original"; S.waiting = false; startNewSession(); toast("Reading the original. Change it under Read → Change book."); return render();
+    case "rescan": if (S.book) scanBook(S.book); return;
+    case "save-key": { const v = $("#set-key").value.trim(); setClaudeKey(v); toast(v ? "Key saved in this browser." : "Key removed."); return render(); }
+    case "forget-key": setClaudeKey(""); toast("Key removed from this browser."); return render();
+    case "test-key": testKey(); return;
     case "undo": return undo();
     case "library": S.importNote = S.importNote || {}; render(); return $("#library")?.scrollIntoView({ behavior: "smooth" });
     case "close-lib": S.importNote = null; return render();
-    case "sample": S.book = sampleBook(); S.pos = saved.samplePos || 0; S.importNote = null; S.cards = null; startNewSession(); return render();
+    case "sample": S.matched.clear(); S.explained.clear(); S.book = sampleBook(); S.pos = saved.samplePos || 0; S.importNote = null; S.cards = null; startNewSession(); return render();
     case "study": S.cards = { queue: [...S.summary.list], done: 0, flipped: false }; return render();
     case "card-flip": S.cards.flipped = true; return render();
     case "card-again": S.cards.queue.push(S.cards.queue.shift()); S.cards.flipped = false; return render();
     case "card-good": S.cards.queue.shift(); S.cards.done++; S.cards.flipped = false; return render();
     case "again": S.cards = null; startNewSession(); S.view = "read"; return render();
-    case "accept": { const r = E.acceptLevelUp(S.progress, now); S.progress = r.progress; persist(); render(); return r.newBadges.length ? showBadge(r.newBadges.at(-1)) : closeModal(); }
+    case "accept": { const r = E.acceptLevelUp(S.progress, now); S.progress = r.progress; S.matched.clear(); persist(); render(); return r.newBadges.length ? showBadge(r.newBadges.at(-1)) : closeModal(); }
     case "decline": S.progress = E.declineLevelUp(S.progress); persist(); closeModal(); return render();
     case "close-modal": closeModal(); return render();
     case "sim-token": {
@@ -458,8 +718,10 @@ document.addEventListener("change", async (ev) => {
   const id = ev.target.id, now = Date.now();
   if (id === "set-preset") { S.settings.preset = ev.target.value; persist(); toast("Applies from your next session."); }
   if (id === "set-def") { S.settings.defPref = ev.target.value; persist(); }
+  if (id === "set-model-match") { S.settings.models.match = ev.target.value; S.matched.clear(); persist(); }
+  if (id === "set-model-words") { S.settings.models.words = ev.target.value; persist(); }
   if (id === "set-level") {
-    const r = E.setLevel(S.progress, ev.target.value, now); S.progress = r.progress; persist(); render();
+    const r = E.setLevel(S.progress, ev.target.value, now); S.progress = r.progress; S.matched.clear(); persist(); render();
     if (r.newBadges.length) showBadge(r.newBadges.at(-1));
   }
   if (id === "f-epub" && ev.target.files[0]) {
@@ -468,7 +730,10 @@ document.addEventListener("change", async (ev) => {
     try {
       const book = gate(await readEpub(file));
       S.importNote = { title: book.title, verdict: book.verdict };
-      if (book.verdict.kind !== "reject") { S.book = book; S.pos = 0; S.cards = null; S.summary = null; startNewSession(); S.importNote = null; toast(`Opened “${book.title}”: ${book.paragraphs.length} paragraphs.`); }
+      if (book.verdict.kind !== "reject") {
+        book.mode = "original"; S.book = book; S.pos = 0; S.cards = null; S.summary = null; S.matched.clear(); S.explained.clear();
+        startNewSession(); S.importNote = null; scanBook(book);
+      }
     } catch (e) { S.importNote = { error: e.message || String(e) }; }
     render();
   }

@@ -11,6 +11,9 @@ them before, and a flashcard review of exactly those words.
   itself (not the metadata) to keep out non-Dutch text and pre-1955 spelling.
 - **Words that don't stick, found for you.** Every word counts its reveals against its encounters.
 - **Dutch definitions on a streak**, and always from B1.
+- **Your books at your level.** On upload, a book is ranked (*About B1 · words you know 72%*). Above your level,
+  each paragraph can be matched to your level as you read, with the original one tap away. Bring your own Claude key.
+- **Words in context**: what a word means in this sentence, not just in the dictionary.
 - **Flashcards built in**, with export to Anki (`.apkg` or AnkiConnect) and CSV.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full design, the checkpoint rules and the architecture.
@@ -21,7 +24,10 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design, the checkpoint rules a
 |---|---|
 | `packages/engine` — checkpoint, streaks, streak tokens and levels, word statistics (TypeScript) | working, tested |
 | `services/ingest` — import check, paragraphs, private textbook word list (Python) | working, tested |
-| `apps/web` — the reader (SvelteKit) | next |
+| `packages/dutch` — base forms (TypeScript, twin in Python) | working, tested |
+| `packages/ai` — book level, level matching, words in context | working, tested |
+| `apps/playtest` — the reader, hosted on GitHub Pages | working, browser-tested |
+| `apps/web` — installable app (SvelteKit) | later |
 | Boekenwurm for Kobo (KOReader plugin) | after the web app |
 
 ## Try it

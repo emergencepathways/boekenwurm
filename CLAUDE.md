@@ -21,6 +21,9 @@ owner asks, and update the design doc and the tests together.
   `definitions.ts` (English/Dutch). No dependencies, so it ports to Lua for KOReader.
 - `packages/dutch/` — base forms (`lemma.ts`), twin of `services/ingest/boekenwurm_ingest/lemma.py`; both must pass
   `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
+- `packages/ai/` — model-agnostic level work: book grading, matching a paragraph to a level, word-in-context;
+  prompts, defensive parsing, validation. The network call lives in the app.
+- `apps/playtest/` — the reader, built into one page and hosted on GitHub Pages by `.github/workflows/pages.yml`.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
   `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `cli.py`.
 - `private/` — the owner's material and everything extracted from it.
@@ -30,6 +33,8 @@ owner asks, and update the design doc and the tests together.
 ```bash
 cd packages/engine && npm test && npx tsc --noEmit -p .        # engine (Node 22.18+ runs .ts directly)
 cd packages/dutch && npm test                                  # base forms (shared cases)
+cd packages/ai && npm test                                     # level work
+node apps/playtest/build.mjs && node apps/playtest/test/e2e.mjs  # reader + browser test (mocked Claude)
 cd services/ingest && python -m unittest discover -s tests -t tests
 python -m boekenwurm_ingest check -v DIR_OR_EPUB...             # import check
 python -m boekenwurm_ingest paragraphs BOOK.epub private/x.json # paragraphs + tokens for the app
@@ -44,3 +49,4 @@ The owner's material, when a session has it: books in `~/Documents/Books/Dutch/`
 - Commit subjects in the imperative ("Add streak badge"), body explains why.
 - Every rule change comes with a test that states the rule in numbers (see `test/checkpoint.test.ts`).
 - Keep the engine pure: no I/O, no clocks (pass `now`), no randomness.
+- Never run level matching on the owner's books from a session; tests use invented text and mocked replies.

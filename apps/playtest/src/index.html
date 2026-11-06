@@ -140,6 +140,18 @@ td .forms { color: var(--muted); font-size: 0.82rem; }
   @keyframes rise { from { transform: translateY(8px); opacity: 0.4; } }
   .toast { animation-name: none; }
 }
+/* level matching */
+.matched { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 0.82rem; }
+.chip { font: 600 0.75rem var(--display); padding: 3px 10px; border-radius: 999px; background: var(--leaf-soft); color: var(--leaf); }
+.chip.ok { background: var(--gold-soft); color: var(--gold); }
+.chip.warn { background: var(--strike-soft); color: var(--strike); }
+.original { border-left: 3px solid var(--line); padding-left: 14px; display: grid; gap: 4px; }
+.original p { margin: 0; font: 400 1.02rem/1.6 var(--read); color: var(--muted); max-width: 40em; }
+.ctx-meaning { display: grid; gap: 2px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 22px; justify-content: center; }
+.stat { display: grid; gap: 2px; justify-items: center; }
+.stat b { font: 700 1.3rem var(--display); }
+.modal p { margin: 0; }
 .muted { color: var(--muted); }
 .empty { color: var(--muted); font-style: italic; }
 @media (max-width: 480px) {

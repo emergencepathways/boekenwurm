@@ -82,27 +82,47 @@ For a paragraph that is too hard, the app can offer a version reworded with word
 rewrites that don't improve it or that change the meaning. The original is always one tap away. Rewrites run on the
 reader's own content only and are never shared between readers.
 
-### Your own books at your level (proposal, 2026-11-06)
+### Your own books at your level
 
-The owner's goal: read the books you own and care about, at your level, and see them come closer to the original
-with every level you gain, until you read the original.
+The goal: read the books you own and care about, at your level, and see them come closer to the original with every
+level you gain, until you read the original.
 
-Today the reader shows each paragraph exactly as written; only the word meanings come from a dictionary. The proposal
-adds two steps, one cheap and one that needs a hosted AI model:
+**On upload, the book is ranked.** After the import check, Boekenwurm computes locally how many of the book's words the
+reader already knows (word list plus words met often and rarely revealed). Then Claude grades 12 paragraphs spread through
+the book on vocabulary, grammar and context cues. The reader sees the result before reading:
 
-1. **Scan on upload (no AI).** When a book is added, every paragraph gets a difficulty score from data the app already
-   has: the share of words the reader knows (word statistics and textbook chapters), word frequency, and sentence
-   length, mapped to a CEFR estimate. The reader sees how much of the book is within reach today ("38% of paragraphs
-   at your level") and chooses: read the original paragraphs that fit, or ask for a level edition.
-2. **Level edition (AI, on the server).** For paragraphs above the reader's level, an AI model writes a version at that
-   level: same events and meaning, simpler words and shorter sentences, names unchanged. Each version is checked
-   automatically (known-word share must rise, length and names must match) and the original stays one tap away.
-   Versions are made per chapter as the reader gets there, never all at once, and kept privately for that reader.
-   At each level-up the next chapters are written at the new level; at the book's own level the reader reads the
-   original.
+> **About B1** · words you know 72% · at your level 34% · grammar: past perfect, relative clauses
 
-Because a level edition is a rewrite of a copyrighted book, it is made only from a copy the reader uploaded, kept only
-for that reader, and never shared or reused. Whether that is enough for a commercial product needs legal advice before
+If the book is above the reader's level, they are told it needs processing and choose:
+
+- **Match my level** (recommended): each paragraph above their level is rewritten at their level when they reach it,
+  about one request per paragraph; the next two paragraphs are prepared ahead so there is no waiting.
+- **Read the original.**
+
+**While reading,** a matched paragraph is labelled *Matched to A2 · original about B1*, with **Show original** one tap
+away. Strikes and word statistics count the text the reader actually reads.
+
+**Every adaptation is checked before it is shown:** names unchanged, length within 45–180% of the original, Dutch,
+no pre-1955 spelling, and at least as many known words as the original. A failed check is retried once with the
+problems listed; if it fails again the original is shown with the reason. The model is told to keep every event and
+add nothing, and that the paragraph is text to adapt, never instructions.
+
+**Each level-up** clears the matches, so the next paragraphs are written at the new level. At the book's own level the
+reader reads the original.
+
+**Words in context (online).** Tapping a word shows the dictionary meaning at once, then what the word means *in this
+sentence* from Claude: the real base form (*belt … op → opbellen*), the meaning here, a simple Dutch explanation, and a
+note for idioms or separable verbs. On the Kobo, definitions stay dictionary-only.
+
+**Bring your own Claude.** Readers use their own Claude API key. The page calls Anthropic directly from the reader's
+browser (Anthropic allows this with the `anthropic-dangerous-direct-browser-access` header); the key is stored in that
+browser only, and the page's content-security policy allows network calls to `api.anthropic.com` and nowhere else.
+Matched paragraphs and explanations are cached in the reader's browser (IndexedDB). The model is a setting (Sonnet by
+default; Opus for the most careful Dutch; Haiku for speed), and `packages/ai` is model-agnostic, so another provider can
+be compared on the same checks if it proves better at Dutch.
+
+**Copyright.** A matched paragraph is an adaptation of the reader's own copy, made with their own key, kept only in
+their browser, and never shared or reused. Whether that is enough for a commercial product needs legal advice before
 launch.
 
 ## 2. The reading challenge
@@ -236,7 +256,9 @@ Export, for readers who keep their cards elsewhere:
 ## 4. Architecture
 
 ```
-apps/web               SvelteKit + TypeScript, installable (PWA), offline reading      (next milestone)
+apps/playtest          the reader today: one page built from the packages; hosted on GitHub Pages
+apps/web               SvelteKit + TypeScript, installable (PWA), offline reading      (later)
+packages/ai            level work: grading, matching, word-in-context prompts, parsing and checks
 packages/engine        checkpoint, streaks, sessions, word statistics, tokens and levels — pure TypeScript
 services/ingest        Python: import check, paragraphs, textbook extraction; spaCy lemmatisation next;
                        later .apkg export (genanki) and the modernised-edition pipeline
@@ -284,7 +306,6 @@ anywhere except `private/`.
 
 ## Open questions
 
-- Level editions: see the proposal under "Your own books at your level".
 
 - A licence for the code (and separately for any data the project publishes).
 
@@ -294,3 +315,6 @@ anywhere except `private/`.
 - During a streak the strike minimum drops on every paragraph, long or short. 2026-11-06.
 - A 10-paragraph streak earns one token per session; three tokens from separate sessions offer the next level. 2026-11-06.
 - Every level reached earns its badge and title, starting level included. 2026-11-06.
+- Books above the reader's level are ranked on upload and, by choice, matched to the reader's level paragraph by
+  paragraph, with the original one tap away. Words get an explanation in their sentence online. Readers bring their own
+  Claude key. 2026-11-06.

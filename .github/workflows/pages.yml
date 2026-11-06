@@ -1,0 +1,61 @@
+# Test everything, build the reader, and publish it to GitHub Pages on every push to main.
+# One-time setup in the repository: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+name: Test and publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install TypeScript
+        run: npm install --global typescript@5.8.3
+      - name: Engine
+        working-directory: packages/engine
+        run: npm test && tsc --noEmit -p .
+      - name: Base forms (shared cases)
+        working-directory: packages/dutch
+        run: npm test && tsc --noEmit -p .
+      - name: Level work (prompts, parsing, checks)
+        working-directory: packages/ai
+        run: npm test && tsc --noEmit -p .
+      - name: Ingest
+        working-directory: services/ingest
+        run: python -m unittest discover -s tests -t tests
+      - name: Build the reader
+        run: node apps/playtest/build.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/playtest/dist/site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
