@@ -139,6 +139,27 @@ allowed, N+1 ends it".)
 - The level chooses which paragraphs are offered, and from B1 switches definitions to Dutch.
 - At C2 tokens are still earned and kept on the profile, with no further offer.
 
+### Level badges and titles
+
+Every level reached comes with a badge and a title, shown on the profile and under the reader's name. The current
+title is the one for the highest level reached.
+
+| Level | Title | Meaning |
+|---|---|---|
+| A1 | Letterproever | Letter taster |
+| A2 | Bladzijdeknabbelaar | Page nibbler |
+| B1 | Hoofdstukvreter | Chapter eater |
+| B2 | Boekenwurm | Bookworm |
+| C1 | Bibliotheekbewoner | Library dweller |
+| C2 | Woordmeester | Word master |
+
+- The starting level's badge is given at once (an A1 reader starts with the A1 badge).
+- Each accepted level-up earns that level's badge, with a celebration screen.
+- Levels below the starting level, and levels skipped by changing the level by hand in settings, get their badges
+  marked *placement*, so the profile shows which were earned in play.
+- Badges are never taken away, even if the reader moves back down a level.
+- Titles are placeholders until the visual design is done (`packages/engine/src/badges.ts`).
+
 ### Definitions: English or Dutch
 
 - From B1 up, definitions are always in Dutch.
@@ -213,7 +234,7 @@ anywhere except `private/`.
 
 ## 6. Milestones
 
-1. ✅ Engine: checkpoint, streaks, sessions, word statistics, streak tokens and level-up offers. Import check.
+1. ✅ Engine: checkpoint, streaks, sessions, word statistics, streak tokens, level-up offers and level badges. Import check.
    Private textbook extraction.
 2. Lemmatisation (spaCy), the Wiktionary dictionary build, chapter reading texts as paragraphs.
 3. Web app: library, reader with tap-to-reveal, checkpoint, session summary, built-in flashcards.
@@ -230,3 +251,4 @@ anywhere except `private/`.
 - The last strike ends the run (3 strikes: the 3rd reveal fails). 2026-11-06.
 - During a streak the strike minimum drops on every paragraph, long or short. 2026-11-06.
 - A 10-paragraph streak earns one token per session; three tokens from separate sessions offer the next level. 2026-11-06.
+- Every level reached earns its badge and title, starting level included. 2026-11-06.
