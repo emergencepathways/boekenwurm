@@ -1,0 +1,15 @@
+[project]
+name = "boekenwurm-ingest"
+version = "0.1.0"
+description = "Boekenwurm book import: Dutch-language and old-spelling checks, paragraphs, private textbook word lists."
+requires-python = ">=3.11"
+dependencies = []  # standard library only for now; spaCy (nl_core_news_sm) arrives with lemmatisation
+
+[project.optional-dependencies]
+nlp = ["spacy>=3.8"]
+
+[project.scripts]
+boekenwurm-ingest = "boekenwurm_ingest.cli:main"
+
+[tool.setuptools]
+packages = ["boekenwurm_ingest"]

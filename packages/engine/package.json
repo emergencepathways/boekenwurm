@@ -1,0 +1,21 @@
+{
+  "name": "@boekenwurm/engine",
+  "version": "0.1.0",
+  "description": "Reading-challenge rules for Boekenwurm: checkpoints, streaks, reveal statistics.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0"
+  }
+}
