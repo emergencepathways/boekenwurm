@@ -19,7 +19,9 @@ owner asks, and update the design doc and the tests together.
 - `packages/engine/` — pure TypeScript rules: `checkpoint.ts` (strikes, streak tightening, strike minimum), `progress.ts` (streak tokens, level-up offer), `badges.ts` (level badges and titles),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
   `definitions.ts` (English/Dutch). No dependencies, so it ports to Lua for KOReader.
-- `services/ingest/` — Python, standard library only for now: `epub.py`, `language.py`, `spelling.py`, `dating.py`,
+- `packages/dutch/` — base forms (`lemma.ts`), twin of `services/ingest/boekenwurm_ingest/lemma.py`; both must pass
+  `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
+- `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
   `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `cli.py`.
 - `private/` — the owner's material and everything extracted from it.
 
@@ -27,6 +29,7 @@ owner asks, and update the design doc and the tests together.
 
 ```bash
 cd packages/engine && npm test && npx tsc --noEmit -p .        # engine (Node 22.18+ runs .ts directly)
+cd packages/dutch && npm test                                  # base forms (shared cases)
 cd services/ingest && python -m unittest discover -s tests -t tests
 python -m boekenwurm_ingest check -v DIR_OR_EPUB...             # import check
 python -m boekenwurm_ingest paragraphs BOOK.epub private/x.json # paragraphs + tokens for the app

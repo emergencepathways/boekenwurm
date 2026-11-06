@@ -1,0 +1,14 @@
+{
+  "name": "@boekenwurm/dutch",
+  "version": "0.1.0",
+  "description": "Dutch language helpers for Boekenwurm: base forms (lemmas) from irregular-verb data and inflection rules.",
+  "type": "module",
+  "private": true,
+  "exports": { ".": "./src/lemma.ts" },
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": { "@types/node": "^22.18.0", "typescript": "^5.9.0" }
+}

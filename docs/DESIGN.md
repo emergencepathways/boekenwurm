@@ -82,6 +82,29 @@ For a paragraph that is too hard, the app can offer a version reworded with word
 rewrites that don't improve it or that change the meaning. The original is always one tap away. Rewrites run on the
 reader's own content only and are never shared between readers.
 
+### Your own books at your level (proposal, 2026-11-06)
+
+The owner's goal: read the books you own and care about, at your level, and see them come closer to the original
+with every level you gain, until you read the original.
+
+Today the reader shows each paragraph exactly as written; only the word meanings come from a dictionary. The proposal
+adds two steps, one cheap and one that needs a hosted AI model:
+
+1. **Scan on upload (no AI).** When a book is added, every paragraph gets a difficulty score from data the app already
+   has: the share of words the reader knows (word statistics and textbook chapters), word frequency, and sentence
+   length, mapped to a CEFR estimate. The reader sees how much of the book is within reach today ("38% of paragraphs
+   at your level") and chooses: read the original paragraphs that fit, or ask for a level edition.
+2. **Level edition (AI, on the server).** For paragraphs above the reader's level, an AI model writes a version at that
+   level: same events and meaning, simpler words and shorter sentences, names unchanged. Each version is checked
+   automatically (known-word share must rise, length and names must match) and the original stays one tap away.
+   Versions are made per chapter as the reader gets there, never all at once, and kept privately for that reader.
+   At each level-up the next chapters are written at the new level; at the book's own level the reader reads the
+   original.
+
+Because a level edition is a rewrite of a copyrighted book, it is made only from a copy the reader uploaded, kept only
+for that reader, and never shared or reused. Whether that is enough for a commercial product needs legal advice before
+launch.
+
 ## 2. The reading challenge
 
 ### Tapping
@@ -90,8 +113,24 @@ reader's own content only and are never shared between readers.
   definition again; it is not a second mistake.
 - A reveal can be undone within 5 seconds (a mis-tap on a phone).
 - Names and numbers are never counted.
-- Reveals are keyed on the base form, so *liep, loopt* and *gelopen* all count for *lopen* (lemmatisation with spaCy,
-  next milestone; until then, the lowercase form).
+- Reveals are keyed on the base form, so *liep, loopt* and *gelopen* all count for *lopen* (see "Base forms" below).
+
+### Base forms
+
+Two layers find the base form of a word, and give the same answers in the browser and on the server
+(`packages/dutch`, `services/ingest/boekenwurm_ingest/lemma.py`, one shared test file `data/nl/lemma-cases.json`):
+
+1. **Rules, everywhere.** A table of 135 common irregular verbs (409 forms, `data/nl/irregular-verbs.json`) plus
+   compounds with inseparable (*verkocht → verkopen*) and separable prefixes (*opgestaan → opstaan*). Then the regular
+   inflections: verb endings, plurals, adjective *-e*, comparatives, diminutives, with the spelling changes undone
+   (*huizen → huis, bomen → boom, leest → lezen, zit → zitten*). Rules over-generate, so a regular form is only accepted
+   when the reader's word list or dictionary knows the result.
+2. **spaCy, on the server.** At import, spaCy's Dutch model reads whole sentences. Besides better base forms, it joins
+   separable verbs that are split up in a sentence: in *Ze belt haar moeder op*, both *belt* and *op* become *opbellen*.
+   Used automatically when spaCy and a Dutch model are installed; otherwise the rules.
+
+Measured on the owner's books with the textbook word list, the rules raise the share of words that match the list from
+71% to 89% (*a modern novel*), 68% to 85% (a translated novel) and 59% to 76% (a learner book's Dutch passages).
 
 ### The checkpoint at every page turn
 
@@ -236,13 +275,16 @@ anywhere except `private/`.
 
 1. ✅ Engine: checkpoint, streaks, sessions, word statistics, streak tokens, level-up offers and level badges. Import check.
    Private textbook extraction.
-2. Lemmatisation (spaCy), the Wiktionary dictionary build, chapter reading texts as paragraphs.
+2. ✅ Base forms (rules everywhere, spaCy on the server). Next: the Wiktionary dictionary build, chapter reading
+   texts as paragraphs.
 3. Web app: library, reader with tap-to-reveal, checkpoint, session summary, built-in flashcards.
 4. Accounts and hosting; Anki and CSV export.
 5. Paragraph selection by known-word share; modernised editions; familiar rewording.
 6. Boekenwurm for Kobo: KOReader plugin with the same rules and word statistics.
 
 ## Open questions
+
+- Level editions: see the proposal under "Your own books at your level".
 
 - A licence for the code (and separately for any data the project publishes).
 

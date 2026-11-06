@@ -21,6 +21,15 @@ execFileSync("tsc", [
 ], { stdio: "inherit" });
 
 const exported = [];
+// packages/dutch: the base-form finder, compiled the same way
+const dutchOut = mkdtempSync(join(tmpdir(), "boekenwurm-dutch-"));
+execFileSync("tsc", [join(here, "..", "..", "packages", "dutch", "src", "lemma.ts"), "--outDir", dutchOut, "--target", "ES2022",
+  "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", "--types", ""], { stdio: "inherit" });
+const dutchJs = readFileSync(join(dutchOut, "lemma.js"), "utf8").replace(/^export\s+(function|const)/gm, "$1");
+rmSync(dutchOut, { recursive: true, force: true });
+const irregular = readFileSync(join(here, "..", "..", "data", "nl", "irregular-verbs.json"), "utf8");
+const dutch = `const Dutch = (() => {\n${dutchJs}\nconst IRREGULAR = ${irregular};\nreturn { createLemmatizer, IRREGULAR };\n})();`;
+
 const body = MODULES.map((m) => {
   const js = readFileSync(join(out, `${m}.js`), "utf8")
     .replace(/^import[^;]*;\s*$/gm, "")
@@ -33,7 +42,7 @@ const body = MODULES.map((m) => {
 }).join("\n");
 rmSync(out, { recursive: true, force: true });
 
-const bundle = `const Engine = (() => {\n${body}\nreturn { ${exported.join(", ")} };\n})();`;
+const bundle = `const Engine = (() => {\n${body}\nreturn { ${exported.join(", ")} };\n})();\n${dutch}`;
 const html = readFileSync(join(here, "src", "index.html"), "utf8")
   .replace("/*__ENGINE__*/", () => bundle)
   .replace("/*__SAMPLE__*/", () => readFileSync(join(here, "src", "sample.js"), "utf8")

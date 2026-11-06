@@ -1,0 +1,341 @@
+{
+ "_about": "Shared test cases for the base-form finder. Both packages/dutch (TypeScript) and services/ingest (Python) must pass every case. The lexicon is a small invented word list for the tests. When the lexicon knows the irregular infinitive, the verb reading wins over a noun with the same spelling (was -> zijn).",
+ "lexicon": [
+  "hebben",
+  "zijn",
+  "lopen",
+  "zitten",
+  "maken",
+  "lezen",
+  "geven",
+  "komen",
+  "fietsen",
+  "werken",
+  "wonen",
+  "kopen",
+  "verkopen",
+  "opstaan",
+  "opruimen",
+  "uitgaan",
+  "staan",
+  "gaan",
+  "doen",
+  "zien",
+  "begrijpen",
+  "vergeten",
+  "bellen",
+  "opbellen",
+  "meenemen",
+  "huis",
+  "boom",
+  "kat",
+  "brief",
+  "kamer",
+  "appel",
+  "boek",
+  "straat",
+  "fiets",
+  "meisje",
+  "kind",
+  "groot",
+  "dik",
+  "lief",
+  "boos",
+  "lekker",
+  "klein",
+  "mooi",
+  "oud",
+  "was",
+  "bad",
+  "bank"
+ ],
+ "cases": [
+  [
+   "liep",
+   "lopen",
+   "irregular past"
+  ],
+  [
+   "liepen",
+   "lopen",
+   "irregular past plural"
+  ],
+  [
+   "gelopen",
+   "lopen",
+   "irregular participle"
+  ],
+  [
+   "loopt",
+   "lopen",
+   "present: doubled vowel undone"
+  ],
+  [
+   "loop",
+   "lopen",
+   "present: stem"
+  ],
+  [
+   "zit",
+   "zitten",
+   "present: consonant doubled back"
+  ],
+  [
+   "zat",
+   "zitten",
+   "irregular past"
+  ],
+  [
+   "gezeten",
+   "zitten",
+   "irregular participle"
+  ],
+  [
+   "maakte",
+   "maken",
+   "regular past"
+  ],
+  [
+   "maakten",
+   "maken",
+   "regular past plural"
+  ],
+  [
+   "gemaakt",
+   "maken",
+   "regular participle"
+  ],
+  [
+   "leest",
+   "lezen",
+   "s becomes z"
+  ],
+  [
+   "las",
+   "lezen",
+   "irregular past"
+  ],
+  [
+   "geeft",
+   "geven",
+   "f becomes v"
+  ],
+  [
+   "kwam",
+   "komen",
+   "irregular past"
+  ],
+  [
+   "fietst",
+   "fietsen",
+   "present -t"
+  ],
+  [
+   "fietste",
+   "fietsen",
+   "regular past"
+  ],
+  [
+   "gefietst",
+   "fietsen",
+   "regular participle"
+  ],
+  [
+   "werkte",
+   "werken",
+   "regular past"
+  ],
+  [
+   "woonde",
+   "wonen",
+   "regular past -de"
+  ],
+  [
+   "kocht",
+   "kopen",
+   "irregular past"
+  ],
+  [
+   "verkocht",
+   "verkopen",
+   "inseparable prefix + irregular"
+  ],
+  [
+   "opgestaan",
+   "opstaan",
+   "separable prefix + irregular participle"
+  ],
+  [
+   "opgeruimd",
+   "opruimen",
+   "separable prefix + regular participle"
+  ],
+  [
+   "uitgegaan",
+   "uitgaan",
+   "separable prefix + irregular participle"
+  ],
+  [
+   "meegenomen",
+   "meenemen",
+   "separable prefix + irregular participle"
+  ],
+  [
+   "begreep",
+   "begrijpen",
+   "irregular past"
+  ],
+  [
+   "is",
+   "zijn",
+   "irregular present"
+  ],
+  [
+   "heeft",
+   "hebben",
+   "irregular present"
+  ],
+  [
+   "gaat",
+   "gaan",
+   "irregular present"
+  ],
+  [
+   "was",
+   "zijn",
+   "irregular past wins over the noun"
+  ],
+  [
+   "huizen",
+   "huis",
+   "plural: z becomes s"
+  ],
+  [
+   "bomen",
+   "boom",
+   "plural: vowel doubled back"
+  ],
+  [
+   "katten",
+   "kat",
+   "plural: consonant undoubled"
+  ],
+  [
+   "brieven",
+   "brief",
+   "plural: v becomes f"
+  ],
+  [
+   "kamers",
+   "kamer",
+   "plural -s"
+  ],
+  [
+   "appels",
+   "appel",
+   "plural -s"
+  ],
+  [
+   "boeken",
+   "boek",
+   "plural -en"
+  ],
+  [
+   "straten",
+   "straat",
+   "plural: vowel doubled back"
+  ],
+  [
+   "meisjes",
+   "meisje",
+   "plural of a diminutive"
+  ],
+  [
+   "fietsje",
+   "fiets",
+   "diminutive -je"
+  ],
+  [
+   "boekje",
+   "boek",
+   "diminutive -je"
+  ],
+  [
+   "huisjes",
+   "huis",
+   "plural diminutive"
+  ],
+  [
+   "grote",
+   "groot",
+   "adjective -e: vowel doubled back"
+  ],
+  [
+   "dikke",
+   "dik",
+   "adjective -e: consonant undoubled"
+  ],
+  [
+   "lieve",
+   "lief",
+   "adjective -e: v becomes f"
+  ],
+  [
+   "boze",
+   "boos",
+   "adjective -e: z becomes s"
+  ],
+  [
+   "groter",
+   "groot",
+   "comparative"
+  ],
+  [
+   "grootste",
+   "groot",
+   "superlative"
+  ],
+  [
+   "lekkerste",
+   "lekker",
+   "superlative -ste"
+  ],
+  [
+   "kleinere",
+   "klein",
+   "comparative -ere"
+  ],
+  [
+   "mooiste",
+   "mooi",
+   "superlative"
+  ],
+  [
+   "bank",
+   "bank",
+   "already a base form"
+  ],
+  [
+   "zebra",
+   "zebra",
+   "unknown word stays as written"
+  ]
+ ],
+ "no_lexicon": [
+  [
+   "liep",
+   "lopen",
+   "irregular forms need no word list"
+  ],
+  [
+   "opgestaan",
+   "opstaan",
+   "separable prefix + irregular, no word list"
+  ],
+  [
+   "fietste",
+   "fietste",
+   "regular forms stay as written without a word list"
+  ]
+ ]
+}

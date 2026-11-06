@@ -2,7 +2,7 @@
 
   python -m boekenwurm_ingest check BOOK.epub [...]        import check, one line per book
   python -m boekenwurm_ingest check --json BOOK.epub        full reports as JSON
-  python -m boekenwurm_ingest paragraphs BOOK.epub OUT.json Dutch paragraphs with tap tokens
+  python -m boekenwurm_ingest paragraphs BOOK.epub OUT.json Dutch paragraphs with tap tokens and base forms
   python -m boekenwurm_ingest textbook BOOK.pdf [--out DIR] private word list from your own textbook
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import json
 import os
 import sys
 
-from . import gate, textbook
+from . import gate, lemma, textbook
 from .tokenize import countable_lemmas, lowercase_vocabulary, to_json, tokenize
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -65,16 +65,36 @@ def cmd_paragraphs(args) -> int:
     if not r.usable and not args.force:
         print(f"Not usable ({r.verdict}): " + " ".join(r.reasons), file=sys.stderr)
         return 2
+    lexicon = load_lexicon(args.lexicon)
+    lem = lemma.get_lemmatizer(lexicon, prefer=args.lemmatizer)
     vocab = lowercase_vocabulary([p.text for p in r.paragraphs])
     out = []
     for i, p in enumerate(r.paragraphs):
         toks = tokenize(p.text, vocab)
+        for t, l in zip(toks, lem.lemmas(p.text, toks)):
+            if t.k == "word":
+                t.lemma = l
         out.append({"id": f"p{i:05d}", "block": p.block, "doc": p.doc, "text": p.text,
                     "countable": len(countable_lemmas(toks)), "tokens": to_json(toks)})
     with open(args.out, "w", encoding="utf-8") as f:
-        json.dump({"title": r.title, "verdict": r.verdict, "paragraphs": out}, f, ensure_ascii=False)
-    print(f"{len(out)} paragraphs -> {args.out}")
+        json.dump({"title": r.title, "verdict": r.verdict, "lemmatizer": lem.name, "paragraphs": out}, f, ensure_ascii=False)
+    print(f"{len(out)} paragraphs -> {args.out} (base forms: {lem.name}"
+          f"{', word list ' + str(len(lexicon)) + ' words' if lexicon else ', no word list'})")
     return 0
+
+
+DEFAULT_WORDLIST = os.path.join(PRIVATE, "textbook", "wordlist.json")
+
+
+def load_lexicon(path: str | None) -> list[str] | None:
+    """Base forms from a word list: the textbook tool's wordlist.json, or a plain text file with one word per line."""
+    path = path or (DEFAULT_WORDLIST if os.path.exists(DEFAULT_WORDLIST) else None)
+    if not path:
+        return None
+    with open(path, encoding="utf-8") as f:
+        if path.endswith(".json"):
+            return [e["base"] for e in json.load(f) if e.get("base")]
+        return [line.strip() for line in f if line.strip()]
 
 
 def cmd_textbook(args) -> int:
@@ -100,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("book")
     p.add_argument("out")
     p.add_argument("--force", action="store_true", help="export even if the check rejects the book")
+    p.add_argument("--lexicon", help="word list for base forms (default: private/textbook/wordlist.json if present)")
+    p.add_argument("--lemmatizer", choices=["auto", "spacy", "rules"], default="auto",
+                   help="auto uses spaCy when it and a Dutch model are installed")
     p.set_defaults(fn=cmd_paragraphs)
     t = sub.add_parser("textbook", help="private word list from a textbook PDF you own")
     t.add_argument("pdf")

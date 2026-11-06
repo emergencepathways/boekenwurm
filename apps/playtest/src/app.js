@@ -67,27 +67,11 @@ function tokenize(text, isName) {
   return out;
 }
 
-// Word list from the textbook tool (private/textbook/wordlist.json): reverse index of likely forms.
-function forms(base) {
-  const b = base.toLowerCase(); const out = new Set([b, b + "s", b + "e", b + "en", b + "je", b + "tje"]);
-  if (b.endsWith("en") && b.length > 4) {
-    let stem = b.slice(0, -2);
-    const V = "aeiou";
-    if (stem.length >= 2 && stem.at(-1) === stem.at(-2)) stem = stem.slice(0, -1);
-    else if (stem.length >= 2 && !V.includes(stem.at(-1)) && V.includes(stem.at(-2)) && (stem.length < 3 || !V.includes(stem.at(-3)))) stem = stem.slice(0, -2) + stem.at(-2) + stem.at(-2) + stem.at(-1);
-    stem = stem.replace(/z$/, "s").replace(/v$/, "f");
-    for (const f of [stem, stem + "t", stem + "te", stem + "ten", stem + "de", stem + "den", "ge" + stem + "t", "ge" + stem + "d"]) out.add(f);
-  }
-  return out;
-}
-let userIndex = null;
+// Word list from the textbook tool (private/textbook/wordlist.json). Base forms come from
+// packages/dutch: irregular verbs always, regular inflections when the word list knows the result.
+let lemmatizer = Dutch.createLemmatizer(Dutch.IRREGULAR);
 function buildUserIndex() {
-  userIndex = null;
-  if (!S.userGloss) return;
-  userIndex = new Map();
-  for (const [base, [gloss, article]] of Object.entries(S.userGloss.entries)) {
-    for (const f of forms(base)) if (!userIndex.has(f) || f === base) userIndex.set(f, { lemma: base, en: gloss, article });
-  }
+  lemmatizer = Dutch.createLemmatizer(Dutch.IRREGULAR, S.userGloss ? Object.keys(S.userGloss.entries) : undefined);
 }
 buildUserIndex();
 
@@ -97,9 +81,10 @@ function lookup(surface) {
     const g = SAMPLE.glossary[w];
     if (g) return { lemma: g[0].toLowerCase(), en: g[1], nl: g[2] };
   }
-  const u = userIndex?.get(w);
-  if (u) return { lemma: u.lemma, en: u.en, nl: null, article: u.article };
-  return { lemma: w, en: null, nl: null };
+  const lemma = lemmatizer.lemma(w);
+  const u = S.userGloss?.entries[lemma];
+  if (u) return { lemma, en: u[0], nl: null, article: u[1] };
+  return { lemma, en: null, nl: null };
 }
 
 // ---------------------------------------------------------------- books
