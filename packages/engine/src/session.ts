@@ -37,10 +37,17 @@ export interface ParagraphResult {
 }
 
 export interface Session {
+  id: string;
   rules: CheckpointRules;
   undoWindowMs: number;
+  /** Passed paragraphs in a row that earn this session its streak token (default 10). */
+  tokenAtStreak: number;
   /** Paragraphs passed in a row in this session. */
   passesInARow: number;
+  /** Longest run of passed paragraphs in this session. */
+  bestStreak: number;
+  /** True once this session's streak reached `tokenAtStreak`. One token per session at most. */
+  tokenEarned: boolean;
   results: ParagraphResult[];
   /** Every reveal of the session, in order. */
   reveals: Reveal[];
@@ -50,8 +57,30 @@ export interface Session {
   ended: boolean;
 }
 
-export function startSession(rules: CheckpointRules, undoWindowMs = 5000): Session {
-  return { rules, undoWindowMs, passesInARow: 0, results: [], reveals: [], encounters: {}, current: null, ended: false };
+export interface SessionOptions {
+  /** Unique per session; streak tokens are counted per session id. */
+  id?: string;
+  undoWindowMs?: number;
+  tokenAtStreak?: number;
+}
+
+let counter = 0;
+
+export function startSession(rules: CheckpointRules, opts: SessionOptions = {}): Session {
+  return {
+    id: opts.id ?? `session-${++counter}`,
+    rules,
+    undoWindowMs: opts.undoWindowMs ?? 5000,
+    tokenAtStreak: opts.tokenAtStreak ?? 10,
+    passesInARow: 0,
+    bestStreak: 0,
+    tokenEarned: false,
+    results: [],
+    reveals: [],
+    encounters: {},
+    current: null,
+    ended: false,
+  };
 }
 
 export function beginParagraph(s: Session, paragraphId: string, lemmas: string[]): Session {
@@ -87,12 +116,15 @@ export function status(s: Session) {
     allowed: cur.allowance.allowed,
     percent: cur.allowance.percent,
     used: revealedCount(s),
+    /** Strikes left before the last one: 0 means the next reveal fails this paragraph. */
+    strikesLeft: Math.max(0, cur.allowance.allowed - revealedCount(s) - (s.rules.failWhen === "reaches" ? 1 : 0)),
     streak: inStreak(s.passesInARow, s.rules) ? s.passesInARow : 0,
+    tokenEarned: s.tokenEarned,
   };
 }
 
 export type TurnOutcome =
-  | { kind: "continue"; session: Session; result: ParagraphResult }
+  | { kind: "continue"; session: Session; result: ParagraphResult; tokenEarnedNow: boolean }
   | { kind: "ended"; session: Session; result: ParagraphResult; streakLength: number };
 
 /** The page turn: judge the paragraph, then continue or end the session. */
@@ -111,7 +143,16 @@ export function turnPage(s: Session): TurnOutcome {
   const encounters = { ...s.encounters };
   for (const l of cur.lemmas) encounters[l] = (encounters[l] ?? 0) + 1;
   const base = { ...s, results: [...s.results, result], reveals: [...s.reveals, ...cur.reveals], encounters, current: null };
-  if (passed) return { kind: "continue", session: { ...base, passesInARow: s.passesInARow + 1 }, result };
+  if (passed) {
+    const run = s.passesInARow + 1;
+    const tokenEarnedNow = !s.tokenEarned && run >= s.tokenAtStreak;
+    return {
+      kind: "continue",
+      session: { ...base, passesInARow: run, bestStreak: Math.max(s.bestStreak, run), tokenEarned: s.tokenEarned || tokenEarnedNow },
+      result,
+      tokenEarnedNow,
+    };
+  }
   return { kind: "ended", session: { ...base, ended: true }, result, streakLength: s.passesInARow };
 }
 

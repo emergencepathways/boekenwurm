@@ -4,7 +4,7 @@
 
 Boekenwurm turns Dutch books into a reading game. You read a paragraph; tap a word to see its meaning and it goes on
 your list. At every page turn the paragraph is judged against an allowance of reveals. Pass, and the next paragraph is a
-little stricter: a streak. Reveal too many, and the session ends with the words you needed, how often you've needed
+little stricter: a streak. Ten in a row earns a streak token, and three tokens offer the next level (A2 → B1). Use your last strike, and the session ends with the words you needed, how often you've needed
 them before, and a flashcard review of exactly those words.
 
 - **Your own content.** Start from your course textbook, then add your own ebooks. An import check reads the text
@@ -19,7 +19,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design, the checkpoint rules a
 
 | Part | State |
 |---|---|
-| `packages/engine` — checkpoint, streaks, sessions, word statistics (TypeScript) | working, tested |
+| `packages/engine` — checkpoint, streaks, streak tokens and levels, word statistics (TypeScript) | working, tested |
 | `services/ingest` — import check, paragraphs, private textbook word list (Python) | working, tested |
 | `apps/web` — the reader (SvelteKit) | next |
 | Boekenwurm for Kobo (KOReader plugin) | after the web app |

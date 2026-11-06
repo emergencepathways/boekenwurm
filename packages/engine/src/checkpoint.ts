@@ -15,9 +15,11 @@
  *     strike minimum by 1 down to `minStrikesFloor` (default 1).
  * A failed paragraph ends the session; the next session starts from the base.
  *
- * A paragraph passes while reveals <= allowed (the allowance is the number of
- * mistakes you may make). Set `failWhen: "reaches"` to make reaching the
- * allowance itself the failure ("third strike and you're out").
+ * The allowance is a number of strikes, and the last strike ends the session:
+ * with 3 strikes, the 3rd reveal fails the paragraph at the page turn ("three
+ * strikes and you're out"); with the floor of 1, any reveal fails it. The
+ * percentage works the same way: 10 strikes for 25% of 40 words.
+ * `failWhen: "exceeds"` switches to "N mistakes allowed, N+1 fails".
  */
 
 export type Preset = "strict" | "standard" | "relaxed";
@@ -42,7 +44,7 @@ export interface CheckpointRules {
   minStrikes: number;
   /** The strike minimum never drops below this during a streak. */
   minStrikesFloor: number;
-  /** "exceeds": fail when reveals > allowed. "reaches": fail when reveals >= allowed. */
+  /** "reaches" (default): the last strike fails, reveals >= allowed. "exceeds": fail when reveals > allowed. */
   failWhen: "exceeds" | "reaches";
 }
 
@@ -53,7 +55,7 @@ export const DEFAULT_RULES: Readonly<CheckpointRules> = {
   floorPercent: 5,
   minStrikes: 3,
   minStrikesFloor: 1,
-  failWhen: "exceeds",
+  failWhen: "reaches",
 };
 
 export function rulesFor(preset: Preset, overrides: Partial<CheckpointRules> = {}): CheckpointRules {

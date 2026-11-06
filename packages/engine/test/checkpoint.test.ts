@@ -54,13 +54,27 @@ test("the larger of percent and strikes wins", () => {
   assert.equal(allowanceFor(20, 2, standard).allowed, 4);
 });
 
-test("pass means reveals <= allowed by default; 'reaches' makes the last strike fail", () => {
-  const a = allowanceFor(8, 0, standard); // 3 allowed
-  assert.equal(passes(3, a, standard), true);
-  assert.equal(passes(4, a, standard), false);
-  const strikeOut = rulesFor("standard", { failWhen: "reaches" });
-  assert.equal(passes(2, a, strikeOut), true);
-  assert.equal(passes(3, a, strikeOut), false);
+test("the 3rd strike ends it by default; 'exceeds' allows N mistakes instead", () => {
+  const a = allowanceFor(8, 0, standard); // 3 strikes
+  assert.equal(passes(2, a, standard), true);
+  assert.equal(passes(3, a, standard), false);
+  const lenient = rulesFor("standard", { failWhen: "exceeds" });
+  assert.equal(passes(3, a, lenient), true);
+  assert.equal(passes(4, a, lenient), false);
+});
+
+test("at the 1-strike floor any reveal fails the paragraph", () => {
+  const a = allowanceFor(6, 4, standard); // deep in a streak: 1 strike
+  assert.equal(a.allowed, 1);
+  assert.equal(passes(0, a, standard), true);
+  assert.equal(passes(1, a, standard), false);
+});
+
+test("the percentage allowance works the same way: 25% of 40 words is 10 strikes", () => {
+  const a = allowanceFor(40, 0, standard);
+  assert.equal(a.allowed, 10);
+  assert.equal(passes(9, a, standard), true);
+  assert.equal(passes(10, a, standard), false);
 });
 
 test("advanced settings are validated", () => {
@@ -75,4 +89,5 @@ test("defaults match the agreed design", () => {
   assert.equal(DEFAULT_RULES.floorPercent, 5);
   assert.equal(DEFAULT_RULES.minStrikes, 3);
   assert.equal(DEFAULT_RULES.minStrikesFloor, 1);
+  assert.equal(DEFAULT_RULES.failWhen, "reaches");
 });

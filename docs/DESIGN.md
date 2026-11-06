@@ -95,10 +95,13 @@ reader's own content only and are never shared between readers.
 
 ### The checkpoint at every page turn
 
-Each paragraph has an **allowance**: the number of reveals you may make and still pass. It is the larger of
+Each paragraph has an allowance of **strikes**, and the last strike ends the session: with 3 strikes, the 3rd reveal
+fails the paragraph. The allowance is the larger of
 
-- the **percentage allowance**: ⌊percent × countable words⌋, and
-- the **strike minimum**: 3 reveals, so short paragraphs (where 25% of 8 words rounds to 2) stay fair.
+- the **percentage allowance**: ⌊percent × countable words⌋ strikes (25% of 40 words: the 10th reveal fails), and
+- the **strike minimum**: 3 strikes, so short paragraphs (where 25% of 8 words rounds to 2) stay fair.
+
+While reading, the reader sees how many strikes are left; at 0, the next reveal will end the run.
 
 Presets, adjustable under advanced settings:
 
@@ -112,7 +115,7 @@ Presets, adjustable under advanced settings:
 paragraph tightens the allowance:
 
 - the percentage drops by 3 points per paragraph, to a floor of 5%;
-- the strike minimum drops by 1 per paragraph, to a floor of 1.
+- the strike minimum drops by 1 per paragraph, long or short, to a floor of 1 (any reveal ends the run).
 
 | Paragraph | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9+ |
 |---|---|---|---|---|---|---|---|---|---|
@@ -122,9 +125,19 @@ paragraph tightens the allowance:
 
 Relaxed reaches 5% on paragraph 12.
 
-**Failure.** More reveals than the allowance ends the session at the page turn: "Your streak lasted N paragraphs." The
-next session starts again from the base. (An option, `failWhen: "reaches"`, makes reaching the allowance itself the
-failure, "three strikes and you're out", in case play-testing prefers it.)
+**Failure.** Using the last strike ends the session at the page turn: "Your streak lasted N paragraphs." The next
+session starts again from the base. (Advanced setting `failWhen: "exceeds"` turns the allowance into "N mistakes
+allowed, N+1 ends it".)
+
+### Streak tokens and moving up a level
+
+- A session whose streak reaches **10 paragraphs** earns a **streak token**, on the 10th paragraph, with a small
+  celebration. One token per session however long the streak runs, and it is kept if the streak later breaks.
+- **Three tokens from three separate sessions** at the same level bring up an offer: "Move up from A2 to B1?"
+  - Yes: the level rises (A1 → A2 → B1 → B2 → C1 → C2) and a new count starts.
+  - Not yet: the count also restarts, so the question comes back after three more tokens rather than every session.
+- The level chooses which paragraphs are offered, and from B1 switches definitions to Dutch.
+- At C2 tokens are still earned and kept on the profile, with no further offer.
 
 ### Definitions: English or Dutch
 
@@ -164,7 +177,7 @@ Export, for readers who keep their cards elsewhere:
 
 ```
 apps/web               SvelteKit + TypeScript, installable (PWA), offline reading      (next milestone)
-packages/engine        checkpoint, streaks, sessions, word statistics — pure TypeScript, no dependencies
+packages/engine        checkpoint, streaks, sessions, word statistics, tokens and levels — pure TypeScript
 services/ingest        Python: import check, paragraphs, textbook extraction; spaCy lemmatisation next;
                        later .apkg export (genanki) and the modernised-edition pipeline
 private/               the owner's books and textbook, and everything extracted from them — never committed
@@ -200,7 +213,8 @@ anywhere except `private/`.
 
 ## 6. Milestones
 
-1. ✅ Engine: checkpoint, streaks, sessions, word statistics. Import check. Private textbook extraction.
+1. ✅ Engine: checkpoint, streaks, sessions, word statistics, streak tokens and level-up offers. Import check.
+   Private textbook extraction.
 2. Lemmatisation (spaCy), the Wiktionary dictionary build, chapter reading texts as paragraphs.
 3. Web app: library, reader with tap-to-reveal, checkpoint, session summary, built-in flashcards.
 4. Accounts and hosting; Anki and CSV export.
@@ -209,7 +223,10 @@ anywhere except `private/`.
 
 ## Open questions
 
-- Play-test `failWhen`: is the allowance the number of mistakes you may make (current), or the strike that ends it?
-- Strike minimum during a streak: currently every streak paragraph lowers it, short or long. Should only short
-  paragraphs lower it?
 - A licence for the code (and separately for any data the project publishes).
+
+## Decided
+
+- The last strike ends the run (3 strikes: the 3rd reveal fails). 2026-11-06.
+- During a streak the strike minimum drops on every paragraph, long or short. 2026-11-06.
+- A 10-paragraph streak earns one token per session; three tokens from separate sessions offer the next level. 2026-11-06.

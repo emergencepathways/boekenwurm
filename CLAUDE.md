@@ -16,7 +16,7 @@ owner asks, and update the design doc and the tests together.
 
 ## Layout
 
-- `packages/engine/` — pure TypeScript rules: `checkpoint.ts` (allowance, streak tightening, strike minimum),
+- `packages/engine/` — pure TypeScript rules: `checkpoint.ts` (strikes, streak tightening, strike minimum), `progress.ts` (streak tokens, level-up offer),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
   `definitions.ts` (English/Dutch). No dependencies, so it ports to Lua for KOReader.
 - `services/ingest/` — Python, standard library only for now: `epub.py`, `language.py`, `spelling.py`, `dating.py`,
