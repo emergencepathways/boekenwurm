@@ -87,6 +87,7 @@ const site = `<!doctype html>
 <style>[hidden]{display:none!important} body{margin:0} img{max-width:100%}</style>
 </head>
 <body>
+<script>window.BW_HOSTED = true;</script>
 ${html}
 </body>
 </html>

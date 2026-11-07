@@ -475,7 +475,8 @@ function matchedLine(p) {
 
 function contextPanel(i, lang) {
   const x = S.explained.get(`${S.pos}|${i}|${para().matched ? "m" : "o"}`);
-  if (!x) return claudeKey() ? "" : `<span class="note">Add your Claude key under Profile to see what this word means in this sentence.</span>`;
+  // The hint only makes sense where the page can reach Claude (the hosted site), not in a preview.
+  if (!x) return claudeKey() || !window.BW_HOSTED ? "" : `<span class="note">Add your Claude key under Profile to see what this word means in this sentence.</span>`;
   if (x.status === "pending") return `<span class="note">Checking this sentence…</span>`;
   if (x.status === "error") return `<span class="note">${h(x.error)}</span>`;
   const d = x.data;
