@@ -176,11 +176,20 @@ td .forms { color: var(--muted); font-size: 0.82rem; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
+// If the reader can't start, say so instead of leaving the page blank.
+window.addEventListener("error", (ev) => {
+  const main = document.getElementById("main");
+  if (!main || main.childElementCount) return;
+  main.innerHTML = '<section class="panel"><h2>The reader couldn\u2019t start</h2><p></p><p>Reload the page. If this keeps happening, send this message along.</p></section>';
+  main.querySelector("p").textContent = String(ev.message || ev.error || "Unknown error");
+});
+</script>
+<script>
+// Everything lives inside one function, so no name here can clash with scripts the host page runs.
+(() => {
+"use strict";
 /*__ENGINE__*/
-</script>
-<script>
 /*__SAMPLE__*/
-</script>
-<script>
 /*__APP__*/
+})();
 </script>

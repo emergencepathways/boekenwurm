@@ -1,6 +1,5 @@
 // Boekenwurm playtest: the real engine (Engine.*) driving a minimal reader.
 // Your books and word lists are read in this browser only; nothing is uploaded.
-"use strict";
 const E = Engine;
 const $ = (sel, el = document) => el.querySelector(sel);
 const h = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -766,6 +765,16 @@ document.addEventListener("touchend", (ev) => {
 setInterval(() => { if (S.view === "read" && S.session?.current && S.sel != null && $(".undo")) render(); }, 1000);
 
 // ---------------------------------------------------------------- start
-S.book = sampleBook();
-startNewSession();
-render();
+try {
+  S.book = sampleBook();
+  startNewSession();
+  render();
+} catch (e) {
+  // Saved progress from an older version is the likeliest cause; start clean rather than show nothing.
+  try { localStorage.removeItem(STORE); } catch { /* ignore */ }
+  S.wordbook = {}; S.progress = E.startProgress("A1", Date.now()); S.pos = 0;
+  S.book = sampleBook();
+  startNewSession();
+  render();
+  toast("Your saved progress couldn't be read, so the story starts fresh.");
+}
