@@ -16,7 +16,8 @@ them before, and a flashcard review of exactly those words.
 - **Words in context**: what a word means in this sentence, not just in the dictionary.
 - **Flashcards built in**, with export to Anki (`.apkg` or AnkiConnect) and CSV.
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the full design, the checkpoint rules and the architecture.
+See [docs/DESIGN.md](docs/DESIGN.md) for the reading design and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the app,
+hosting and data. The first playtest is kept on the `playtest-v1` branch.
 
 ## Status
 
@@ -27,7 +28,9 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design, the checkpoint rules a
 | `packages/dutch` — base forms (TypeScript, twin in Python) | working, tested |
 | `packages/ai` — book level, level matching, words in context | working, tested |
 | `apps/playtest` — the reader, hosted on GitHub Pages | working, browser-tested |
-| `apps/web` — installable app (SvelteKit) | later |
+| `packages/books` — page stitching, progress, PDF text | working, tested |
+| `supabase/` — database with owner-only access | working, tested on Postgres |
+| `apps/web` — the mobile app (React + Vite PWA) | next: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Boekenwurm for Kobo (KOReader plugin) | after the web app |
 
 ## Try it

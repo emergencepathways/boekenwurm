@@ -257,7 +257,8 @@ Export, for readers who keep their cards elsewhere:
 
 ```
 apps/playtest          the reader today: one page built from the packages; hosted on GitHub Pages
-apps/web               SvelteKit + TypeScript, installable (PWA), offline reading      (later)
+apps/web               React + Vite + TypeScript, installable PWA (see ARCHITECTURE.md)  (next)
+packages/books         page stitching, progress through printed books, PDF text
 packages/ai            level work: grading, matching, word-in-context prompts, parsing and checks
 packages/engine        checkpoint, streaks, sessions, word statistics, tokens and levels — pure TypeScript
 services/ingest        Python: import check, paragraphs, textbook extraction; spaCy lemmatisation next;
@@ -310,6 +311,9 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- The app: React + Vite PWA, Supabase (EU) with email-link, Apple and Google sign-in; page photos read by Claude;
+  an open Wiktionary dictionary for everyone plus a private textbook import. See ARCHITECTURE.md. 2026-11-09.
 
 - The last strike ends the run (3 strikes: the 3rd reveal fails). 2026-11-06.
 - During a streak the strike minimum drops on every paragraph, long or short. 2026-11-06.

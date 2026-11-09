@@ -1,0 +1,26 @@
+{
+  "name": "@boekenwurm/books",
+  "version": "0.1.0",
+  "description": "Getting books into Boekenwurm: page stitching, progress through printed books, PDF text into paragraphs.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.0"
+  },
+  "peerDependencies": {
+    "pdfjs-dist": ">=4"
+  }
+}

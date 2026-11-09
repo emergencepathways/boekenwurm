@@ -4,7 +4,7 @@
   "description": "Model-agnostic level work for Boekenwurm: book grading, level matching, word-in-context explanations.",
   "type": "module",
   "private": true,
-  "exports": { ".": "./src/level.ts" },
+  "exports": { ".": "./src/index.ts" },
   "engines": { "node": ">=22.18" },
   "scripts": { "test": "node --test \"test/**/*.test.ts\"", "typecheck": "tsc --noEmit" },
   "devDependencies": { "@types/node": "^22.18.0", "typescript": "^5.9.0" }

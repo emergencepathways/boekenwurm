@@ -23,6 +23,12 @@ owner asks, and update the design doc and the tests together.
   `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
 - `packages/ai/` — model-agnostic level work: book grading, matching a paragraph to a level, word-in-context;
   prompts, defensive parsing, validation. The network call lives in the app.
+- `packages/books/` — getting books in: `stitch.ts` (pages → paragraphs across page breaks, progress through a
+  printed book), `pdf.ts` (PDF text → paragraphs, scanned-PDF detection; pdf.js passed in).
+- `packages/ai/` also has `photo.ts`: page photos → paragraphs and covers → title/author/ISBN (Claude vision).
+- `supabase/` — database schema with owner-only row-level security; `supabase/tests/run.sh` tests it on local Postgres.
+- `docs/ARCHITECTURE.md` — the hosted app: React + Vite PWA, Supabase (EU), sign-in, sync, camera flow.
+- Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.
 - `apps/playtest/` — the reader, built into one page and hosted on GitHub Pages by `.github/workflows/pages.yml`.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
   `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `cli.py`.
@@ -33,7 +39,9 @@ owner asks, and update the design doc and the tests together.
 ```bash
 cd packages/engine && npm test && npx tsc --noEmit -p .        # engine (Node 22.18+ runs .ts directly)
 cd packages/dutch && npm test                                  # base forms (shared cases)
-cd packages/ai && npm test                                     # level work
+cd packages/ai && npm test                                     # level work, page photos, covers
+cd packages/books && npm test                                  # stitching, progress, PDF (real-PDF tests need pdf-lib + pdfjs-dist)
+supabase/tests/run.sh                                          # schema + row-level security on local Postgres
 node apps/playtest/build.mjs && node apps/playtest/test/e2e.mjs  # reader + browser test (mocked Claude)
 cd services/ingest && python -m unittest discover -s tests -t tests
 python -m boekenwurm_ingest check -v DIR_OR_EPUB...             # import check

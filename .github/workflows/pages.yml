@@ -37,6 +37,11 @@ jobs:
       - name: Level work (prompts, parsing, checks)
         working-directory: packages/ai
         run: npm test && tsc --noEmit -p .
+      - name: Books (page stitching, progress, PDF text)
+        working-directory: packages/books
+        run: npm install --no-audit --no-fund && npm test && tsc --noEmit -p .
+      - name: Database schema and row-level security
+        run: supabase/tests/run.sh
       - name: Ingest
         working-directory: services/ingest
         run: python -m unittest discover -s tests -t tests
