@@ -24,10 +24,12 @@ owner asks, and update the design doc and the tests together.
 - `packages/ai/` — model-agnostic level work: book grading, matching a paragraph to a level, word-in-context;
   prompts, defensive parsing, validation. The network call lives in the app.
 - `packages/books/` — getting books in: `stitch.ts` (pages → paragraphs across page breaks, progress through a
-  printed book), `pdf.ts` (PDF text → paragraphs, scanned-PDF detection; pdf.js passed in).
+  printed book), `pdf.ts` (PDF text → paragraphs, scanned-PDF detection; pdf.js passed in), `ocr.ts` (free on-device page reading:
+  Tesseract lines → paragraphs, words to check).
 - `packages/ai/` also has `photo.ts`: page photos → paragraphs and covers → title/author/ISBN (Claude vision).
 - `supabase/` — database schema with owner-only row-level security; `supabase/tests/run.sh` tests it on local Postgres.
-- `docs/ARCHITECTURE.md` — the hosted app: React + Vite PWA, Supabase (EU), sign-in, sync, camera flow.
+- `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
+  link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.
 - `apps/playtest/` — the reader, built into one page and hosted on GitHub Pages by `.github/workflows/pages.yml`.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
@@ -58,3 +60,4 @@ The owner's material, when a session has it: books in `~/Documents/Books/Dutch/`
 - Every rule change comes with a test that states the rule in numbers (see `test/checkpoint.test.ts`).
 - Keep the engine pure: no I/O, no clocks (pass `now`), no randomness.
 - Never run level matching on the owner's books from a session; tests use invented text and mocked replies.
+- Never add a Boekenwurm-owned AI key or a server that calls a model: AI runs only on the reader's own key.

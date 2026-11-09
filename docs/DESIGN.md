@@ -312,8 +312,11 @@ anywhere except `private/`.
 
 ## Decided
 
-- The app: React + Vite PWA, Supabase (EU) with email-link, Apple and Google sign-in; page photos read by Claude;
-  an open Wiktionary dictionary for everyone plus a private textbook import. See ARCHITECTURE.md. 2026-11-09.
+- The app: a web app that installs to the home screen (no app stores), React + Vite, Supabase (EU) with email-link
+  and Google sign-in; an open Wiktionary dictionary for everyone plus a private textbook import. See ARCHITECTURE.md.
+  2026-11-09.
+- AI never runs on Boekenwurm's budget: Claude features use the reader's own key. Without one, free mode reads page
+  photos on the device and the reader sets book levels. 2026-11-09.
 
 - The last strike ends the run (3 strikes: the 3rd reveal fails). 2026-11-06.
 - During a streak the strike minimum drops on every paragraph, long or short. 2026-11-06.
