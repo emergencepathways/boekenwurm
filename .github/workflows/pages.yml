@@ -1,5 +1,11 @@
-# Test everything, build the reader, and publish it to GitHub Pages on every push to main.
-# One-time setup in the repository: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Test everything, build the app, and publish it to GitHub Pages on every push to main.
+#   https://<owner>.github.io/<repo>/            the app (apps/web)
+#   https://<owner>.github.io/<repo>/playtest/   the first playtest, kept for reference
+# One-time setup in the repository:
+#   Settings → Pages → Build and deployment → Source: "GitHub Actions".
+#   Settings → Secrets and variables → Actions: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.
+#   Both are public by design (they ship to every browser); row-level security protects the data. Without them the
+#   app still builds and runs on each device only, without sign-in.
 name: Test and publish
 
 on:
@@ -23,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -45,11 +53,32 @@ jobs:
       - name: Ingest
         working-directory: services/ingest
         run: python -m unittest discover -s tests -t tests
-      - name: Build the reader
-        run: node apps/playtest/build.mjs
+
+      - name: App dependencies
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+      - name: App tests (import check, sync rules)
+        working-directory: apps/web
+        run: npm test && npm run typecheck
+      - name: Build the app
+        working-directory: apps/web
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::Supabase secrets are not available to this run; the app is built without sign-in."
+          fi
+          npx vite build
+      - name: Add the playtest under /playtest/
+        run: |
+          node apps/playtest/build.mjs
+          mkdir -p apps/web/dist/playtest
+          cp apps/playtest/dist/site/index.html apps/web/dist/playtest/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/playtest/dist/site
+          path: apps/web/dist
 
   deploy:
     if: github.event_name != 'pull_request'
