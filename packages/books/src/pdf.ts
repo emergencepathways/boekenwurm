@@ -149,7 +149,7 @@ export function joinLines(lines: string[]): string {
 
 /** The parts of pdf.js used here; pass the library in (`await import("pdfjs-dist")`). */
 export interface PdfJs {
-  getDocument(src: { data: Uint8Array; disableFontFace?: boolean; isEvalSupported?: boolean }): { promise: Promise<PdfDoc> };
+  getDocument(src: { data: Uint8Array; disableFontFace?: boolean; isEvalSupported?: boolean }): { promise: Promise<PdfDoc>; destroy?(): Promise<void> };
 }
 interface PdfDoc {
   numPages: number;
@@ -166,7 +166,8 @@ export interface PdfReading {
 }
 
 export async function readPdf(pdfjs: PdfJs, data: Uint8Array, opts: { maxPages?: number } = {}): Promise<PdfReading> {
-  const doc = await pdfjs.getDocument({ data, disableFontFace: true, isEvalSupported: false }).promise;
+  const task = pdfjs.getDocument({ data, disableFontFace: true, isEvalSupported: false });
+  const doc = await task.promise;
   const n = Math.min(doc.numPages, opts.maxPages ?? 2000);
   const allLines: Line[][] = [];
   for (let i = 1; i <= n; i++) {
@@ -180,7 +181,8 @@ export async function readPdf(pdfjs: PdfJs, data: Uint8Array, opts: { maxPages?:
     }
     allLines.push(linesFromItems(items));
   }
-  await doc.destroy?.();
+  // pdf.js 5 frees the document with doc.destroy(); pdf.js 6 with the loading task's destroy().
+  await (task.destroy ? task.destroy() : doc.destroy?.());
   const heads = runningHeads(allLines);
   const scannedPages: number[] = [];
   const pages: PageText[] = allLines.map((lines, i) => {
