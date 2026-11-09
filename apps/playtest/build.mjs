@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const engine = join(here, "..", "..", "packages", "engine");
 const out = mkdtempSync(join(tmpdir(), "boekenwurm-engine-"));
+// No ambient type packages: an empty type folder works on every TypeScript version ("--types ''" fails on 5.x).
+const NO_TYPES = ["--typeRoots", mkdtempSync(join(tmpdir(), "boekenwurm-notypes-"))];
 
 // Order matters: each module only uses the ones above it.
 const MODULES = ["checkpoint", "definitions", "badges", "session", "words", "progress"];
@@ -17,14 +19,14 @@ const MODULES = ["checkpoint", "definitions", "badges", "session", "words", "pro
 execFileSync("tsc", [
   ...MODULES.map((m) => join(engine, "src", `${m}.ts`)),
   "--outDir", out, "--target", "ES2022", "--module", "ES2022", "--moduleResolution", "bundler",
-  "--rewriteRelativeImportExtensions", "--strict", "--skipLibCheck", "--types", "",
+  "--rewriteRelativeImportExtensions", "--strict", "--skipLibCheck", ...NO_TYPES,
 ], { stdio: "inherit" });
 
 const exported = [];
 // packages/dutch: the base-form finder, compiled the same way
 const dutchOut = mkdtempSync(join(tmpdir(), "boekenwurm-dutch-"));
 execFileSync("tsc", [join(here, "..", "..", "packages", "dutch", "src", "lemma.ts"), "--outDir", dutchOut, "--target", "ES2022",
-  "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", "--types", ""], { stdio: "inherit" });
+  "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", ...NO_TYPES], { stdio: "inherit" });
 const dutchJs = readFileSync(join(dutchOut, "lemma.js"), "utf8").replace(/^export\s+(function|const)/gm, "$1");
 rmSync(dutchOut, { recursive: true, force: true });
 const irregular = readFileSync(join(here, "..", "..", "data", "nl", "irregular-verbs.json"), "utf8");
@@ -32,7 +34,7 @@ const irregular = readFileSync(join(here, "..", "..", "data", "nl", "irregular-v
 // packages/ai: prompts, parsing and checks for level work
 const aiOut = mkdtempSync(join(tmpdir(), "boekenwurm-ai-"));
 execFileSync("tsc", [join(here, "..", "..", "packages", "ai", "src", "level.ts"), "--outDir", aiOut, "--target", "ES2022",
-  "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", "--types", ""], { stdio: "inherit" });
+  "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", ...NO_TYPES], { stdio: "inherit" });
 const aiNames = [];
 const aiJs = readFileSync(join(aiOut, "level.js"), "utf8").replace(/^export\s+(function|const)\s+([A-Za-z_$][\w$]*)/gm, (_, k, n) => {
   aiNames.push(n);
