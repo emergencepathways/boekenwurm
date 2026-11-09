@@ -27,10 +27,10 @@ hosting and data. The first playtest is kept on the `playtest-v1` branch.
 | `services/ingest` — import check, paragraphs, private textbook word list (Python) | working, tested |
 | `packages/dutch` — base forms (TypeScript, twin in Python) | working, tested |
 | `packages/ai` — book level, level matching, words in context | working, tested |
-| `apps/playtest` — the reader, hosted on GitHub Pages | working, browser-tested |
+| `apps/web` — the installable app: Home, reader, Add book (EPUB, PDF, camera), Study, sign-in and sync | working, browser-tested; hosted on GitHub Pages |
+| `apps/playtest` — the first reader, kept at `/playtest/` | working, browser-tested |
 | `packages/books` — page stitching, progress, PDF text | working, tested |
 | `supabase/` — database with owner-only access | working, tested on Postgres |
-| `apps/web` — the mobile app (React + Vite PWA) | next: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Boekenwurm for Kobo (KOReader plugin) | after the web app |
 
 ## Try it
@@ -38,6 +38,9 @@ hosting and data. The first playtest is kept on the `playtest-v1` branch.
 Requires Node 22.18+ and Python 3.11+.
 
 ```bash
+# the app, on http://localhost:5173 (sign-in needs apps/web/.env.local; see apps/web/.env.example)
+cd apps/web && npm install && npm run dev
+
 # engine tests
 cd packages/engine && npm test
 

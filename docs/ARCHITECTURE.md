@@ -171,8 +171,16 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 
 1. ✅ `packages/books`: page stitching, progress, PDF text, free on-device page reading; `packages/ai`: page and cover
    reading with Claude. Database schema.
-2. `apps/web` skeleton: tabs, Home with sample story, reader ported from the playtest, local store.
-3. Add book: EPUB and PDF; then the camera flow.
-4. Supabase: sign-in, sync, storage.
-5. Study tab with FSRS; default dictionary build; textbook import.
-6. Install prompts and home-screen polish; hosting with preview deploys; then the Kobo plugin.
+2. ✅ `apps/web`: tabs, Home with the sample story, the reader ported from the playtest, the device store (IndexedDB).
+3. ✅ Add book: EPUB and PDF (text and scanned); the camera flow (cover, details, pages; Claude or on the device).
+4. ✅ Supabase: email sign-in (link, or the 6-digit code from the same email for the Home Screen app on iOS, which
+   keeps its own sign-in apart from Safari), sync of profile, books, paragraphs, sessions, word counts and cards,
+   covers in storage, and an in-app connection check (Me → Connection check).
+5. ✅ Study tab with FSRS (`ts-fsrs`) and CSV export; private textbook word-list import. Still to do: the default
+   Wiktionary dictionary build, `.apkg` export.
+6. ✅ Install: iOS Add to Home Screen sheet, Android install prompt after a finished session; GitHub Pages builds the
+   app from the repository's Actions secrets. Still to do: preview deploys per pull request; then the Kobo plugin.
+
+Not synced yet, by choice for now: page photos stay on the device that took them (their text is synced), and matched
+paragraphs and word explanations are cached per device (`paragraph_versions` is in the schema for when they are).
+Google sign-in is left for later; it needs an OAuth client in Google Cloud and the provider turned on in Supabase.
