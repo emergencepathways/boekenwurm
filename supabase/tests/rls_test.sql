@@ -63,6 +63,20 @@ exception when insufficient_privilege then raise notice 'ok: storage is limited 
 end $$;
 reset role;
 
+-- first page (0002): progress runs first_page..page_count, and the first page can't come after the last
+do $$ begin
+  if (select first_page from books where id = '10000000-0000-0000-0000-000000000001') <> 1 then
+    raise exception 'FAIL: existing books should start at page 1';
+  end if;
+  update books set first_page = 9, page_count = 212 where id = '10000000-0000-0000-0000-000000000001';
+  raise notice 'ok: a book can start at page 9 of 212';
+  begin
+    update books set first_page = 300 where id = '10000000-0000-0000-0000-000000000001';
+    raise exception 'FAIL: first page 300 of 212 was accepted';
+  exception when check_violation then raise notice 'ok: the first page cannot come after the last';
+  end;
+end $$;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

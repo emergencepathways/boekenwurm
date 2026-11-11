@@ -11,5 +11,5 @@ run "'$bin/initdb' -D '$tmp/data' -A trust -U postgres >/dev/null"
 run "'$bin/pg_ctl' -D '$tmp/data' -o '-k $tmp -p 54329 -c listen_addresses=' -l '$tmp/log' -w start >/dev/null"
 psql=(psql -h "$tmp" -p 54329 -U postgres -d postgres -v ON_ERROR_STOP=1 -q -X)
 "${psql[@]}" -f "$here/supabase_stubs.sql"
-"${psql[@]}" -f "$here/../migrations/0001_init.sql"
+for m in "$here"/../migrations/*.sql; do "${psql[@]}" -f "$m"; done   # every migration, in order
 "${psql[@]}" -t -A -f "$here/rls_test.sql" 2>&1 | sed 's/^psql:[^:]*:[0-9]*: NOTICE:  /  /'
