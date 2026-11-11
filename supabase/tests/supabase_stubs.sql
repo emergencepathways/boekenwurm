@@ -1,6 +1,7 @@
 -- Minimal stand-ins for the parts of Supabase the migration uses, so it can be tested on plain Postgres.
 -- Not used in production: Supabase provides the real auth and storage schemas.
 create role authenticated nologin;
+create role anon nologin;
 create schema auth;
 create table auth.users (id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$

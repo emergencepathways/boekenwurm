@@ -77,6 +77,44 @@ do $$ begin
   end;
 end $$;
 
+-- translations (0003): 200 Google lookups a day per reader, counted where the reader can't change the count
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$
+declare r record; i integer;
+begin
+  for i in 1..200 loop
+    select * into r from claim_translation('Europe/Amsterdam');
+    if not r.allowed then raise exception 'FAIL: lookup % of 200 was refused', i; end if;
+  end loop;
+  if r.used <> 200 then raise exception 'FAIL: count is % after 200 lookups', r.used; end if;
+  select * into r from claim_translation('Europe/Amsterdam');
+  if r.allowed or r.used <> 200 then raise exception 'FAIL: the 201st lookup was allowed'; end if;
+  raise notice 'ok: 200 lookups a day are allowed, the 201st is refused';
+  select * into r from claim_translation('Not/AZone');
+  raise notice 'ok: an unknown time zone counts in UTC';
+end $$;
+do $$ begin
+  update translation_usage set words = 0;
+  if exists (select 1 from translation_usage where words = 0) then raise exception 'FAIL: B reset their own count'; end if;
+  raise notice 'ok: a reader cannot reset their count';
+end $$;
+do $$ begin
+  insert into translation_usage (day, words) values (current_date + 1, 0);
+  raise exception 'FAIL: B wrote their own count';
+exception when insufficient_privilege then raise notice 'ok: a reader cannot write their count';
+end $$;
+insert into word_meanings (word, lemma, meaning, source) values ('fietsenstalling', 'fietsenstalling', 'bicycle shed', 'google');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+select 'A sees B''s usage rows: ' || count(*) from translation_usage;
+select 'A sees B''s saved meanings: ' || count(*) from word_meanings;
+do $$ declare r record; begin
+  select * into r from claim_translation('Europe/Amsterdam');
+  if not r.allowed or r.used <> 1 then raise exception 'FAIL: A''s count is not their own'; end if;
+  raise notice 'ok: each reader has their own count';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')
