@@ -31,9 +31,12 @@ owner asks, and update the design doc and the tests together.
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.
-- `apps/playtest/` — the reader, built into one page and hosted on GitHub Pages by `.github/workflows/pages.yml`.
+- `apps/web/` — the installable app (React + Vite PWA), deployed to Cloudflare Pages by `.github/workflows/publish.yml`.
+  Nothing is preloaded except the open dictionary (`public/dict/nl.json`, built at deploy time, not committed).
+- `apps/playtest/` — the first reader, built into one page; kept for reference, no longer hosted.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
-  `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `cli.py`.
+  `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `dictionary.py` (the open
+  Wiktionary + wordfreq dictionary), `cli.py`.
 - `private/` — the owner's material and everything extracted from it.
 
 ## Commands
@@ -49,6 +52,8 @@ cd services/ingest && python -m unittest discover -s tests -t tests
 python -m boekenwurm_ingest check -v DIR_OR_EPUB...             # import check
 python -m boekenwurm_ingest paragraphs BOOK.epub private/x.json # paragraphs + tokens for the app
 python -m boekenwurm_ingest textbook TEXTBOOK.pdf               # -> private/textbook/ (refuses other repo paths)
+python -m boekenwurm_ingest dictionary DUTCH.jsonl.gz OUT.json  # open dictionary (needs wordfreq; source from kaikki.org)
+cd apps/web && npm test && npm run build && node test/e2e.mjs   # app: unit tests, build, browser test (mocked Claude)
 ```
 
 The owner's material, when a session has it: books in `~/Documents/Books/Dutch/` and course files in

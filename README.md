@@ -27,8 +27,9 @@ hosting and data. The first playtest is kept on the `playtest-v1` branch.
 | `services/ingest` — import check, paragraphs, private textbook word list (Python) | working, tested |
 | `packages/dutch` — base forms (TypeScript, twin in Python) | working, tested |
 | `packages/ai` — book level, level matching, words in context | working, tested |
-| `apps/web` — the installable app: Home, reader, Add book (EPUB, PDF, camera), Study, sign-in and sync | working, browser-tested; hosted on GitHub Pages |
-| `apps/playtest` — the first reader, kept at `/playtest/` | working, browser-tested |
+| `apps/web` — the installable app: Home, reader, Add book (EPUB, PDF, camera), Study, sign-in and sync | working, browser-tested; hosted on Cloudflare Pages |
+| Open dictionary — Wiktionary + wordfreq, built at deploy time (`services/ingest`) | working, tested |
+| `apps/playtest` — the first reader, kept for reference (not hosted) | working, browser-tested |
 | `packages/books` — page stitching, progress, PDF text | working, tested |
 | `supabase/` — database with owner-only access | working, tested on Postgres |
 | Boekenwurm for Kobo (KOReader plugin) | after the web app |

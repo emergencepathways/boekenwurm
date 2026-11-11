@@ -13,8 +13,8 @@ A single-page reader for trying the rules before the real web app exists. It run
 
 ## Hosted
 
-Every push to `main` runs all tests and publishes the reader to GitHub Pages
-(`.github/workflows/pages.yml`). One-time setup: repository Settings → Pages → Source: **GitHub Actions**.
+The playtest is no longer published: the app (`apps/web`) replaced it on the live site. CI still builds it, and the
+branch `playtest-v1` keeps it exactly as it was tested.
 
 The hosted page sends network requests only to `api.anthropic.com` (enforced by its content-security policy), with the
 reader's own key, which stays in their browser.

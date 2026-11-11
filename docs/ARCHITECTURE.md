@@ -48,7 +48,7 @@ leaves one clear place to add a server later (a Supabase Edge Function) if a fea
 | App framework | React 19 + Vite + TypeScript | Most-requested front-end skill (portfolio); fast builds; large ecosystem |
 | Feels like a phone app | PWA: web manifest, service worker (`vite-plugin-pwa`), `display: standalone`, home-screen icons (incl. `apple-touch-icon`), safe-area padding, bottom tab bar, no browser bars once added to the home screen | Installs from the browser on iOS and Android; camera works; no store, no fees |
 | Getting it on the home screen | Android: the browser's install prompt (`beforeinstallprompt`), offered after the first finished session. iOS: a one-time sheet showing Share → Add to Home Screen, since Safari has no install prompt | Readers who skip it still get the full app in the browser |
-| Hosting the app | GitHub Pages now (already set up, free); Cloudflare Pages when preview deploys per pull request are wanted | No new account to start; moving later is a settings change, not a rewrite |
+| Hosting the app | Cloudflare Pages (`boekenwurm.pages.dev`), deployed by GitHub Actions after the tests pass | Free, with unmetered static traffic; commercial use allowed; EU-friendly CDN; a custom domain later is a settings change. GitHub Pages discourages commercial SaaS, Netlify pauses sites when free credits run out, Vercel Hobby is non-commercial (compared 2026-11-11) |
 | Accounts, database, files | Supabase, EU region | Postgres + auth + private storage in one; row-level security; GDPR-friendly; generous free tier; open source, so no lock-in |
 | Sign-in | Email link (magic link) + Google | No passwords to manage; Google is one tap on Android and works on iOS. Sign in with Apple needs a paid Apple developer account, so it's left out; any Apple user can use the email link |
 | Offline and speed | Local-first: IndexedDB is the source of truth on the device; changes sync to Supabase in the background | Reading never waits for the network; works on a train |
@@ -151,8 +151,14 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 
 ## Word lists
 
-- **Default for everyone:** an open Dutch dictionary built from Wiktionary (meanings) and wordfreq (frequency).
-  Built by a script in CI, shipped as a static JSON file the app caches; attribution on the Me → About screen.
+- **Default for everyone:** an open Dutch dictionary built from English Wiktionary's Dutch entries (meanings, de/het,
+  inflected forms) and wordfreq (frequency): `python -m boekenwurm_ingest dictionary`. The deploy workflow downloads the
+  wiktextract extract from kaikki.org (cached for a month), keeps the 40,000 most common lemmas with a modern meaning and
+  the forms that point at them (*liep → lopen*, *huizen → huis*), and ships `/dict/nl.json` (about 1–1.5 MB compressed).
+  The app loads it in the background, the service worker keeps it for offline use, and Me → About carries the
+  attribution. Both sources are CC BY-SA 4.0, and so is the built file.
+- A word that is mostly a form of a commoner word (*was* → *zijn*) maps to that word; its own meaning (*laundry*) is
+  kept but ranked lower. Dutch-language explanations still come from Claude; a Dutch Wiktionary build can add them later.
 - **Your textbook (private):** each reader can import their own textbook's word list from their own copy. Nothing from
   any textbook is part of the app or this repository.
 - Words are tracked against the active list: "known", "in my textbook up to chapter 13", "new".
@@ -171,15 +177,16 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 
 1. ✅ `packages/books`: page stitching, progress, PDF text, free on-device page reading; `packages/ai`: page and cover
    reading with Claude. Database schema.
-2. ✅ `apps/web`: tabs, Home with the sample story, the reader ported from the playtest, the device store (IndexedDB).
+2. ✅ `apps/web`: tabs, Home, the reader ported from the playtest, the device store (IndexedDB). Nothing is preloaded:
+   a new reader starts with an empty shelf and adds their own books (decided 2026-11-11).
 3. ✅ Add book: EPUB and PDF (text and scanned); the camera flow (cover, details, pages; Claude or on the device).
 4. ✅ Supabase: email sign-in (link, or the 6-digit code from the same email for the Home Screen app on iOS, which
    keeps its own sign-in apart from Safari), sync of profile, books, paragraphs, sessions, word counts and cards,
    covers in storage, and an in-app connection check (Me → Connection check).
-5. ✅ Study tab with FSRS (`ts-fsrs`) and CSV export; private textbook word-list import. Still to do: the default
-   Wiktionary dictionary build, `.apkg` export.
-6. ✅ Install: iOS Add to Home Screen sheet, Android install prompt after a finished session; GitHub Pages builds the
-   app from the repository's Actions secrets. Still to do: preview deploys per pull request; then the Kobo plugin.
+5. ✅ Study tab with FSRS (`ts-fsrs`) and CSV export; private textbook word-list import; the open Wiktionary +
+   wordfreq dictionary, built at deploy time. Still to do: `.apkg` export.
+6. ✅ Install: iOS Add to Home Screen sheet, Android install prompt after a finished session. Hosted on Cloudflare
+   Pages, deployed from GitHub Actions with the repository's secrets. Still to do: preview deploys per pull request; then the Kobo plugin.
 
 Not synced yet, by choice for now: page photos stay on the device that took them (their text is synced), and matched
 paragraphs and word explanations are cached per device (`paragraph_versions` is in the schema for when they are).

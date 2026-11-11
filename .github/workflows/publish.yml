@@ -1,0 +1,148 @@
+# Test everything, build the open dictionary and the app, and publish to Cloudflare Pages on every push to main.
+#   https://<project>.pages.dev   the app (apps/web)
+#
+# One-time setup in the GitHub repository (Settings → Secrets and variables → Actions):
+#   Secrets  VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY   public by design; row-level security protects the data
+#            CLOUDFLARE_API_TOKEN                              a token with the "Cloudflare Pages: Edit" permission
+#            CLOUDFLARE_ACCOUNT_ID                             from the Cloudflare dashboard
+#   Variable CLOUDFLARE_PROJECT (optional)                     the Pages project name; default "boekenwurm"
+# The first deploy creates the Pages project. Pull requests run the tests and the build, without deploying.
+name: Test and publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ---------------------------------------------------------------- tests
+      - name: Install TypeScript
+        run: npm install --global typescript@5.8.3
+      - name: Engine
+        working-directory: packages/engine
+        run: npm test && tsc --noEmit -p .
+      - name: Base forms (shared cases)
+        working-directory: packages/dutch
+        run: npm test && tsc --noEmit -p .
+      - name: Level work (prompts, parsing, checks)
+        working-directory: packages/ai
+        run: npm test && tsc --noEmit -p .
+      - name: Books (page stitching, progress, PDF text)
+        working-directory: packages/books
+        run: npm install --no-audit --no-fund && npm test && tsc --noEmit -p .
+      - name: Database schema and row-level security
+        run: supabase/tests/run.sh
+      - name: Ingest and dictionary build
+        working-directory: services/ingest
+        run: python -m unittest discover -s tests -t tests
+      - name: Playtest still builds (kept on the playtest-v1 branch; not published)
+        run: node apps/playtest/build.mjs
+      - name: App dependencies
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+      - name: App tests (import check, sync rules)
+        working-directory: apps/web
+        run: npm test && npm run typecheck
+
+      # ---------------------------------------------------------------- the open dictionary
+      # English Wiktionary's Dutch entries (kaikki.org, CC BY-SA 4.0), downloaded once a month and cached.
+      - name: Month (dictionary cache key)
+        id: month
+        run: echo "m=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - name: Wiktionary data cache
+        id: wikt
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/boekenwurm/kaikki-nl.jsonl.gz
+          key: kaikki-nl-${{ steps.month.outputs.m }}
+          restore-keys: kaikki-nl-
+      - name: Download the Dutch Wiktionary extract
+        if: steps.wikt.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          mkdir -p ~/.cache/boekenwurm
+          out=~/.cache/boekenwurm/kaikki-nl.jsonl.gz
+          # The Dutch-only file first; if it has moved, stream the full English Wiktionary export and keep the Dutch lines.
+          if curl -fsSL --retry 3 "https://kaikki.org/dictionary/Dutch/kaikki.org-dictionary-Dutch.jsonl" | gzip > "$out.tmp" \
+             && [ "$(gzip -cd "$out.tmp" | head -c 100 | wc -c)" -gt 0 ]; then
+            mv "$out.tmp" "$out"
+          else
+            echo "::warning::The Dutch-only file wasn't found; filtering the full Wiktionary export (slower)."
+            curl -fsSL --retry 3 "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz" \
+              | gzip -cd | grep -F '"lang_code": "nl"' | gzip > "$out.tmp"
+            mv "$out.tmp" "$out"
+          fi
+          ls -l "$out"
+      - name: Build the dictionary
+        run: |
+          pip install --quiet "wordfreq==3.1.1"
+          mkdir -p apps/web/public/dict
+          cd services/ingest && python -m boekenwurm_ingest dictionary ~/.cache/boekenwurm/kaikki-nl.jsonl.gz ../../apps/web/public/dict/nl.json
+
+      # ---------------------------------------------------------------- the app
+      - name: Build the app
+        working-directory: apps/web
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::Supabase secrets are not available to this run; the app is built without sign-in."
+          fi
+          npx vite build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: apps/web/dist
+          retention-days: 7
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.CLOUDFLARE_PROJECT || 'boekenwurm' }}.pages.dev
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CLOUDFLARE_PROJECT || 'boekenwurm' }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets to deploy (see the top of this file)."
+            exit 1
+          fi
+          # Create the project on the first deploy; later runs find it already there.
+          npx --yes wrangler@4.152.0 pages project list | grep -qw "$PROJECT" \
+            || npx --yes wrangler@4.152.0 pages project create "$PROJECT" --production-branch=main
+          npx --yes wrangler@4.152.0 pages deploy site --project-name="$PROJECT" --branch=main --commit-dirty=true

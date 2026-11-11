@@ -225,7 +225,8 @@ title is the one for the highest level reached.
 - During a streak, definitions are always in Dutch: part of the challenge.
 - Otherwise the reader chooses (English by default).
 
-Sources: Wiktionary (English glosses and Dutch definitions, CC BY-SA, attributed in the app) and, privately, the
+Sources: the open dictionary built from English Wiktionary and wordfreq (English meanings, CC BY-SA, attributed in the
+app; Dutch definitions come from Claude for now) and, privately, the
 reader's own textbook word list.
 
 ## 3. After the session
@@ -256,8 +257,8 @@ Export, for readers who keep their cards elsewhere:
 ## 4. Architecture
 
 ```
-apps/playtest          the reader today: one page built from the packages; hosted on GitHub Pages
-apps/web               React + Vite + TypeScript, installable PWA (see ARCHITECTURE.md)  (next)
+apps/playtest          the first reader: one page built from the packages (kept for reference; no longer hosted)
+apps/web               React + Vite + TypeScript, installable PWA on Cloudflare Pages (see ARCHITECTURE.md)
 packages/books         page stitching, progress through printed books, PDF text
 packages/ai            level work: grading, matching, word-in-context prompts, parsing and checks
 packages/engine        checkpoint, streaks, sessions, word statistics, tokens and levels — pure TypeScript
@@ -298,7 +299,8 @@ anywhere except `private/`.
 
 1. ✅ Engine: checkpoint, streaks, sessions, word statistics, streak tokens, level-up offers and level badges. Import check.
    Private textbook extraction.
-2. ✅ Base forms (rules everywhere, spaCy on the server). Next: the Wiktionary dictionary build, chapter reading
+2. ✅ Base forms (rules everywhere, spaCy on the server); the open Wiktionary + wordfreq dictionary, whose form table
+   gives the app base forms for irregular and regular words alike. Next: chapter reading
    texts as paragraphs.
 3. Web app: library, reader with tap-to-reveal, checkpoint, session summary, built-in flashcards.
 4. Accounts and hosting; Anki and CSV export.
@@ -312,6 +314,8 @@ anywhere except `private/`.
 
 ## Decided
 
+- Hosted on Cloudflare Pages with a generic address (`*.pages.dev`), deployed by GitHub Actions; nothing is preloaded
+  in the app except the open dictionary. 2026-11-11.
 - The app: a web app that installs to the home screen (no app stores), React + Vite, Supabase (EU) with email-link
   and Google sign-in; an open Wiktionary dictionary for everyone plus a private textbook import. See ARCHITECTURE.md.
   2026-11-09.
