@@ -276,6 +276,9 @@ td .forms { color: var(--muted); font-size: 0.82rem; }
 .thumb .img .spinner { position: absolute; inset: 0; margin: auto; }
 .thumb .seen { font-weight: 500; color: var(--muted); }
 .thumb .seen.off { color: var(--strike); font-weight: 700; }
+.thumb.notext .img { border: 2px dashed var(--line); background: transparent; display: grid; place-items: center; }
+.thumb.notext .blank { font: 600 0.62rem var(--ui); color: var(--muted); }
+.gapask { border-color: var(--leaf); }
 .pagenums { display: flex; gap: 10px; }
 .pagenums > span { flex: 1; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
 .pagenums small { font: 500 0.72rem var(--ui); color: var(--muted); }

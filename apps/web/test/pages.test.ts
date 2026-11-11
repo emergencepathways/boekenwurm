@@ -3,7 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  arrange, differs, flags, keepEarlierOrder, keepPosition, nextPage, nextSection, numberPages, SECTION_SIZE, stitchBook, type PageEntry,
+  arrange, differs, flags, inSection, keepEarlierOrder, keepPosition, markNoText, missingPages, nextPage, nextSection, noTextPages, numberPages,
+  SECTION_SIZE, stitchBook, type PageEntry,
 } from "../src/lib/pages.ts";
 
 const range = { firstPage: 7, lastPage: 212 };
@@ -116,4 +117,35 @@ test("the reader stays on the same paragraph when an earlier page arrives later"
   // Read to the end of what was photographed: continue at the first new page.
   assert.equal(keepPosition(before, 3, [...after, p("e", 14)]), 4);
   assert.equal(keepPosition(before, 0, after), 0);
+});
+
+test("missing pages: the gaps between the first page and the furthest one, as runs", () => {
+  // 7, 8, then the reader typed 10 (page 9 is a picture), then 11, then 14 typed.
+  const es = [entry(0, 7), entry(1, 8), entry(2, 10, undefined, { manualPage: 10 }), entry(3, 11), entry(4, 14, undefined, { manualPage: 14 })];
+  assert.deepEqual(missingPages(es, range), [[9], [12, 13]]);
+  assert.deepEqual(missingPages([entry(0, 7), entry(1, 8)], range), []);
+  assert.deepEqual(missingPages([], range), []);
+});
+
+test("a page marked as having no text is no longer missing, counts as read, and isn't stitched or flagged", () => {
+  const es = [entry(0, 7), entry(1, 8), entry(2, 10, undefined, { manualPage: 10 })];
+  const marked = markNoText(es, [9], 3, 1);
+  assert.deepEqual(missingPages(marked, range), []);
+  assert.deepEqual(noTextPages(marked), [9]);
+  assert.deepEqual(order(marked), ["0:7", "1:8", "3:9", "2:10"]);
+  assert.deepEqual(stitchBook(marked, range).map((p) => p.pageNumber), [7, 8, 10]);
+  const placed = arrange(marked, range);
+  assert.equal(flags(placed[2], placed, range).length, 0);
+  // The next photo still follows the furthest page.
+  assert.equal(nextPage(marked, range), 11);
+});
+
+test("a missed page photographed later slots into its place and doesn't count towards the 20", () => {
+  const es = [...Array.from({ length: 20 }, (_, i) => entry(i, null, undefined, i >= 2 ? { manualPage: 8 + i } : {}))];
+  assert.equal(inSection(es, 1), 20);
+  assert.deepEqual(missingPages(es, range), [[9]]);
+  const filled = [...es, entry(20, 9, undefined, { manualPage: 9, filled: true })];
+  assert.equal(inSection(filled, 1), 20, "still 20: the missed page is extra");
+  assert.deepEqual(missingPages(filled, range), []);
+  assert.deepEqual(arrange(filled, range).slice(0, 4).map((p) => p.pageNumber), [7, 8, 9, 10]);
 });

@@ -5,7 +5,9 @@
  *   3. pages, in sections of up to 20 photos per visit: each photo is numbered in the order taken, from the first
  *      page (lib/pages.ts), and read in the background (Claude with a key, the device for free). The number read from
  *      the photo is shown next to its page number; where they differ the reader can change it, and the pages after
- *      it follow. A retake replaces the photo in its place, so the order holds.
+ *      it follow. A retake replaces the photo in its place, so the order holds. When a section ends with a gap in the
+ *      page numbers, the reader is asked: a missed page (photograph it now) or a page with no text (a picture, map,
+ *      or left out on purpose).
  * Pages are stitched into paragraphs across page breaks, in page order.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,8 +16,8 @@ import { normalizeIsbn } from "@boekenwurm/ai";
 import { bookProgress } from "@boekenwurm/books";
 import { bookById, loadText, saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
 import {
-  arrange, differs, flags, isBusy, keepEarlierOrder, keepPosition, nextPage, nextSection, numberPages, SECTION_SIZE, stitchBook,
-  type PageEntry, type Placed, type Range,
+  arrange, differs, flags, inSection as countInSection, isBusy, keepEarlierOrder, keepPosition, markNoText, missingPages, nextPage, nextSection,
+  numberPages, SECTION_SIZE, stitchBook, type PageEntry, type Placed, type Range,
 } from "../lib/pages.ts";
 import { newBook, readCover, readPhotoPage, toParagraphs } from "../lib/books.ts";
 import { downscale, COVER_SIDE, OCR_SIDE } from "../lib/images.ts";
@@ -353,6 +355,13 @@ function PagesStep({ bookId }: { bookId: string }) {
   const [checking, setChecking] = useState<number | null>(null);
   const [retaking, setRetaking] = useState<number | null>(null);
   const [thumbVersion, setThumbVersion] = useState(0); // a retake changes the photo under the same slot
+  // Missed pages being photographed now: each next photo takes the next of these numbers.
+  const [fill, setFill] = useState<number[]>([]);
+  const fillRef = useRef<number[]>([]);
+  fillRef.current = fill;
+  // The missed-page question: shown when a section ends, or before leaving with gaps; "Decide later" hides it.
+  const [gapAsk, setGapAsk] = useState<{ then: (() => void) | null } | null>(null);
+  const [gapsLater, setGapsLater] = useState(false);
   const queue = useRef<Array<{ seq: number; blob: Blob }>>([]);
   const working = useRef(false);
   const pagesRef = useRef(pages);
@@ -431,12 +440,20 @@ function PagesStep({ bookId }: { bookId: string }) {
    * distinct slots, in the order picked, and the section stops at 20), then is stored and read in the background.
    */
   const add = (photo: Blob) => {
-    if (pagesRef.current.filter((p) => p.section === section).length >= SECTION_SIZE) {
+    // A missed page: it takes its number and slots into place, outside the section's 20.
+    const missed = fillRef.current[0];
+    if (missed == null && countInSection(pagesRef.current, section) >= SECTION_SIZE) {
       toast(`This section is full: ${SECTION_SIZE} photos. Read them, then photograph the next section.`);
       return;
     }
+    if (missed != null) {
+      fillRef.current = fillRef.current.slice(1);
+      setFill(fillRef.current);
+    }
     const seq = Math.max(bookById(bookId)?.nextSeq ?? 0, ...pagesRef.current.map((p) => p.seq + 1));
-    const entry: PageEntry = { seq, section, status: "queued", page: null, problems: [], uncertain: [], by: null };
+    const entry: PageEntry = {
+      seq, section, status: "queued", page: null, problems: [], uncertain: [], by: null, ...(missed != null ? { manualPage: missed, filled: true } : {}),
+    };
     const next = [...pagesRef.current, entry];
     pagesRef.current = next;
     setPages(next);
@@ -472,6 +489,38 @@ function PagesStep({ bookId }: { bookId: string }) {
     void work();
   };
 
+  /** Pages with no text to read (a picture, a map, or left out on purpose): no longer missing, and counted as read. */
+  const markNoTextPages = async (run: number[]) => {
+    const seq = Math.max(bookById(bookId)?.nextSeq ?? 0, ...pagesRef.current.map((p) => p.seq + 1));
+    const next = markNoText(pagesRef.current, run, seq, section);
+    pagesRef.current = next;
+    setPages(next);
+    await persist(next);
+    const b = bookById(bookId);
+    if (b) await saveBook({ ...b, pagesRead: [...new Set([...b.pagesRead, ...run])].sort((x, y) => x - y) });
+  };
+
+  /** Photograph missed pages now: the next photos take these numbers. */
+  const photographMissed = (run: number[]) => {
+    fillRef.current = run;
+    setFill(run);
+    setGapAsk(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  /** Undo a "no text" mark: the page is missing again (or is about to be photographed). */
+  const unmarkNoText = async (seq: number, thenPhotograph: boolean) => {
+    const n = pagesRef.current.find((p) => p.seq === seq)?.manualPage ?? null;
+    const next = pagesRef.current.filter((p) => p.seq !== seq);
+    pagesRef.current = next;
+    setPages(next);
+    setChecking(null);
+    await persist(next);
+    const b = bookById(bookId);
+    if (b && n != null) await saveBook({ ...b, pagesRead: b.pagesRead.filter((x) => x !== n) });
+    if (thenPhotograph && n != null) photographMissed([n]);
+  };
+
   const remove = async (seq: number) => {
     const next = pagesRef.current.filter((p) => p.seq !== seq);
     pagesRef.current = next;
@@ -483,14 +532,19 @@ function PagesStep({ bookId }: { bookId: string }) {
 
   const placed = arrange(pages, range);
   const flagged = placed.filter((p) => flags(p, placed, range).length);
-  const inSection = pages.filter((p) => p.section === section).length;
-  const full = inSection >= SECTION_SIZE;
+  const inSection = countInSection(pages, section);
+  const filling = fill.length > 0;
+  const full = inSection >= SECTION_SIZE && !filling;
+  const gaps = missingPages(pages, range);
+  // Leaving with gaps (Start reading, Add more later): ask first, once per visit.
+  const finish = (then: () => void) => (gaps.length && !gapsLater && !filling ? setGapAsk({ then }) : then());
+  const askGaps = gaps.length > 0 && !filling && !retaking && (gapAsk != null || (full && !gapsLater));
   const ready = pages.filter((p) => p.status === "done").length;
   const busy = pages.filter(isBusy).length;
   const startAt = nextPage(pages, range);
   const retakeOf = retaking != null ? placed.find((p) => p.entry.seq === retaking) : null;
   // The page number the next photo will get.
-  const upcoming = numberPages([...pages, { seq: Number.MAX_SAFE_INTEGER, section, status: "queued", page: null, problems: [], uncertain: [], by: null }], range).get(Number.MAX_SAFE_INTEGER)!;
+  const upcoming = filling ? fill[0] : numberPages([...pages, { seq: Number.MAX_SAFE_INTEGER, section, status: "queued", page: null, problems: [], uncertain: [], by: null }], range).get(Number.MAX_SAFE_INTEGER)!;
   const read = book?.pageCount ? bookProgress(book.pageCount, placed.filter((p) => p.entry.status === "done" && p.pageNumber != null).map((p) => p.pageNumber!), range.firstPage) : null;
 
   const openNext = (afterSeq: number | null) => {
@@ -507,15 +561,36 @@ function PagesStep({ bookId }: { bookId: string }) {
       <p className="muted" style={{ margin: 0 }}>
         {retakeOf
           ? `Retake page ${retakeOf.pageNumber}. It goes back in the same place.`
-          : full
+          : filling
+            ? `Photograph page ${fill[0]}${fill.length > 1 ? ` (then ${fill.slice(1).join(", ")})` : ""}. It goes into its place in the book.`
+            : full
             ? `This section is done: ${SECTION_SIZE} photos.`
             : `Section ${section}: photograph up to ${SECTION_SIZE} pages in order${inSection ? "" : `, starting at page ${startAt}`}. ${useClaude ? "Claude reads each page (one request per page)." : "Each page is read on this device, for free."}`}
       </p>
+
+      {askGaps && (
+        <GapPrompt
+          runs={gaps}
+          onPhotograph={photographMissed}
+          onNoText={(run) => void markNoTextPages(run)}
+          onLater={() => {
+            const then = gapAsk?.then ?? null;
+            setGapAsk(null);
+            setGapsLater(true);
+            then?.();
+          }}
+        />
+      )}
 
       {retakeOf ? (
         <>
           <Camera key={`retake-${retaking}`} onPhoto={(b) => void replace(retakeOf.entry.seq, b)} hint="Flat, in good light, the whole page in the frame, with its page number." />
           <button className="btn ghost" type="button" onClick={() => setRetaking(null)}>Cancel the retake</button>
+        </>
+      ) : filling ? (
+        <>
+          <Camera key="missed" onPhoto={add} hint={`The missed page: page ${fill[0]}.`} />
+          <button className="btn ghost" type="button" onClick={() => setFill([])}>Stop: decide later</button>
         </>
       ) : full ? (
         <section className="panel">
@@ -525,7 +600,7 @@ function PagesStep({ bookId }: { bookId: string }) {
           </p>
           <div className="actions">
             {flagged.length > 0 && <button className="btn" type="button" onClick={() => openNext(null)}>Review flagged pages</button>}
-            <button className="btn primary" type="button" disabled={!ready} onClick={() => open({ name: "reader", bookId })}>Start reading</button>
+            <button className="btn primary" type="button" disabled={!ready} onClick={() => finish(() => open({ name: "reader", bookId }))}>Start reading</button>
           </div>
         </section>
       ) : (
@@ -541,6 +616,15 @@ function PagesStep({ bookId }: { bookId: string }) {
       {placed.length > 0 && (
         <div className="thumbs" aria-label="Photographed pages, in reading order">
           {placed.map((p) => {
+            if (p.entry.noText)
+              return (
+                <button key={p.entry.seq} type="button" className="thumb notext" onClick={() => setChecking(p.entry.seq)}
+                  style={{ background: "none", border: 0, padding: 0, cursor: "pointer" }} aria-label={`Page ${p.pageNumber}, no text to read`}>
+                  <span className="img"><span className="blank">no text</span></span>
+                  <span className="pg">p. {p.pageNumber}</span>
+                  <span className="seen">picture</span>
+                </button>
+              );
             const f = flags(p, placed, range);
             const off = differs(p, range);
             const seen = isBusy(p.entry) ? "reading…" : p.seen != null ? `read ${p.seen}` : "read –";
@@ -569,9 +653,25 @@ function PagesStep({ bookId }: { bookId: string }) {
           the pages after it follow.{placed.some((p) => p.typed) ? " * You typed this number." : ""}
         </p>
       )}
-      <Gaps numbers={placed.map((p) => p.pageNumber)} />
+      {gaps.length > 0 && !askGaps && !filling && (
+        <p className="small muted" style={{ margin: 0 }}>
+          Missing so far: page {gaps.map((r) => (r.length === 1 ? r[0] : `${r[0]}–${r[r.length - 1]}`)).join(", ")}. Reading skips over gaps.{" "}
+          <button className="btn small ghost" type="button" onClick={() => setGapAsk({ then: null })}>Photograph or mark them</button>
+        </p>
+      )}
 
-      {checking != null && placed.find((p) => p.entry.seq === checking) && (
+      {checking != null && placed.find((p) => p.entry.seq === checking)?.entry.noText && (
+        <section className="panel" aria-label="A page with no text">
+          <b>Page {placed.find((p) => p.entry.seq === checking)!.pageNumber}</b>
+          <p style={{ margin: 0 }}>Marked as having no text to read: a picture, a map, or left out on purpose. It counts as read.</p>
+          <div className="actions">
+            <button className="btn small" type="button" onClick={() => void unmarkNoText(checking, true)}>Photograph it instead</button>
+            <button className="btn small ghost" type="button" onClick={() => void unmarkNoText(checking, false)}>Remove the mark</button>
+            <button className="btn small ghost" type="button" onClick={() => setChecking(null)}>Close</button>
+          </div>
+        </section>
+      )}
+      {checking != null && placed.find((p) => p.entry.seq === checking) && !placed.find((p) => p.entry.seq === checking)!.entry.noText && (
         <CheckPage
           key={checking}
           placed={placed.find((p) => p.entry.seq === checking)!}
@@ -596,23 +696,46 @@ function PagesStep({ bookId }: { bookId: string }) {
         />
       )}
 
-      {!full && !retakeOf && (
+      {!full && !retakeOf && !filling && !askGaps && (
         <div className="actions">
-          <button className="btn primary" type="button" disabled={!ready} onClick={() => open({ name: "reader", bookId })}>
+          <button className="btn primary" type="button" disabled={!ready} onClick={() => finish(() => open({ name: "reader", bookId }))}>
             {busy ? `Start reading (${plural(busy, "page")} still reading)` : "Start reading"}
           </button>
-          <button className="btn ghost" type="button" onClick={close}>Add more later</button>
+          <button className="btn ghost" type="button" onClick={() => finish(close)}>Add more later</button>
         </div>
       )}
     </>
   );
 }
 
-function Gaps({ numbers }: { numbers: number[] }) {
-  const s = [...new Set(numbers)].sort((a, b) => a - b);
-  const gaps: string[] = [];
-  for (let i = 1; i < s.length; i++) if (s[i] - s[i - 1] > 1) gaps.push(s[i] - s[i - 1] === 2 ? `${s[i - 1] + 1}` : `${s[i - 1] + 1}–${s[i] - 1}`);
-  return gaps.length ? <p className="small muted" style={{ margin: 0 }}>Missing so far: page {gaps.join(", ")}. Reading skips over gaps; photograph them any time and they slot into place.</p> : null;
+/**
+ * The end of a section with a gap in the page numbers: was a page missed (photograph it now, and it slots into its
+ * place), or does it have no text to read (a picture, a map, or left out on purpose)? One gap at a time.
+ */
+function GapPrompt({ runs, onPhotograph, onNoText, onLater }: {
+  runs: number[][];
+  onPhotograph: (run: number[]) => void;
+  onNoText: (run: number[]) => void;
+  onLater: () => void;
+}) {
+  const run = runs[0];
+  const name = run.length === 1 ? `page ${run[0]}` : `pages ${run[0]}–${run[run.length - 1]}`;
+  return (
+    <section className="panel gapask" role="group" aria-label="Missed a page?">
+      <h2>Missed a page?</h2>
+      <p style={{ margin: 0 }}>
+        {name[0].toUpperCase() + name.slice(1)} {run.length === 1 ? "isn't" : "aren't"} in the book.
+        {runs.length > 1 ? <span className="muted"> ({plural(runs.length, "gap")} to check.)</span> : null}
+      </p>
+      <div className="actions">
+        <button className="btn primary small" type="button" onClick={() => onPhotograph(run)}>Photograph {name}</button>
+        <button className="btn small" type="button" onClick={() => onNoText(run)}>
+          No text: {run.length === 1 ? "it's" : "they're"} a picture, a map, or left out on purpose
+        </button>
+      </div>
+      <button className="btn small ghost" type="button" style={{ justifySelf: "start" }} onClick={onLater}>Decide later</button>
+    </section>
+  );
 }
 
 function PageThumb({ bookId, seq, spinning, version = 0 }: { bookId: string; seq: number; spinning: boolean; version?: number }) {

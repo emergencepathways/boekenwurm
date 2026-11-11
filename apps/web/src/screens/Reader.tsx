@@ -724,6 +724,7 @@ export function Reader({ bookId }: { bookId: string }) {
         paragraphs={r.text!.paragraphs}
         current={r.pos}
         isPhoto={book!.source === "photo"}
+        noText={book!.pagesRead}
         onGo={(ord) => void jumpTo(ord)}
         onClose={() => ((r.modal = null), bump())}
         onPhotograph={() => open({ name: "photo", bookId })}
@@ -819,9 +820,11 @@ function TypeMeaning({ word, onSave, open = false }: { word: string; onSave: (te
   );
 }
 
-function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto }: {
+function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, noText = [] }: {
   paragraphs: Paragraph[];
   current: number;
+  /** Pages counted as read without text of their own (marked as a picture or map), so not missing. */
+  noText?: number[];
   onGo: (ord: number) => void;
   onClose: () => void;
   onPhotograph: () => void;
@@ -833,7 +836,8 @@ function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto }
   const [note, setNote] = useState<string | null>(null);
   const min = byPage ? Math.min(...nums) : 1;
   const max = byPage ? Math.max(...nums) : paragraphs.length;
-  const pages = [...new Set(nums)].sort((a, b) => a - b);
+  const textless = new Set(noText.filter((n) => !nums.includes(n)));
+  const pages = [...new Set([...nums, ...textless])].sort((a, b) => a - b);
   const missing: string[] = [];
   for (let i = 1; i < pages.length; i++) if (pages[i] - pages[i - 1] > 1) missing.push(pages[i] - pages[i - 1] === 2 ? `${pages[i - 1] + 1}` : `${pages[i - 1] + 1}–${pages[i] - 1}`);
   const go = () => {
@@ -844,7 +848,8 @@ function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto }
     const i = paragraphs.findIndex((p) => p.pageNumber != null && p.pageNumber >= n);
     if (i < 0) return setNote(`Page ${n} isn't in this book.`);
     const landed = paragraphs[i].pageNumber!;
-    if (landed !== n) setNote(`Page ${n} isn't ${isPhoto ? "photographed" : "available"}; going to page ${landed}.`);
+    // Said as a toast: the sheet closes with the jump.
+    if (landed !== n) toast(textless.has(n) ? `Page ${n} has no text to read; going to page ${landed}.` : `Page ${n} isn't ${isPhoto ? "photographed" : "available"}; going to page ${landed}.`);
     onGo(i);
   };
   return (

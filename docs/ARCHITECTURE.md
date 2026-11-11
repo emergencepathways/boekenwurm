@@ -123,6 +123,10 @@ Bottom tab bar, like a native app: **Home · Study · Me**. The reader opens ful
    the page number (readings outside the chosen pages are ignored), outside the chosen pages, the same page twice, or
    words the device was unsure of. The reader uses the number read, keeps the one in order, types another, or
    **retakes** the photo: a retake replaces the photo *in its slot*, so it keeps its number and place.
+   A **gap in the page numbers** is asked about when a section ends (20 photos) or before the reader leaves to
+   read: "Missed a page?" The reader photographs it now (the photo takes the missing number and slots into place,
+   outside the section's 20), or marks it as having **no text**: a picture, a map, or left out on purpose. A page
+   with no text is no longer missing, counts as read in the book's progress, and Go to page skips over it.
 6. Paragraphs that run over a page break are joined, and words hyphenated across lines or pages are rejoined. The
    reader stays on the same paragraph when an earlier page arrives later.
 7. **Reading** is in order by default; **Go to page** jumps anywhere photographed (a jump starts a fresh run and

@@ -338,6 +338,9 @@ anywhere except `private/`.
 - Photographed pages are numbered by capture order from the first page, not by the number read from the photo
   (stylised page numbers were misread). The number read is shown next to each page's number; a difference is
   flagged and the reader can change the number, and the photos after it follow. 2026-11-11.
+- A gap in the page numbers is asked about at the end of a section: a missed page is photographed and slots into
+  place, or the page is marked as having no text (children's books: pictures, maps, pages left out on purpose),
+  which counts it as read. 2026-11-11.
 - Hosted on Cloudflare Pages with a generic address (`*.pages.dev`), deployed by GitHub Actions; nothing is preloaded
   in the app except the open dictionary. 2026-11-11.
 - The app: a web app that installs to the home screen (no app stores), React + Vite, Supabase (EU) with email-link

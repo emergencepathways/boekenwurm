@@ -10,6 +10,8 @@
  * - A retake replaces the photo in the same slot, so it keeps its number and place.
  * - Photos are taken in sections of at most 20, one section per visit to the camera, carrying on after the furthest
  *   page so far.
+ * - A gap in the page numbers is asked about when a section ends: a missed page is photographed and slots into its
+ *   place, or the page is marked as having no text (a picture, a map, or left out on purpose).
  */
 // A relative path (not the @boekenwurm/books alias) so the tests can load this module in Node without Vite.
 import { placePages, stitch, type PageText, type StitchedParagraph } from "../../../../packages/books/src/stitch.ts";
@@ -31,6 +33,13 @@ export interface PageEntry {
   manualPage?: number | null;
   /** The reader saw that the number read from the photo differs, and kept the number in order. */
   keepOrder?: boolean;
+  /**
+   * Not a photo: a page the reader marked as having no text to read (a picture, a map, or left out on purpose). It
+   * holds its page number (manualPage), so it isn't missing, and counts as read.
+   */
+  noText?: boolean;
+  /** A photo of a page that was missed, taken after the section ended; it doesn't count towards the 20. */
+  filled?: boolean;
 }
 
 export interface Range {
@@ -89,7 +98,7 @@ export function differs(p: Placed, range: Range): boolean {
 /** Why a photo needs the reader's look, if it does. Words to check are optional; the rest affect reading. */
 export function flags(p: Placed, all: Placed[], range: Range): string[] {
   const e = p.entry;
-  if (isBusy(e)) return [];
+  if (isBusy(e) || e.noText) return [];
   const out: string[] = [];
   if (e.status === "failed" || e.status === "check") out.push(...(e.problems.length ? e.problems : ["This photo couldn't be read."]));
   if (differs(p, range))
@@ -102,6 +111,37 @@ export function flags(p: Placed, all: Placed[], range: Range): string[] {
   return out;
 }
 
+/** Photos that count towards a section's 20: not pages marked as having no text, nor missed pages taken later. */
+export const inSection = (entries: PageEntry[], section: number) => entries.filter((e) => (e.section ?? 1) === section && !e.noText && !e.filled).length;
+
+/** Pages marked as having no text to read. They count as read. */
+export const noTextPages = (entries: PageEntry[]): number[] => entries.filter((e) => e.noText && e.manualPage != null).map((e) => e.manualPage!);
+
+/**
+ * Pages missing between the first page and the furthest one photographed, as runs ([[10], [14, 15]]): a page that was
+ * skipped, or one with no text that the reader hasn't marked yet.
+ */
+export function missingPages(entries: PageEntry[], range: Range): number[][] {
+  const have = new Set(numberPages(entries, range).values());
+  if (!have.size) return [];
+  const runs: number[][] = [];
+  for (let n = range.firstPage; n < Math.max(...have); n++) {
+    if (have.has(n)) continue;
+    const last = runs[runs.length - 1];
+    if (last && last[last.length - 1] === n - 1) last.push(n);
+    else runs.push([n]);
+  }
+  return runs;
+}
+
+/** A page marked as having no text: it takes its number, so it is no longer missing. */
+export function markNoText(entries: PageEntry[], pages: number[], seq: number, section: number): PageEntry[] {
+  return [
+    ...entries,
+    ...pages.map((n, i): PageEntry => ({ seq: seq + i, section, status: "done", page: null, problems: [], uncertain: [], by: null, manualPage: n, noText: true })),
+  ];
+}
+
 /**
  * Books photographed before numbering by capture order were placed by the numbers read from the photos. Their
  * photos keep that order: where the new numbering would give a photo another number, its old number is kept as if
@@ -110,7 +150,7 @@ export function flags(p: Placed, all: Placed[], range: Range): string[] {
 export function keepEarlierOrder(entries: PageEntry[], range: Range): PageEntry[] {
   const old = new Map(
     placePages(
-      entries.map((e) => {
+      entries.filter((e) => !e.noText).map((e) => {
         const n = e.manualPage ?? seenNumber(e);
         const inRange = n != null && (e.manualPage != null || (n >= range.firstPage && (range.lastPage == null || n <= range.lastPage)));
         return { seq: e.seq, pageNumber: inRange ? n : null };

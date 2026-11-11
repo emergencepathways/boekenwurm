@@ -321,6 +321,9 @@ const STORY = {
   11: ["In Utrecht stapte ze over op een andere trein, die veel voller was en waar ze moest blijven staan.", "Een vrouw met een grote hond probeerde ook een plekje te vinden, wat niet zo makkelijk was."],
   12: ["Toen ze eindelijk op haar werk aankwam, was de vergadering al begonnen en keek iedereen naar haar.", "Ze ging snel zitten en deed alsof ze precies wist waar het gesprek over ging."],
   13: ["Na de vergadering at ze een broodje kaas in de kantine en belde ze haar moeder om te vertellen hoe het ging.", "Haar moeder lachte en zei dat ze morgen gewoon een trein eerder moest nemen."],
+  15: ["Na het werk fietste Lotte langs de gracht naar huis, waar de bomen al bijna al hun bladeren kwijt waren.", "Bij de bakker op de hoek kocht ze een bruin brood en twee appelflappen voor haar buurman."],
+  16: ["Haar buurman Kees zat zoals altijd op het bankje voor zijn deur en las de krant van gisteren.", "Hij was blij met de appelflap en vertelde over zijn kleinzoon, die net had leren fietsen."],
+  17: ["Toen het donker werd, maakte Lotte soep van de groenten die nog in de koelkast lagen.", "Ze at aan het raam en keek naar de lichtjes van de boten die langzaam voorbij voeren."],
 };
 async function pagePhoto(n, { number = true, blank = false } = {}) {
   const p = await browser.newPage({ viewport: { width: 700, height: 950 } });
@@ -396,6 +399,34 @@ check(after.length === 5, "the retake replaced the photo instead of adding one")
 check(after.filter((t) => t.includes("*")).length === 2, "the two numbers changed by hand are marked");
 await shot("14-pages-ordered");
 
+step("a gap in the page numbers: missed a page, or a page with no text?");
+// Page 14 is a picture and page 16 was skipped: the photos of 15 and 17 come out as 14 and 15 until fixed.
+for (const n of [15, 17]) {
+  await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(n));
+  await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
+  await page.locator(".thumb", { hasText: `read ${n}` }).click();
+  await page.getByRole("button", { name: `Use ${n}` }).click();
+  await page.locator("[aria-label='Check this page']").waitFor({ state: "detached" }).catch(() => {});
+}
+check((await nums()) === "9,10,11,12,13,15,17", "the two fixed pages leave gaps at 14 and 16");
+await page.getByRole("button", { name: /^Start reading/ }).click();
+const gapPrompt = page.getByRole("group", { name: "Missed a page?" });
+await gapPrompt.waitFor();
+check(await gapPrompt.getByText("Page 14 isn't in the book.").isVisible(), "before reading, the reader is asked about page 14");
+check(await gapPrompt.getByText("(2 gaps to check.)").isVisible(), "with the number of gaps");
+await shot("14b-missed-page");
+await gapPrompt.getByRole("button", { name: /No text: it's a picture, a map, or left out on purpose/ }).click();
+await gapPrompt.getByText("Page 16 isn't in the book.").waitFor();
+check(await page.locator(".thumb.notext", { hasText: "p. 14" }).isVisible(), "page 14 is marked as having no text");
+await gapPrompt.getByRole("button", { name: "Photograph page 16" }).click();
+check(await page.getByText("Photograph page 16. It goes into its place in the book.").isVisible(), "the camera asks for the missed page");
+await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(16));
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
+check((await nums()) === "9,10,11,12,13,14,15,16,17", "the missed page slots into place: no gaps left");
+check(await page.locator(".thumb", { hasText: "p. 16" }).getByText("read 16").isVisible(), "and it was read as page 16");
+check((await gapPrompt.count()) === 0, "no more questions");
+await shot("14c-gaps-settled");
+
 step("reading the photographed book in order, and going to a page");
 await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para .w").first().waitFor();
@@ -406,21 +437,28 @@ await page.getByLabel("Page number").fill("12");
 await page.getByRole("button", { name: "Go", exact: true }).click();
 check(await page.waitForFunction(() => document.querySelector(".folio .num")?.textContent?.startsWith("p. 12"), null, { timeout: 10000 }).then(() => true, () => false), "Go to page 12 lands on page 12");
 await shot("15-reader-page-12");
+await page.getByRole("button", { name: "Go to a page" }).click();
+await page.getByLabel("Page number").waitFor();
+check(!(await page.getByText(/Missing: page/).isVisible()), "the page with no text isn't listed as missing");
+await page.getByLabel("Page number").fill("14");
+await page.getByRole("button", { name: "Go", exact: true }).click();
+check(await page.getByText("Page 14 has no text to read; going to page 15.").waitFor({ timeout: 5000 }).then(() => true, () => false), "Go to page 14 (a picture) explains and goes to page 15");
+
 // Read to the end of what's photographed: the app asks for the next section.
-const nextSection = page.getByText(/Next section: up to 20 pages, from page 14/);
-for (let i = 0; i < 20 && !(await nextSection.isVisible()); i++)
+const nextSection = page.getByText(/Next section: up to 20 pages, from page 18/);
+for (let i = 0; i < 60 && !(await nextSection.isVisible()); i++)
   await page.getByRole("button", { name: "Next page →" }).click({ timeout: 3000 }).catch(() => {});
 await nextSection.waitFor();
-check(true, "at the end of the photographed pages, the next section is offered from page 14");
+check(true, "at the end of the photographed pages, the next section is offered from page 18");
 await shot("16-next-section");
 
 step("a section stops at 20 photos");
 await page.getByRole("button", { name: "Photograph the next pages" }).click();
-check(await page.getByText(/Section 2: photograph up to 20 pages in order, starting at page 14/).waitFor().then(() => true, () => false), "section 2 starts at page 14");
-const blanks = await Promise.all(Array.from({ length: 21 }, (_, i) => pagePhoto(14 + i, { blank: true })));
+check(await page.getByText(/Section 2: photograph up to 20 pages in order, starting at page 18/).waitFor().then(() => true, () => false), "section 2 starts at page 18");
+const blanks = await Promise.all(Array.from({ length: 21 }, (_, i) => pagePhoto(18 + i, { blank: true })));
 await page.locator("input[type=file][multiple]").setInputFiles(blanks.map((b, i) => ({ ...b, name: `leeg-${i}.jpg` })));
 await page.getByText("This section is done: 20 photos.").waitFor({ timeout: 60000 });
-check((await page.locator(".thumb").count()) === 25, "20 photos were taken in section 2 (the 21st was not)");
+check((await page.locator(".thumb:not(.notext)").count()) === 28, "20 photos were taken in section 2 (the 21st was not)");
 check((await page.locator("video").count()) === 0 && (await page.getByRole("button", { name: "Take photo" }).count()) === 0, "the camera closes when the section is full");
 await shot("17-section-full");
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 300000 });
