@@ -86,3 +86,34 @@ export function pageFromOcr(lines: OcrLine[], seq: number): OcrPage {
     quality: letters.length ? Math.round((sure / letters.length) * 100) / 100 : 0,
   };
 }
+
+// ---------------------------------------------------------------- the printed page number
+
+/** A number read in a digits-only pass over the top or bottom strip of a page photo. */
+export interface NumberCandidate {
+  text: string;
+  /** 0–100, as Tesseract reports it. */
+  confidence: number;
+  where: "top" | "bottom" | "body";
+}
+
+/** Below this, a digit reading is too unsure to place a page by. */
+export const PAGE_NUMBER_MIN_CONFIDENCE = 60;
+
+/**
+ * The page number from the readings of a page's top and bottom strips (and the body pass, when it found one).
+ * Tesseract reads a lone number poorly in a full-page pass (a "9" can come back as "€"), so the app reads the
+ * strips again with digits only, and this picks the answer: whole numbers of 1–4 digits, sure enough, inside the
+ * book's pages when those are known; the surest wins, the foot of the page before the head on a tie (most books
+ * print the number at the foot).
+ */
+export function pickPageNumber(candidates: NumberCandidate[], range: { firstPage?: number; lastPage?: number | null } = {}): number | null {
+  const lo = 1;
+  const hi = range.lastPage ?? 5000;
+  const rank = { bottom: 2, body: 1, top: 0 };
+  const ok = candidates
+    .map((c) => ({ ...c, n: /^\d{1,4}$/.test(c.text.trim()) ? Number(c.text.trim()) : NaN }))
+    .filter((c) => Number.isInteger(c.n) && c.n >= lo && c.n <= hi && c.confidence >= PAGE_NUMBER_MIN_CONFIDENCE)
+    .sort((a, b) => b.confidence - a.confidence || rank[b.where] - rank[a.where]);
+  return ok.length ? ok[0].n : null;
+}

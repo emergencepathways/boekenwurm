@@ -65,6 +65,72 @@ export function orderPages(pages: PageText[]): { ordered: PageText[]; duplicates
   return { ordered, duplicates };
 }
 
+// ---------------------------------------------------------------- placing photographed pages
+
+/** One photo of a page, in the order it was taken. */
+export interface Shot {
+  seq: number;
+  /** The printed number read from the photo, or typed by the reader; null when neither. */
+  pageNumber: number | null;
+}
+
+export interface PlacedShot {
+  seq: number;
+  pageNumber: number | null;
+  /** The number was worked out from the pages taken before and after, not read from the photo. */
+  guessed: boolean;
+}
+
+/**
+ * Where each photo goes in the book. Pages are photographed one after another, so a photo whose number couldn't be
+ * read sits between its neighbours in capture order, and its number follows from theirs:
+ *
+ *   taken:  p.11, ?, p.13      ->  the middle photo is page 12
+ *   taken:  p.11, ?, ?         ->  pages 12 and 13 (the reader went on in order)
+ *   taken:  ?, p.20            ->  page 19
+ *
+ * A number is only filled in when it fits: between two known pages the gap must match the photos in between, and a
+ * filled number never repeats a known one or falls outside firstPage..lastPage. Everything else keeps its capture
+ * position. The result is in reading order (by page, then by capture).
+ */
+export function placePages(shots: Shot[], opts: { firstPage?: number; lastPage?: number } = {}): PlacedShot[] {
+  const first = opts.firstPage ?? 1;
+  const last = opts.lastPage ?? Number.POSITIVE_INFINITY;
+  const byCapture = [...shots].sort((a, b) => a.seq - b.seq);
+  const known = new Set(byCapture.filter((s) => s.pageNumber != null).map((s) => s.pageNumber!));
+  const out: PlacedShot[] = byCapture.map((s) => ({ seq: s.seq, pageNumber: s.pageNumber, guessed: false }));
+  const ok = (n: number) => Number.isInteger(n) && n >= first && n <= last && !known.has(n);
+
+  let i = 0;
+  while (i < out.length) {
+    if (out[i].pageNumber != null) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < out.length && out[j].pageNumber == null) j++; // out[i..j-1] is a run without numbers
+    const before = i > 0 ? out[i - 1].pageNumber! : null;
+    const after = j < out.length ? out[j].pageNumber! : null;
+    const run = j - i;
+    let start: number | null = null;
+    if (before != null && after != null) start = after - before === run + 1 ? before + 1 : null;
+    else if (before != null) start = before + 1;
+    else if (after != null) start = after - run;
+    if (start != null && Array.from({ length: run }, (_, k) => start! + k).every(ok))
+      for (let k = 0; k < run; k++) out[i + k] = { ...out[i + k], pageNumber: start + k, guessed: true };
+    i = j;
+  }
+
+  // Reading order: numbered pages by number; a page still without one stays right after the photo taken before it.
+  const key = new Map<number, number>();
+  let lastKnown = Number.NEGATIVE_INFINITY;
+  for (const s of out) {
+    if (s.pageNumber != null) lastKnown = s.pageNumber;
+    key.set(s.seq, s.pageNumber ?? lastKnown + 0.5);
+  }
+  return out.sort((a, b) => key.get(a.seq)! - key.get(b.seq)! || a.seq - b.seq);
+}
+
 /** Join the end of one piece of text to the start of the next across a break. */
 export function joinAcross(before: string, after: string, hyphenated: boolean): string {
   const a = before.trimEnd();
@@ -132,12 +198,15 @@ export interface BookProgress {
 }
 
 /**
- * Progress through a printed book: pages finished out of the page count the reader entered.
- * pagesRead holds printed page numbers; numbers outside 1..pageCount are ignored.
+ * Progress through a printed book: pages finished out of the pages the reader chose to read. `lastPage` is the last
+ * printed page number; `firstPage` is where the reader starts (after the title pages, contents and, if they like,
+ * the prologue). Pages 9 to 212 are 204 pages. Page numbers outside that range are ignored.
  */
-export function bookProgress(pageCount: number, pagesRead: Iterable<number>): BookProgress {
-  const count = Math.max(1, Math.floor(pageCount));
-  const done = new Set([...pagesRead].filter((n) => Number.isInteger(n) && n >= 1 && n <= count));
+export function bookProgress(lastPage: number, pagesRead: Iterable<number>, firstPage = 1): BookProgress {
+  const last = Math.max(1, Math.floor(lastPage));
+  const first = Math.min(last, Math.max(1, Math.floor(firstPage)));
+  const count = last - first + 1;
+  const done = new Set([...pagesRead].filter((n) => Number.isInteger(n) && n >= first && n <= last));
   const furthest = done.size ? Math.max(...done) : null;
   return { share: Math.round((done.size / count) * 1000) / 1000, pagesRead: done.size, pageCount: count, furthestPage: furthest };
 }

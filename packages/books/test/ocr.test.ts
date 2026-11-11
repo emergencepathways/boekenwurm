@@ -1,7 +1,7 @@
 // Recognised lines here are invented for the tests, shaped like Tesseract.js output.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pageFromOcr, tidy, type OcrLine } from "../src/ocr.ts";
+import { pageFromOcr, pickPageNumber, tidy, type OcrLine } from "../src/ocr.ts";
 import { stitch } from "../src/stitch.ts";
 
 let y = 0;
@@ -54,4 +54,15 @@ test("unreadable lines are dropped and common recognition slips tidied", () => {
   assert.deepEqual(r.page.paragraphs, ['Een zin, met "rare" tekens.']);
   assert.equal(tidy("Hij kwam - zo zei ze - te laat."), "Hij kwam - zo zei ze - te laat.");
   assert.equal(tidy("Het IJsselmeer is groot ."), "Het IJsselmeer is groot.");
+});
+
+test("the page number: digits only, sure enough, inside the book, the foot of the page first", () => {
+  const c = (text: string, confidence: number, where: "top" | "bottom" | "body" = "bottom") => ({ text, confidence, where });
+  assert.equal(pickPageNumber([c("12", 96)]), 12);
+  assert.equal(pickPageNumber([c("€", 47, "body"), c("9", 87)]), 9);
+  assert.equal(pickPageNumber([c("12", 39), c("0", 0, "top")]), null, "too unsure");
+  assert.equal(pickPageNumber([c("1999", 90, "top"), c("34", 85)], { lastPage: 212 }), 34, "a year in the running head is outside the book");
+  assert.equal(pickPageNumber([c("34", 90, "top"), c("34", 90)]), 34);
+  assert.equal(pickPageNumber([c("35", 90, "top"), c("34", 90)]), 34, "on a tie the foot of the page wins");
+  assert.equal(pickPageNumber([c("3a", 99)]), null);
 });

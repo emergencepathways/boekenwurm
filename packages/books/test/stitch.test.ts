@@ -1,7 +1,7 @@
 // Page text here is invented for the tests.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bookProgress, joinAcross, orderPages, pagesFinished, stitch, type PageText } from "../src/stitch.ts";
+import { bookProgress, placePages, joinAcross, orderPages, pagesFinished, stitch, type PageText } from "../src/stitch.ts";
 
 const page = (seq: number, pageNumber: number | null, paragraphs: string[], o: Partial<PageText> = {}): PageText =>
   ({ seq, pageNumber, paragraphs, startsMidParagraph: false, endsMidParagraph: false, ...o });
@@ -61,4 +61,47 @@ test("a page counts as finished once the reader has moved past its last paragrap
   assert.deepEqual(pagesFinished(paragraphs, 1), [1]);
   assert.deepEqual(pagesFinished(paragraphs, 2), [1]);
   assert.deepEqual(pagesFinished(paragraphs, 3), [1, 2]);
+});
+
+// ---------------------------------------------------------------- placing photographed pages
+
+const shots = (...ns: Array<number | null>) => ns.map((pageNumber, seq) => ({ seq, pageNumber }));
+const placed = (r: ReturnType<typeof placePages>) => r.map((s) => `${s.seq}:${s.pageNumber ?? "?"}${s.guessed ? "~" : ""}`);
+
+test("a photo without a page number between two known pages gets the number in between", () => {
+  assert.deepEqual(placed(placePages(shots(11, null, 13))), ["0:11", "1:12~", "2:13"]);
+  assert.deepEqual(placed(placePages(shots(11, null, null, 14))), ["0:11", "1:12~", "2:13~", "3:14"]);
+});
+
+test("the gap must fit: 11, ?, 15 leaves the photo unnumbered, right after page 11", () => {
+  assert.deepEqual(placed(placePages(shots(11, null, 15))), ["0:11", "1:?", "2:15"]);
+});
+
+test("photos after the last known page continue in order; photos before the first count back", () => {
+  assert.deepEqual(placed(placePages(shots(30, null, null))), ["0:30", "1:31~", "2:32~"]);
+  assert.deepEqual(placed(placePages(shots(null, null, 20))), ["0:18~", "1:19~", "2:20"]);
+});
+
+test("a filled number never repeats a known page or leaves the chosen pages", () => {
+  // 12 and 13 leave no room in between, so the photo taken between them stays unnumbered, after page 12.
+  assert.deepEqual(placed(placePages(shots(12, null, 13))), ["0:12", "1:?", "2:13"]);
+  // Counting on from 12 would give 13, which another photo already is.
+  assert.deepEqual(placed(placePages(shots(12, null, 20, 13))), ["0:12", "1:?", "3:13", "2:20"]);
+  assert.deepEqual(placed(placePages(shots(null, 9), { firstPage: 9 })), ["0:?", "1:9"]);
+  assert.deepEqual(placed(placePages(shots(212, null), { lastPage: 212 })), ["0:212", "1:?"]);
+});
+
+test("pages taken out of order are read in page order; a typed number moves a photo to its place", () => {
+  assert.deepEqual(placed(placePages(shots(14, 12, 13))), ["1:12", "2:13", "0:14"]);
+  // Photo 1 had no number; once the reader types 15 it moves after page 14.
+  assert.deepEqual(placed(placePages([{ seq: 0, pageNumber: 14 }, { seq: 1, pageNumber: 15 }, { seq: 2, pageNumber: 12 }])), ["2:12", "0:14", "1:15"]);
+});
+
+test("progress counts only the pages the reader chose: pages 9 to 212 are 204 pages", () => {
+  const p = bookProgress(212, [9, 10, 11, 5, 213], 9);
+  assert.equal(p.pageCount, 204);
+  assert.equal(p.pagesRead, 3);
+  assert.equal(p.share, 0.015);
+  // Without a first page, reading starts at page 1.
+  assert.equal(bookProgress(212, []).pageCount, 212);
 });
