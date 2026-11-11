@@ -178,6 +178,31 @@ check(translateReferer === base, "the request carries the site's address, so a s
 await page.locator(".para .w", { hasText: /^verse$/ }).click();
 check(translated.length === 2, "a word translated once isn't sent again");
 await shot("04b-translated");
+
+step("the daily allowance: 200 Google lookups, then the reader is asked instead");
+const count = () => page.evaluate(() => JSON.parse(localStorage.getItem("boekenwurm-translations") ?? "null"));
+check((await count())?.words === 2, "each Google lookup is counted (signed out: on the device)");
+await page.evaluate(() => {
+  const c = JSON.parse(localStorage.getItem("boekenwurm-translations"));
+  localStorage.setItem("boekenwurm-translations", JSON.stringify({ ...c, words: 200 }));
+});
+await page.locator(".para .w", { hasText: /^hele$/ }).click();
+await page.getByText(/You've used today's 200 Google Translate lookups/).waitFor();
+check(translated.length === 2, "over the limit, nothing is sent to Google");
+check((await page.locator(".pip.used").count()) === 2, "and the tap doesn't count yet");
+check(await page.getByRole("button", { name: "Connect Claude" }).isVisible(), "the reader can connect Claude");
+check((await page.getByRole("link", { name: /Look it up/ }).getAttribute("href")).includes("text=hele"), "or look the word up themselves");
+await shot("04c-limit");
+await page.getByLabel("Meaning of hele").fill("whole");
+await page.getByRole("button", { name: "Save", exact: true }).click();
+await page.locator(".def .meaning", { hasText: "whole" }).waitFor();
+check((await page.locator(".pip.used").count()) === 3, "a typed meaning makes the tap count");
+check(await page.getByText("Your own meaning.").isVisible(), "and is marked as the reader's own");
+check(await page.evaluate(() => new Promise((ok) => {
+  const req = indexedDB.open("boekenwurm-app");
+  req.onsuccess = () => { const g = req.result.transaction("kv").objectStore("kv").get("meanings"); g.onsuccess = () => ok(g.result?.hele?.en === "whole" && g.result?.verse?.from === "translation"); };
+})), "typed and translated meanings are saved for the reader");
+await page.evaluate(() => localStorage.setItem("boekenwurm-translations", JSON.stringify({ day: JSON.parse(localStorage.getItem("boekenwurm-translations")).day, words: 3 })));
 for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Next page →" }).click();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "three pages turned");
 

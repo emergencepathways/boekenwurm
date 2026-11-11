@@ -14,6 +14,7 @@ import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { translateWord, type TranslateResult } from "../lib/translate.ts";
+import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
@@ -44,7 +45,7 @@ interface RS {
   waiting: boolean;
   showOriginal: boolean;
   /** Words being looked up (no dictionary meaning yet), or found to have none: base form -> state. */
-  lookups: Map<string, "pending" | "none" | "offline">;
+  lookups: Map<string, "pending" | "none" | "offline" | "limit">;
   explaining: Map<string, Promise<AI.Explanation | null>>;
   modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
 }
@@ -180,23 +181,35 @@ export function Reader({ bookId }: { bookId: string }) {
     r.lookups.set(lemma, "pending");
     bump();
     const where = r.session?.current?.paragraphId;
+    const word = surface.toLowerCase();
     let meaning: Meaning | null = null;
-    let offline = false;
+    // Saved meanings (this reader's, from any device) were already checked by look(); Google is next.
     const t = await translateWord(surface).catch((): TranslateResult => ({ ok: false, reason: "offline" }));
-    if (t.ok) meaning = { en: t.text, nl: null, from: "translation" };
-    else offline = t.reason === "offline";
+    if (t.ok) meaning = { en: t.text, nl: null, from: "translation", word };
     meaning ??= compoundMeaning(surface);
     if (!meaning && getState().hasKey) {
       const x = await explain(i);
-      if (x && (x.meaningEn || x.meaningNl)) meaning = { en: x.meaningEn || null, nl: x.meaningNl || null, from: "claude" };
+      if (x && (x.meaningEn || x.meaningNl)) meaning = { en: x.meaningEn || null, nl: x.meaningNl || null, from: "claude", word };
     }
     if (meaning) {
       r.lookups.delete(lemma);
+      // Saved for this reader (device and account), so the word is never looked up again.
       await saveMeaning(lemma, meaning);
       // Count it only if the reader is still on the paragraph they tapped in.
       if (r.session?.current?.paragraphId === where) countTap(i, lemma, surface);
-    } else r.lookups.set(lemma, offline && !navigator.onLine ? "offline" : "none");
+    } else if (!t.ok && t.reason === "limit") r.lookups.set(lemma, "limit");
+    else r.lookups.set(lemma, !t.ok && t.reason === "offline" && !navigator.onLine ? "offline" : "none");
     bump();
+  }
+
+  /** The reader typed a meaning: it is saved like any other, and the tap counts. */
+  async function typedMeaning(i: number, lemma: string, surface: string, text: string) {
+    const meaning = text.trim().slice(0, 300);
+    if (!meaning) return;
+    r.lookups.delete(lemma);
+    countTap(i, lemma, surface);
+    bump();
+    await saveMeaning(lemma, { en: meaning, nl: null, from: "manual", word: surface.toLowerCase() });
   }
 
   function undo() {
@@ -559,6 +572,7 @@ export function Reader({ bookId }: { bookId: string }) {
               <div className="meaning">{m.en}</div>
               {m.from === "translation" && <span className="note">Not in the dictionary: translated by Google Translate.</span>}
               {m.from === "compound" && <span className="note">Not in the dictionary as one word: its two parts.</span>}
+              {m.from === "manual" && <span className="note">Your own meaning.</span>}
               {lang === "nl" && <span className="note">No Dutch explanation for this word yet, so here is the English.</span>}
             </>
           ) : null
@@ -566,8 +580,18 @@ export function Reader({ bookId }: { bookId: string }) {
           <span className="note" aria-live="polite">Not in the dictionary. Looking it up…</span>
         ) : lookup === "offline" ? (
           <span className="note">You're offline, so this word couldn't be looked up. This tap doesn't count; tap it again when you're back online.</span>
+        ) : lookup === "limit" ? (
+          <LimitPrompt
+            word={tok.t}
+            hasKey={hasKey}
+            onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)}
+            onAddKey={() => setTab("me", "claude")}
+          />
         ) : lookup === "none" && x?.status !== "done" ? (
-          <span className="note">No meaning found for this word, so this tap doesn't count: no strike, and nothing to study.</span>
+          <>
+            <span className="note">No meaning found for this word, so this tap doesn't count: no strike, and nothing to study.</span>
+            <TypeMeaning word={tok.t} onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)} />
+          </>
         ) : null}
         {why && <span className="note">{why}</span>}
         {x?.status === "pending" && <span className="note">Checking this sentence…</span>}
@@ -735,6 +759,46 @@ export function Reader({ bookId }: { bookId: string }) {
       </Sheet>
     );
   }
+}
+
+/**
+ * Today's 200 Google Translate lookups are used up: the reader can add their Claude key, look the word up themselves
+ * and type its meaning, or wait until tomorrow (this tap stays free).
+ */
+function LimitPrompt({ word, hasKey, onSave, onAddKey }: { word: string; hasKey: boolean; onSave: (text: string) => void; onAddKey: () => void }) {
+  return (
+    <div className="limit stack" style={{ gap: 8 }}>
+      <span className="note">
+        <b>You've used today's {DAILY_TRANSLATIONS} Google Translate lookups.</b> They come back at midnight. Until then this tap doesn't
+        count, unless you add the meaning:
+      </span>
+      <div className="actions">
+        {!hasKey && <button className="btn small" type="button" onClick={onAddKey}>Connect Claude</button>}
+        <a className="btn small" href={`https://translate.google.com/?sl=nl&tl=en&op=translate&text=${encodeURIComponent(word)}`} target="_blank" rel="noopener noreferrer">
+          Look it up ↗
+        </a>
+      </div>
+      <TypeMeaning word={word} onSave={onSave} open />
+    </div>
+  );
+}
+
+/** Type a meaning for a word: saved to the reader's own words, so it's never looked up again. */
+function TypeMeaning({ word, onSave, open = false }: { word: string; onSave: (text: string) => void; open?: boolean }) {
+  const [shown, setShown] = useState(open);
+  const [text, setText] = useState("");
+  if (!shown)
+    return (
+      <button className="btn small ghost" type="button" style={{ justifySelf: "start" }} onClick={() => setShown(true)}>
+        Know it? Type the meaning
+      </button>
+    );
+  return (
+    <form className="row" onSubmit={(e) => (e.preventDefault(), onSave(text))}>
+      <input value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder={`What does “${word}” mean?`} aria-label={`Meaning of ${word}`} style={{ flex: 1, minWidth: 0 }} />
+      <button className="btn small primary" type="submit" disabled={!text.trim()}>Save</button>
+    </form>
+  );
 }
 
 function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto }: {

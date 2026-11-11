@@ -93,7 +93,9 @@ export interface Meaning {
   en: string | null;
   nl: string | null;
   article?: string | null;
-  from: "list" | "dictionary" | "translation" | "compound" | "claude";
+  from: "list" | "dictionary" | "translation" | "compound" | "claude" | "manual";
+  /** The word as it was tapped, for meanings the reader's account keeps (word_meanings). */
+  word?: string;
 }
 
 export interface CardState {

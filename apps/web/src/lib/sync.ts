@@ -7,11 +7,11 @@ import type { Progress } from "@boekenwurm/engine";
 import { supabase } from "./supabase.ts";
 import { db, wipeDevice } from "./db.ts";
 import {
-  adoptBook, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook,
+  adoptBook, adoptMeanings, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook, SAVED_SOURCES,
 } from "./store.ts";
 import { bookToRow, mergeProgress, rowToBook, serverWins, wordbookFrom, type BookRow, type WordStatRow } from "./merge.ts";
 import { fromRow } from "./srs.ts";
-import type { BookText, CardState, Paragraph, SessionRow, WordDelta } from "./types.ts";
+import type { BookText, CardState, Meaning, Paragraph, SessionRow, WordDelta } from "./types.ts";
 
 let running: Promise<void> | null = null;
 let again = false;
@@ -21,6 +21,7 @@ function errText(e: unknown): string {
   const m = e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
   // The database is missing a newer migration: say which file to run.
   if (/first_page/.test(m)) return "The database needs an update: run supabase/migrations/0002_first_page.sql in the Supabase SQL Editor.";
+  if (/word_meanings|translation_usage|claim_translation/.test(m)) return "The database needs an update: run supabase/migrations/0003_translations.sql in the Supabase SQL Editor.";
   return m;
 }
 
@@ -67,6 +68,7 @@ async function syncOnce(): Promise<void> {
     await pullBooks(sb, since);
     await pullWords(sb);
     await pullCards(sb, since);
+    await syncMeanings(sb, user.id, since);
     // A minute of overlap covers clocks that disagree a little.
     await db.put("kv", started - 60_000, "lastPull");
     await db.put("kv", user.id, "owner");
@@ -280,6 +282,34 @@ async function pullCards(sb: SB, since: number) {
     if (!local || !local.dirty || remote.updatedAt > local.updatedAt) cards[r.lemma] = remote;
   }
   await setCards(cards);
+}
+
+/**
+ * The reader's saved meanings (word_meanings): every word Google or Claude found, or the reader typed, so it is
+ * never looked up again, on any of their devices.
+ */
+async function syncMeanings(sb: SB, userId: string, since: number) {
+  const dirty = (await db.get<string[]>("kv", "meaningsDirty")) ?? [];
+  const source = { translation: "google", claude: "claude", manual: "manual" } as const;
+  const rows = dirty
+    .map((lemma) => ({ lemma, m: getState().meanings[lemma] }))
+    .filter(({ m }) => m && SAVED_SOURCES.includes(m.from) && (m.en || m.nl))
+    .map(({ lemma, m }) => ({
+      user_id: userId, lemma: lemma.slice(0, 80), word: (m.word ?? lemma).toLowerCase().slice(0, 80),
+      meaning: (m.en || m.nl)!.slice(0, 300), source: source[m.from as keyof typeof source],
+    }));
+  for (let i = 0; i < rows.length; i += 500) check(await sb.from("word_meanings").upsert(rows.slice(i, i + 500), { onConflict: "user_id,lemma" }));
+  const after = (await db.get<string[]>("kv", "meaningsDirty")) ?? [];
+  await db.put("kv", after.filter((l) => !dirty.includes(l)), "meaningsDirty");
+
+  const pulled = check(await sb.from("word_meanings").select("lemma, word, meaning, source").gt("updated_at", new Date(since).toISOString())) as Array<{
+    lemma: string; word: string; meaning: string; source: "google" | "claude" | "manual";
+  }>;
+  if (!pulled.length) return;
+  const from = { google: "translation", claude: "claude", manual: "manual" } as const;
+  const incoming: Record<string, Meaning> = {};
+  for (const r of pulled) incoming[r.lemma] = { en: r.meaning, nl: null, from: from[r.source], word: r.word };
+  await adoptMeanings(incoming, new Set((await db.get<string[]>("kv", "meaningsDirty")) ?? []));
 }
 
 // ---------------------------------------------------------------- sign-in

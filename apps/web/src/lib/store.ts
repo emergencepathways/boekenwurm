@@ -43,6 +43,8 @@ export interface State {
   hasKey: boolean;
   /** The open dictionary: undefined while loading, null when this build has none. */
   dictionary: { words: number; forms: number; built: string; attribution: string } | null | undefined;
+  /** Google Translate lookups today (lib/usage.ts). */
+  translations: { day: string; used: number; limit: number } | null;
 }
 
 const now = () => Date.now();
@@ -64,6 +66,7 @@ let state: State = {
   sync: { status: "off", lastAt: null, error: null },
   hasKey: false,
   dictionary: undefined,
+  translations: null,
 };
 
 const listeners = new Set<() => void>();
@@ -253,9 +256,29 @@ export async function recordToken(s: Session): Promise<boolean> {
 
 // ---------------------------------------------------------------- words and cards
 
-export async function saveMeaning(lemma: string, m: Meaning): Promise<void> {
-  if (state.meanings[lemma]?.from === "claude" && m.from !== "claude") return;
+/** Meanings the reader's account keeps (word_meanings): found by Google or Claude, or typed by the reader. */
+export const SAVED_SOURCES: ReadonlyArray<Meaning["from"]> = ["translation", "claude", "manual"];
+
+export async function saveMeaning(lemma: string, m: Meaning, opts: { sync?: boolean } = {}): Promise<void> {
+  const have = state.meanings[lemma];
+  // A meaning the reader typed is theirs; Claude's (in a sentence) beats a bare translation.
+  if (have?.from === "manual" && m.from !== "manual") return;
+  if (have?.from === "claude" && m.from !== "claude" && m.from !== "manual") return;
   const meanings = { ...state.meanings, [lemma]: m };
+  setState({ meanings });
+  await db.put("kv", meanings, "meanings");
+  if (opts.sync !== false && SAVED_SOURCES.includes(m.from)) {
+    const dirty = new Set((await db.get<string[]>("kv", "meaningsDirty")) ?? []);
+    dirty.add(lemma);
+    await db.put("kv", [...dirty], "meaningsDirty");
+    changed();
+  }
+}
+
+/** Meanings from the reader's account (another device), without marking them changed here. */
+export async function adoptMeanings(incoming: Record<string, Meaning>, keepLocal: Set<string>): Promise<void> {
+  const meanings = { ...state.meanings };
+  for (const [lemma, m] of Object.entries(incoming)) if (!keepLocal.has(lemma)) meanings[lemma] = m;
   setState({ meanings });
   await db.put("kv", meanings, "meanings");
 }

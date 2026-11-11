@@ -133,9 +133,12 @@ launch.
   definition again; it is not a second mistake.
 - A reveal can be undone within 5 seconds (a mis-tap on a phone).
 - Names and numbers are never counted.
-- **A tap counts only when a meaning is found.** The open dictionary (or the reader's own word list) answers at once.
-  A word it doesn't know is looked up: Google Translate, then the word split into two dictionary words (a compound:
-  *fietsenstalling* = *fiets* + *stalling*), then Claude with the reader's key. The tap becomes a strike and a word
+- **A tap counts only when a meaning is found.** The open dictionary, the reader's own word list, or a meaning the
+  reader already has saved answers at once. A word none of them knows is looked up: Google Translate (up to 200 words
+  per reader per day), then the word split into two dictionary words (a compound: *fietsenstalling* = *fiets* +
+  *stalling*), then Claude with the reader's key. Every meaning found is saved for that reader, so a word is looked up
+  only once. Past the daily 200, the reader can connect Claude, look the word up and type its meaning, or wait until
+  midnight; a typed meaning is saved and counts like any other. The tap becomes a strike and a word
   to study once a meaning arrives. If none is found (a translation that only hands the word back doesn't count), the
   tap is free: no strike, nothing to study, and the reader is told so. Offline, an unknown word can't be looked up,
   so its tap is free too.
@@ -320,6 +323,9 @@ anywhere except `private/`.
 
 ## Decided
 
+- Google Translate is limited to 200 words per reader per day (counted in the account, or on the device when signed
+  out); every meaning found is saved per reader and checked before Google; past the limit the reader connects Claude,
+  types the meaning, or waits. 2026-11-11.
 - A tap counts only when a meaning is found (dictionary, Google Translate, compound parts, or Claude); otherwise it is
   free. Google Cloud Translation runs on Boekenwurm's own key, restricted to the site, the Translation API and a daily
   quota inside the free tier; only the tapped word is sent. Readers can delete books from the ••• button on each

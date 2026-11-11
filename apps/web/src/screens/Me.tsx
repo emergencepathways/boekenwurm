@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as E from "@boekenwurm/engine";
-import { getState, importWordList, updateProfile, useStore } from "../lib/store.ts";
+import { getState, importWordList, SAVED_SOURCES, updateProfile, useStore } from "../lib/store.ts";
+import { lookupsToday } from "../lib/translate.ts";
+import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { MODELS, setClaudeKey, testKey, claudeKey } from "../lib/claude.ts";
 import { parseWordList } from "../lib/words.ts";
 import { sendSignInEmail, signOut, syncNow, verifyCode } from "../lib/sync.ts";
@@ -96,6 +98,7 @@ export function Me() {
         </label>
       </section>
 
+      <LookupsSection />
       <ClaudeSection />
       <WordListSection />
 
@@ -227,6 +230,33 @@ function Account() {
         </form>
       )}
       {err && <p className="error">{err}</p>}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- word lookups
+
+function LookupsSection() {
+  const t = useStore((s) => s.translations);
+  const meanings = useStore((s) => s.meanings);
+  const user = useStore((s) => s.user);
+  useEffect(() => void lookupsToday(), [user]);
+  const saved = Object.values(meanings).filter((m) => SAVED_SOURCES.includes(m.from)).length;
+  const used = t?.used ?? 0;
+  const limit = t?.limit ?? DAILY_TRANSLATIONS;
+  return (
+    <section className="panel">
+      <h2>Word lookups</h2>
+      <p>
+        Words the dictionary doesn't know are looked up with Google Translate: up to {limit} a day, back at midnight. Every meaning found is saved
+        {user ? " to your account" : " on this device"}, so a word is only ever looked up once.
+      </p>
+      <div className="row">
+        <span className="label">Today</span>
+        <span className="num">{used} of {limit}</span>
+        <span className="bar grow" aria-label={`${used} of ${limit} lookups used today`}><i style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} /></span>
+      </div>
+      <p className="small">Your saved meanings: <span className="num">{saved.toLocaleString()}</span> words (from Google, Claude, or typed by you).</p>
     </section>
   );
 }

@@ -147,6 +147,8 @@ their own rows; storage buckets are private with the same rule (`{user_id}/…` 
   `paragraph_versions` (reader-only, regenerated on level change).
 - `reading_sessions` and `paragraph_results` — every run: strikes, passes, streak length, token earned.
 - `word_stats` — reveals and encounters per base form; `cards` — flashcard state (FSRS).
+- `word_meanings` — meanings the reader found for words the dictionary doesn't know (Google, Claude, typed);
+  `translation_usage` — Google lookups per reader per day (migration 0003).
 - `word_lists` and `word_list_entries` — the default dictionary is public read-only data shipped with the app (not a
   table); a reader's imported textbook list is a private `word_lists` row.
 
@@ -182,8 +184,15 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 - Google Cloud Translation for words the dictionary doesn't know: the owner's key (`VITE_GOOGLE_TRANSLATE_KEY`,
   an Actions secret) ships in the app, so in Google Cloud it is restricted to the site (HTTP referrers
   `boekenwurm.pages.dev/*`), to the Cloud Translation API only, and to a daily quota of about 16,000 characters,
-  which keeps a month inside the free 500,000. Only the single tapped word is sent, never a sentence; each word is
-  translated once and kept on the device. Requests send the site's origin (the page itself sends no referrer).
+  which keeps a month inside the free 500,000. Only the single tapped word is sent, never a sentence. Requests send the
+  site's origin (the page itself sends no referrer).
+- Per reader, Google lookups are limited to 200 a day (their local midnight): `claim_translation()` (migration 0003)
+  counts them in `translation_usage`, which readers can read but not change; signed out, the device counts. Every
+  meaning found (Google, Claude, or typed by the reader) is saved in `word_meanings` and synced, and the app looks
+  there before asking Google. The owner can see each reader's use in the SQL Editor:
+  `select u.email, t.day, t.words from translation_usage t join auth.users u on u.id = t.user_id order by t.day desc;`
+  Limit: the key ships in the app, so a determined user could call Google directly and skip the count. Moving the call
+  into a Supabase Edge Function (key held server-side, count enforced there) closes that if it is ever needed.
 - Content-security policy: scripts from the app only; network to Supabase, `api.anthropic.com`,
   `translation.googleapis.com`, and the one-time
   download of the free text-recognition model.
