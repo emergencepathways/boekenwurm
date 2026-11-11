@@ -70,7 +70,7 @@ function contentSecurityPolicy(): Plugin {
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://translation.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://fonts.googleapis.com https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://*.supabase.co",
     "media-src 'self' blob:",
     "object-src 'none'",

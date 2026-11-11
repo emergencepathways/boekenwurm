@@ -1,63 +1,31 @@
 /**
- * Google Cloud Translation (Basic, v2) for single tapped words the dictionary doesn't know.
+ * Google Translate for single tapped words the dictionary doesn't know, through Boekenwurm's translate function
+ * (supabase/functions/translate). The Google key lives only in that function, so the daily allowance of 200 words
+ * per reader (claim_translation, migration 0003) can't be skipped. Lookups need a signed-in reader: the count
+ * belongs to their account. Only the one word is sent, never the sentence or the book.
  *
- * The key (VITE_GOOGLE_TRANSLATE_KEY) ships in the app, so in Google Cloud it is restricted to this site (HTTP
- * referrer boekenwurm.pages.dev) and to the Translation API, with a daily quota inside the free 500,000 characters a
- * month. Only the one word is sent, never the sentence or the book. The page's referrer policy is "no-referrer", so
- * these requests send the site's origin explicitly, which is what the key restriction checks.
- *
- * Each reader may look up 200 words a day (lib/usage.ts); words already looked up are saved and never asked again.
+ * Words already looked up are saved to the reader's meanings (store.saveMeaning) and never asked again.
  */
 import { isUsefulTranslation } from "./meaning.ts";
-import { claimOnDevice, DAILY_TRANSLATIONS, localDay, type Claim, type DayCount } from "./usage.ts";
+import { DAILY_TRANSLATIONS, localDay } from "./usage.ts";
 import { supabase } from "./supabase.ts";
 import { getState, setState } from "./store.ts";
 
-const KEY = import.meta.env.VITE_GOOGLE_TRANSLATE_KEY?.trim() || "";
+export type TranslateResult = { ok: true; text: string } | { ok: false; reason: "none" | "offline" | "unavailable" | "limit" | "signin" };
 
-export const canTranslate = (): boolean => Boolean(KEY);
-
-export type TranslateResult = { ok: true; text: string } | { ok: false; reason: "none" | "offline" | "unavailable" | "limit" };
-
-const DEVICE_COUNT = "boekenwurm-translations";
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const FUNCTION_URL = `${(import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "")}/functions/v1/translate`;
 
-function deviceCount(): DayCount | null {
-  try {
-    return JSON.parse(localStorage.getItem(DEVICE_COUNT) ?? "null") as DayCount | null;
-  } catch {
-    return null;
-  }
+function counted(used: number | undefined, limit: number | undefined) {
+  if (typeof used !== "number") return;
+  setState({ translations: { day: localDay(new Date(), timeZone()), used, limit: limit ?? DAILY_TRANSLATIONS } });
 }
 
-/**
- * One lookup from today's allowance. Signed in, the account's count decides (it holds across devices and can't be
- * reset from the app); signed out, or if the account can't be reached, the device's count does.
- */
-export async function claimLookup(): Promise<Claim> {
-  const today = localDay(new Date(), timeZone());
-  const onDevice = claimOnDevice(deviceCount(), today);
-  let claim: Claim = onDevice.claim;
-  if (supabase && getState().user) {
-    const { data, error } = await supabase.rpc("claim_translation", { p_tz: timeZone() });
-    const row = Array.isArray(data) ? (data[0] as { allowed: boolean; used: number; daily_limit: number } | undefined) : undefined;
-    if (!error && row) claim = { allowed: row.allowed, used: row.used, limit: row.daily_limit };
-  }
-  // The device keeps its own tally too, so the count shows (and holds) offline.
-  try {
-    localStorage.setItem(DEVICE_COUNT, JSON.stringify({ day: today, words: Math.max(onDevice.state.words, claim.used) }));
-  } catch {
-    /* storage blocked */
-  }
-  setState({ translations: { day: today, used: claim.used, limit: claim.limit } });
-  return claim;
-}
-
-/** Today's lookups so far, for Me (without using one). */
+/** Today's lookups so far, for Me (without using one). Signed out: none, since lookups need an account. */
 export async function lookupsToday(): Promise<{ used: number; limit: number }> {
   const today = localDay(new Date(), timeZone());
-  const c = deviceCount();
-  let used = c && c.day === today ? c.words : 0;
+  const kept = getState().translations;
+  let used = kept && kept.day === today ? kept.used : 0;
   if (supabase && getState().user) {
     const { data } = await supabase.from("translation_usage").select("words").eq("day", today).maybeSingle();
     if (data) used = Math.max(used, (data as { words: number }).words);
@@ -66,30 +34,33 @@ export async function lookupsToday(): Promise<{ used: number; limit: number }> {
   return { used, limit: DAILY_TRANSLATIONS };
 }
 
-/** "fietsenstalling" -> "bicycle shed". Results that only hand the word back count as no meaning. */
+/** "fietsenstalling" -> "bicycle parking". Results that only hand the word back count as no meaning. */
 export async function translateWord(word: string, signal?: AbortSignal): Promise<TranslateResult> {
-  if (!KEY) return { ok: false, reason: "unavailable" };
+  if (!supabase) return { ok: false, reason: "unavailable" };
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  if (!token) return { ok: false, reason: "signin" };
   if (!navigator.onLine) return { ok: false, reason: "offline" };
-  if (!(await claimLookup()).allowed) return { ok: false, reason: "limit" };
   let res: Response;
   try {
-    res = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(KEY)}`, {
+    res = await fetch(FUNCTION_URL, {
       method: "POST",
       signal,
-      referrerPolicy: "strict-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ q: word, source: "nl", target: "en", format: "text" }),
+      headers: {
+        authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ word, tz: timeZone() }),
     });
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
     return { ok: false, reason: "offline" };
   }
-  if (!res.ok) return { ok: false, reason: "unavailable" }; // a refused key or a spent quota: the tap stays free
-  const body = (await res.json().catch(() => null)) as { data?: { translations?: Array<{ translatedText?: string }> } } | null;
-  const text = decodeEntities(body?.data?.translations?.[0]?.translatedText ?? "").trim();
+  const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; reason?: string; used?: number; limit?: number } | null;
+  counted(body?.used, body?.limit);
+  if (res.status === 429) return { ok: false, reason: "limit" };
+  if (res.status === 401) return { ok: false, reason: "signin" };
+  if (!res.ok || !body?.ok) return { ok: false, reason: res.status === 400 ? "none" : "unavailable" }; // the tap stays free
+  const text = (body.text ?? "").trim();
   return isUsefulTranslation(word, text) ? { ok: true, text } : { ok: false, reason: "none" };
-}
-
-function decodeEntities(s: string): string {
-  return s.replace(/&(#39|quot|amp|lt|gt);/g, (_, e: string) => ({ "#39": "'", quot: '"', amp: "&", lt: "<", gt: ">" })[e]!);
 }

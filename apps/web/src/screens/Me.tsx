@@ -250,6 +250,7 @@ function LookupsSection() {
       <p>
         Words the dictionary doesn't know are looked up with Google Translate: up to {limit} a day, back at midnight. Every meaning found is saved
         {user ? " to your account" : " on this device"}, so a word is only ever looked up once.
+        {!user && " Lookups need an account: sign in above to use them."}
       </p>
       <div className="row">
         <span className="label">Today</span>

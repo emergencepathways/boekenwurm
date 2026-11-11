@@ -1,10 +1,13 @@
-# Test everything, build the open dictionary and the app, and publish to Cloudflare Pages on every push to main.
+# Test everything, build the open dictionary and the app, publish the app to Cloudflare Pages and the translate
+# function to Supabase on every push to main.
 #   https://<project>.pages.dev   the app (apps/web)
+#   supabase/functions/translate  Google Translate for tapped words, 200 a day per reader (the key stays server-side)
 #
 # One-time setup in the GitHub repository (Settings → Secrets and variables → Actions):
 #   Secrets  VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY   public by design; row-level security protects the data
-#            VITE_GOOGLE_TRANSLATE_KEY (optional)               ships in the app: restrict it to boekenwurm.pages.dev and the
-#                                                               Cloud Translation API, with a daily quota (ARCHITECTURE.md)
+#            SUPABASE_ACCESS_TOKEN                             a Supabase personal access token, to deploy the function
+#            GOOGLE_TRANSLATE_KEY                              never in the app: set as the function's secret here.
+#                                                               Restrict it to the Cloud Translation API (ARCHITECTURE.md)
 #            CLOUDFLARE_API_TOKEN                              a token with the "Cloudflare Pages: Edit" permission
 #            CLOUDFLARE_ACCOUNT_ID                             from the Cloudflare dashboard
 #   Variable CLOUDFLARE_PROJECT (optional)                     the Pages project name; default "boekenwurm"
@@ -55,6 +58,8 @@ jobs:
         run: npm install --no-audit --no-fund && npm test && tsc --noEmit -p .
       - name: Database schema and row-level security
         run: supabase/tests/run.sh
+      - name: Translate function (daily allowance, one word only)
+        run: node --test supabase/functions/translate/handler.test.ts
       - name: Ingest and dictionary build
         working-directory: services/ingest
         run: python -m unittest discover -s tests -t tests
@@ -108,11 +113,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_GOOGLE_TRANSLATE_KEY: ${{ secrets.VITE_GOOGLE_TRANSLATE_KEY }}
         run: |
-          if [ -z "$VITE_GOOGLE_TRANSLATE_KEY" ]; then
-            echo "::warning::No Google Translate key: words the dictionary doesn't know fall back to compounds and Claude only."
-          fi
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
             echo "::warning::Supabase secrets are not available to this run; the app is built without sign-in."
           fi
@@ -122,6 +123,35 @@ jobs:
           name: site
           path: apps/web/dist
           retention-days: 7
+
+  # The translate function. Without the two secrets it is skipped with a warning; the app then treats lookups as
+  # unavailable (compounds, Claude and typed meanings still work).
+  functions:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.0
+      - name: Deploy the translate function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GOOGLE_TRANSLATE_KEY: ${{ secrets.GOOGLE_TRANSLATE_KEY }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$GOOGLE_TRANSLATE_KEY" ] || [ -z "$SUPABASE_URL" ]; then
+            echo "::warning::Add SUPABASE_ACCESS_TOKEN and GOOGLE_TRANSLATE_KEY to deploy the translate function (see the top of this file)."
+            exit 0
+          fi
+          ref=$(echo "$SUPABASE_URL" | sed -E 's#^https://([a-z0-9]+)\.supabase\.co/?$#\1#')
+          # The key goes through a file, not the command line, and the file is removed straight after.
+          umask 077
+          printf 'GOOGLE_TRANSLATE_KEY=%s\n' "$GOOGLE_TRANSLATE_KEY" > "$RUNNER_TEMP/fn.env"
+          supabase secrets set --project-ref "$ref" --env-file "$RUNNER_TEMP/fn.env"
+          rm -f "$RUNNER_TEMP/fn.env"
+          supabase functions deploy translate --project-ref "$ref" --no-verify-jwt --use-api
 
   deploy:
     if: github.event_name != 'pull_request'

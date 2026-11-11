@@ -45,7 +45,7 @@ interface RS {
   waiting: boolean;
   showOriginal: boolean;
   /** Words being looked up (no dictionary meaning yet), or found to have none: base form -> state. */
-  lookups: Map<string, "pending" | "none" | "offline" | "limit">;
+  lookups: Map<string, "pending" | "none" | "offline" | "limit" | "signin">;
   explaining: Map<string, Promise<AI.Explanation | null>>;
   modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
 }
@@ -197,7 +197,7 @@ export function Reader({ bookId }: { bookId: string }) {
       await saveMeaning(lemma, meaning);
       // Count it only if the reader is still on the paragraph they tapped in.
       if (r.session?.current?.paragraphId === where) countTap(i, lemma, surface);
-    } else if (!t.ok && t.reason === "limit") r.lookups.set(lemma, "limit");
+    } else if (!t.ok && (t.reason === "limit" || t.reason === "signin")) r.lookups.set(lemma, t.reason);
     else r.lookups.set(lemma, !t.ok && t.reason === "offline" && !navigator.onLine ? "offline" : "none");
     bump();
   }
@@ -580,12 +580,14 @@ export function Reader({ bookId }: { bookId: string }) {
           <span className="note" aria-live="polite">Not in the dictionary. Looking it up…</span>
         ) : lookup === "offline" ? (
           <span className="note">You're offline, so this word couldn't be looked up. This tap doesn't count; tap it again when you're back online.</span>
-        ) : lookup === "limit" ? (
+        ) : lookup === "limit" || lookup === "signin" ? (
           <LimitPrompt
+            why={lookup}
             word={tok.t}
             hasKey={hasKey}
             onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)}
             onAddKey={() => setTab("me", "claude")}
+            onSignIn={() => setTab("me", "account")}
           />
         ) : lookup === "none" && x?.status !== "done" ? (
           <>
@@ -762,17 +764,33 @@ export function Reader({ bookId }: { bookId: string }) {
 }
 
 /**
- * Today's 200 Google Translate lookups are used up: the reader can add their Claude key, look the word up themselves
- * and type its meaning, or wait until tomorrow (this tap stays free).
+ * Google Translate can't be asked: today's 200 lookups are used up (they come back at midnight), or the reader isn't
+ * signed in (the allowance belongs to an account). The reader can sign in, add their Claude key, or look the word
+ * up themselves and type its meaning. Until then this tap stays free.
  */
-function LimitPrompt({ word, hasKey, onSave, onAddKey }: { word: string; hasKey: boolean; onSave: (text: string) => void; onAddKey: () => void }) {
+function LimitPrompt({ why, word, hasKey, onSave, onAddKey, onSignIn }: {
+  why: "limit" | "signin";
+  word: string;
+  hasKey: boolean;
+  onSave: (text: string) => void;
+  onAddKey: () => void;
+  onSignIn: () => void;
+}) {
   return (
     <div className="limit stack" style={{ gap: 8 }}>
-      <span className="note">
-        <b>You've used today's {DAILY_TRANSLATIONS} Google Translate lookups.</b> They come back at midnight. Until then this tap doesn't
-        count, unless you add the meaning:
-      </span>
+      {why === "limit" ? (
+        <span className="note">
+          <b>You've used today's {DAILY_TRANSLATIONS} Google Translate lookups.</b> They come back at midnight. Until then this tap doesn't
+          count, unless you add the meaning:
+        </span>
+      ) : (
+        <span className="note">
+          <b>Not in the dictionary.</b> Sign in to look words up with Google Translate ({DAILY_TRANSLATIONS} a day). Until then this tap
+          doesn't count, unless you add the meaning:
+        </span>
+      )}
       <div className="actions">
+        {why === "signin" && <button className="btn small primary" type="button" onClick={onSignIn}>Sign in</button>}
         {!hasKey && <button className="btn small" type="button" onClick={onAddKey}>Connect Claude</button>}
         <a className="btn small" href={`https://translate.google.com/?sl=nl&tl=en&op=translate&text=${encodeURIComponent(word)}`} target="_blank" rel="noopener noreferrer">
           Look it up ↗

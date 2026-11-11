@@ -1,0 +1,8 @@
+# Supabase CLI settings for this repository. Only the Edge Function settings matter here: the database schema is
+# applied from supabase/migrations/ in the SQL Editor, and functions are deployed by .github/workflows/publish.yml.
+project_id = "boekenwurm"
+
+[functions.translate]
+# The reader's token is checked by the database when the function claims a lookup as them (handler.ts), which
+# also works with Supabase's new JWT signing keys; the gateway check is off so those tokens aren't refused early.
+verify_jwt = false

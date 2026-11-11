@@ -1,8 +1,7 @@
 /**
  * The daily Google Translate allowance: 200 words per reader per day, the day turning at the reader's midnight.
- * Signed in, the count is kept in the reader's account (claim_translation in migration 0003), so it holds across
- * devices and the reader can't reset it. Signed out, it is kept on the device. No aliases, so the rule is tested in
- * Node (test/usage.test.ts).
+ * The count is kept in the reader's account and claimed by the translate function (claim_translation in migration
+ * 0003; supabase/functions/translate), so it holds across devices and can't be reset or skipped from the app.
  */
 
 /** Words a reader may look up with Google Translate per day. Keep in step with claim_translation (0003). */
@@ -15,22 +14,4 @@ export function localDay(now: Date = new Date(), timeZone?: string): string {
   } catch {
     return now.toISOString().slice(0, 10);
   }
-}
-
-export interface DayCount {
-  day: string;
-  words: number;
-}
-
-export interface Claim {
-  allowed: boolean;
-  used: number;
-  limit: number;
-}
-
-/** One lookup against a count kept on the device: a new day starts from zero; at the limit nothing is added. */
-export function claimOnDevice(state: DayCount | null, today: string, limit = DAILY_TRANSLATIONS): { claim: Claim; state: DayCount } {
-  const words = state && state.day === today ? state.words : 0;
-  if (words >= limit) return { claim: { allowed: false, used: words, limit }, state: { day: today, words } };
-  return { claim: { allowed: true, used: words + 1, limit }, state: { day: today, words: words + 1 } };
 }

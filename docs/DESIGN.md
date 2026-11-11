@@ -134,7 +134,7 @@ launch.
 - A reveal can be undone within 5 seconds (a mis-tap on a phone).
 - Names and numbers are never counted.
 - **A tap counts only when a meaning is found.** The open dictionary, the reader's own word list, or a meaning the
-  reader already has saved answers at once. A word none of them knows is looked up: Google Translate (up to 200 words
+  reader already has saved answers at once. A word none of them knows is looked up: Google Translate (signed-in readers, up to 200 words
   per reader per day), then the word split into two dictionary words (a compound: *fietsenstalling* = *fiets* +
   *stalling*), then Claude with the reader's key. Every meaning found is saved for that reader, so a word is looked up
   only once. Past the daily 200, the reader can connect Claude, look the word up and type its meaning, or wait until
@@ -323,12 +323,14 @@ anywhere except `private/`.
 
 ## Decided
 
-- Google Translate is limited to 200 words per reader per day (counted in the account, or on the device when signed
-  out); every meaning found is saved per reader and checked before Google; past the limit the reader connects Claude,
-  types the meaning, or waits. 2026-11-11.
+- Google Translate is limited to 200 words per reader per day, counted in the account; every meaning found is saved
+  per reader and checked before Google; past the limit the reader connects Claude, types the meaning, or waits.
+  2026-11-11. The Google call moved into a Supabase Edge Function so the key stays server-side and the limit can't be
+  skipped; lookups therefore need a signed-in reader (signed out, the reader is offered to sign in, connect Claude or
+  type the meaning). 2026-11-11.
 - A tap counts only when a meaning is found (dictionary, Google Translate, compound parts, or Claude); otherwise it is
-  free. Google Cloud Translation runs on Boekenwurm's own key, restricted to the site, the Translation API and a daily
-  quota inside the free tier; only the tapped word is sent. Readers can delete books from the ••• button on each
+  free. Google Cloud Translation runs on Boekenwurm's own key, held by the translate function and restricted to the
+  Translation API and a daily quota inside the free tier; only the tapped word is sent. Readers can delete books from the ••• button on each
   cover. 2026-11-11.
 - Photographed books: the reader sets the first page to read and the last page, and progress counts the pages
   between; photos come in sections of up to 20 per visit; each photo's place is fixed when it is taken (page number,

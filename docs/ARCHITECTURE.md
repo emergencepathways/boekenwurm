@@ -181,21 +181,21 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 
 ## Security and privacy
 
-- Google Cloud Translation for words the dictionary doesn't know: the owner's key (`VITE_GOOGLE_TRANSLATE_KEY`,
-  an Actions secret) ships in the app, so in Google Cloud it is restricted to the site (HTTP referrers
-  `boekenwurm.pages.dev/*`), to the Cloud Translation API only, and to a daily quota of about 16,000 characters,
-  which keeps a month inside the free 500,000. Only the single tapped word is sent, never a sentence. Requests send the
-  site's origin (the page itself sends no referrer).
-- Per reader, Google lookups are limited to 200 a day (their local midnight): `claim_translation()` (migration 0003)
-  counts them in `translation_usage`, which readers can read but not change; signed out, the device counts. Every
-  meaning found (Google, Claude, or typed by the reader) is saved in `word_meanings` and synced, and the app looks
-  there before asking Google. The owner can see each reader's use in the SQL Editor:
+- Google Cloud Translation for words the dictionary doesn't know runs in a Supabase Edge Function,
+  `supabase/functions/translate`. The owner's key is the function's secret (`GOOGLE_TRANSLATE_KEY`, set from the Actions
+  secret of that name by the deploy workflow) and never reaches the app. In Google Cloud it is restricted to the Cloud
+  Translation API, with a daily quota of about 16,000 characters, which keeps a month inside the free 500,000. A
+  server key can't be restricted by website; it doesn't need to be, since nobody outside Supabase sees it.
+- The function takes one word from a signed-in reader. It first claims a lookup with `claim_translation()`
+  (migration 0003), called with the reader's own token so the database decides whose count it is, and only then
+  sends the word (never a sentence) to Google. The 201st word of the reader's day (their local midnight) is refused
+  before Google is asked. Readers can read their count in `translation_usage` but not change it, and lookups need an
+  account, so the limit can't be skipped from the app or by calling Google directly. Every meaning found (Google,
+  Claude, or typed by the reader) is saved in `word_meanings` and synced, and the app looks there before asking.
+  The owner can see each reader's use in the SQL Editor:
   `select u.email, t.day, t.words from translation_usage t join auth.users u on u.id = t.user_id order by t.day desc;`
-  Limit: the key ships in the app, so a determined user could call Google directly and skip the count. Moving the call
-  into a Supabase Edge Function (key held server-side, count enforced there) closes that if it is ever needed.
-- Content-security policy: scripts from the app only; network to Supabase, `api.anthropic.com`,
-  `translation.googleapis.com`, and the one-time
-  download of the free text-recognition model.
+- Content-security policy: scripts from the app only; network to Supabase (including the translate function),
+  `api.anthropic.com`, and the one-time download of the free text-recognition model.
 - The Claude key never leaves the device except to Anthropic; it is not synced to Supabase. Boekenwurm has no key of
   its own and no server that calls a model.
 - Readers can export everything (JSON) and delete their account and all files (GDPR).

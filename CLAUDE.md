@@ -28,6 +28,8 @@ owner asks, and update the design doc and the tests together.
   Tesseract lines → paragraphs, words to check).
 - `packages/ai/` also has `photo.ts`: page photos → paragraphs and covers → title/author/ISBN (Claude vision).
 - `supabase/` — database schema with owner-only row-level security; `supabase/tests/run.sh` tests it on local Postgres.
+  `supabase/functions/translate/` — the Edge Function that holds the Google Translate key and enforces 200 words a
+  day per reader (`handler.ts` is plain TypeScript, tested under Node; `index.ts` is the Deno entry).
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.
@@ -47,13 +49,14 @@ cd packages/dutch && npm test                                  # base forms (sha
 cd packages/ai && npm test                                     # level work, page photos, covers
 cd packages/books && npm test                                  # stitching, progress, PDF (real-PDF tests need pdf-lib + pdfjs-dist)
 supabase/tests/run.sh                                          # schema + row-level security on local Postgres
+node --test supabase/functions/translate/handler.test.ts       # translate function (daily allowance, one word)
 node apps/playtest/build.mjs && node apps/playtest/test/e2e.mjs  # reader + browser test (mocked Claude)
 cd services/ingest && python -m unittest discover -s tests -t tests
 python -m boekenwurm_ingest check -v DIR_OR_EPUB...             # import check
 python -m boekenwurm_ingest paragraphs BOOK.epub private/x.json # paragraphs + tokens for the app
 python -m boekenwurm_ingest textbook TEXTBOOK.pdf               # -> private/textbook/ (refuses other repo paths)
 python -m boekenwurm_ingest dictionary DUTCH.jsonl.gz OUT.json  # open dictionary (needs wordfreq; source from kaikki.org)
-cd apps/web && npm test && npm run build && node test/e2e.mjs   # app: unit tests, build, browser test (mocked Claude)
+cd apps/web && npm test && npm run build && node test/e2e.mjs   # app: unit tests, build, browser test (mocked Claude, translate)
 ```
 
 The owner's material, when a session has it: books in `~/Documents/Books/Dutch/` and course files in
@@ -67,4 +70,5 @@ The owner's material, when a session has it: books in `~/Documents/Books/Dutch/`
 - Never run level matching on the owner's books from a session; tests use invented text and mocked replies.
 - Never add a Boekenwurm-owned AI key or a server that calls a model: AI runs only on the reader's own key. The one
   owner-paid service is Google Cloud Translation for single tapped words (decided by the owner, 2026-11-11): keep its key
-  restricted to the site and the Translation API, and never send more than the tapped word.
+  in the translate function only (never in the app), restricted to the Translation API, and never send more than the
+  tapped word.

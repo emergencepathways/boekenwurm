@@ -1,8 +1,9 @@
 // End-to-end check of the built app in a real browser at phone size, with Claude's replies mocked and Supabase
 // unreachable (the app must work fully on the device). The EPUB is built here from invented sentences; no real
 // book text is used.
-//   VITE_GOOGLE_TRANSLATE_KEY=e2e-test-key npm run build && node test/e2e.mjs [path-to-playwright] [screenshot-dir]
-// (the key is a stand-in: Google Translate is mocked below, like Claude)
+//   npm run build && node test/e2e.mjs [path-to-playwright] [screenshot-dir]
+// The build needs VITE_SUPABASE_URL (apps/web/.env.local or the environment): the reader signs in part-way with a
+// made-up session, and the translate function (Google Translate behind it) is mocked, like Claude.
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
@@ -107,17 +108,32 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && !/supabase|Failed to load resource|fonts\.g|Estimating resolution/i.test(m.text()) && errors.push(m.text()));
 await ctx.route("https://api.anthropic.com/**", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" } }) : mockClaude(r)));
 await ctx.route(/supabase\.co/, (r) => r.abort());
-// Google Translate, mocked: a word comes back translated, except "Elke", which comes back unchanged (no meaning).
+// The translate function (supabase/functions/translate), mocked: 200 words a day, then refused. A word comes back
+// translated, except "Elke", which comes back unchanged (no meaning).
 const translated = [];
-let translateReferer = null;
-await ctx.route("https://translation.googleapis.com/**", async (r) => {
-  if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" } });
-  const q = JSON.parse(r.request().postData() || "{}").q ?? "";
-  translated.push(q);
-  translateReferer = r.request().headers().referer ?? null;
-  const text = q.toLowerCase() === "elke" ? q : `${q} (in English)`;
-  await r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ data: { translations: [{ translatedText: text }] } }) });
+const lookups = { used: 0, auth: null };
+await ctx.route("**/functions/v1/translate", async (r) => {
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+  if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors });
+  lookups.auth = r.request().headers().authorization ?? null;
+  if (lookups.used >= 200) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 200, limit: 200 }) });
+  const { word } = JSON.parse(r.request().postData() || "{}");
+  translated.push(word);
+  lookups.used++;
+  const text = word.toLowerCase() === "elke" ? word : `${word} (in English)`;
+  await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, text, used: lookups.used, limit: 200 }) });
 });
+
+// A made-up signed-in session, as supabase-js keeps it, so the reader is signed in without reaching Supabase.
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+  || (existsSync(join(here, "..", ".env.local")) && readFileSync(join(here, "..", ".env.local"), "utf8").match(/^VITE_SUPABASE_URL=(.+)$/m)?.[1]?.trim());
+if (!supabaseUrl) throw new Error("e2e needs VITE_SUPABASE_URL (apps/web/.env.local) in the build and here");
+const authKey = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+const exp = Math.floor(Date.now() / 1000) + 86400;
+const reader = { id: "00000000-0000-4000-8000-0000000000e2", aud: "authenticated", role: "authenticated", email: "reader@example.com", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+const accessToken = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: reader.id, aud: "authenticated", role: "authenticated", exp })}.e2e`;
+const fakeSession = JSON.stringify({ access_token: accessToken, refresh_token: "e2e", token_type: "bearer", expires_in: 86400, expires_at: exp, user: reader });
 await ctx.route("**/dict/nl.json", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(DICT) }));
 await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 
@@ -158,51 +174,60 @@ await page.locator(".para .w", { hasText: /^fietst$/ }).click();
 check((await page.locator(".pip.used").count()) === 1, "one strike used after one tap");
 check(await page.locator(".def .meaning", { hasText: "to cycle" }).isVisible(), "dictionary meaning shown for an inflected form");
 check(await page.locator(".def .lemma", { hasText: "fietsen" }).isVisible(), "base form from the dictionary's form table (fietst -> fietsen)");
-check(translated.length === 0, "a word the dictionary knows isn't sent to Google Translate");
+check(translated.length === 0, "a word the dictionary knows isn't looked up");
 await page.locator(".para .w", { hasText: /^fietst$/ }).click();
 check((await page.locator(".pip.used").count()) === 1, "tapping the same word again is not a second strike");
 await shot("04-reader");
 await page.getByRole("button", { name: "Undo tap" }).click();
 check((await page.locator(".pip.used").count()) === 0, "undo within 5 seconds takes the strike back");
 await page.locator(".para .w", { hasText: /^markt$/ }).click();
-step("a word the dictionary doesn't know: Google Translate, or no strike when there's no meaning");
+step("signed out, a word the dictionary doesn't know: sign in to look it up, and the tap is free");
+await page.locator(".para .w", { hasText: /^Elke$/ }).click();
+await page.getByText(/Sign in to look words up with Google Translate/).waitFor();
+check(translated.length === 0, "signed out, nothing is looked up");
+check((await page.locator(".pip.used").count()) === 1, "and the tap doesn't count (still 1, for markt)");
+check(await page.getByRole("button", { name: "Sign in", exact: true }).isVisible(), "the reader is offered to sign in");
+await shot("04a-signin");
+
+step("signed in: Google Translate through the translate function, or no strike when there's no meaning");
+await page.evaluate(([k, v]) => localStorage.setItem(k, v), [authKey, fakeSession]);
+await page.reload();
+await page.locator(".continue").click();
+await page.locator(".para .w").first().waitFor();
+const pips0 = await page.locator(".pip.used").count();
 await page.locator(".para .w", { hasText: /^Elke$/ }).click();
 await page.getByText(/No meaning found for this word, so this tap doesn't count/).waitFor();
-check((await page.locator(".pip.used").count()) === 1, "no meaning found: no strike (still 1, for markt)");
+check((await page.locator(".pip.used").count()) === pips0, "no meaning found: no strike");
 await page.locator(".para .w", { hasText: /^verse$/ }).click();
 await page.getByText("Not in the dictionary: translated by Google Translate.").waitFor();
-check((await page.locator(".pip.used").count()) === 2, "a meaning from Google Translate: the tap counts");
+check((await page.locator(".pip.used").count()) === pips0 + 1, "a meaning from Google Translate: the tap counts");
 check(await page.locator(".def .meaning", { hasText: "verse (in English)" }).isVisible(), "the translation is shown");
-check(translated.join(",") === "Elke,verse", "only the tapped word is sent to Google Translate");
-check(translateReferer === base, "the request carries the site's address, so a site-locked key is accepted");
+check(translated.join(",") === "Elke,verse", "only the tapped word is sent");
+check(lookups.auth === `Bearer ${accessToken}`, "the lookup carries the reader's session, so their own allowance is used");
 await page.locator(".para .w", { hasText: /^verse$/ }).click();
 check(translated.length === 2, "a word translated once isn't sent again");
 await shot("04b-translated");
 
 step("the daily allowance: 200 Google lookups, then the reader is asked instead");
-const count = () => page.evaluate(() => JSON.parse(localStorage.getItem("boekenwurm-translations") ?? "null"));
-check((await count())?.words === 2, "each Google lookup is counted (signed out: on the device)");
-await page.evaluate(() => {
-  const c = JSON.parse(localStorage.getItem("boekenwurm-translations"));
-  localStorage.setItem("boekenwurm-translations", JSON.stringify({ ...c, words: 200 }));
-});
+check(lookups.used === 2, "each lookup is counted");
+lookups.used = 200;
 await page.locator(".para .w", { hasText: /^hele$/ }).click();
 await page.getByText(/You've used today's 200 Google Translate lookups/).waitFor();
 check(translated.length === 2, "over the limit, nothing is sent to Google");
-check((await page.locator(".pip.used").count()) === 2, "and the tap doesn't count yet");
+check((await page.locator(".pip.used").count()) === pips0 + 1, "and the tap doesn't count yet");
 check(await page.getByRole("button", { name: "Connect Claude" }).isVisible(), "the reader can connect Claude");
 check((await page.getByRole("link", { name: /Look it up/ }).getAttribute("href")).includes("text=hele"), "or look the word up themselves");
 await shot("04c-limit");
 await page.getByLabel("Meaning of hele").fill("whole");
 await page.getByRole("button", { name: "Save", exact: true }).click();
 await page.locator(".def .meaning", { hasText: "whole" }).waitFor();
-check((await page.locator(".pip.used").count()) === 3, "a typed meaning makes the tap count");
+check((await page.locator(".pip.used").count()) === pips0 + 2, "a typed meaning makes the tap count");
 check(await page.getByText("Your own meaning.").isVisible(), "and is marked as the reader's own");
 check(await page.evaluate(() => new Promise((ok) => {
   const req = indexedDB.open("boekenwurm-app");
   req.onsuccess = () => { const g = req.result.transaction("kv").objectStore("kv").get("meanings"); g.onsuccess = () => ok(g.result?.hele?.en === "whole" && g.result?.verse?.from === "translation"); };
 })), "typed and translated meanings are saved for the reader");
-await page.evaluate(() => localStorage.setItem("boekenwurm-translations", JSON.stringify({ day: JSON.parse(localStorage.getItem("boekenwurm-translations")).day, words: 3 })));
+lookups.used = 3;
 for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Next page →" }).click();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "three pages turned");
 

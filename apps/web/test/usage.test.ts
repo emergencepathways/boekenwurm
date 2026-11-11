@@ -1,25 +1,14 @@
-// The daily Google Translate allowance, kept on the device when the reader isn't signed in.
+// The daily Google Translate allowance. The count itself is kept by the database (supabase/tests/rls_test.sql) and
+// claimed by the translate function (supabase/functions/translate/handler.test.ts); here, the app's side.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { claimOnDevice, DAILY_TRANSLATIONS, localDay } from "../src/lib/usage.ts";
+import { DAILY_TRANSLATIONS, localDay } from "../src/lib/usage.ts";
 
-test("200 words a day: the 200th lookup is allowed, the 201st is not", () => {
+test("200 words a day, the same number the database allows", async () => {
   assert.equal(DAILY_TRANSLATIONS, 200);
-  let state = null as ReturnType<typeof claimOnDevice>["state"] | null;
-  for (let i = 1; i <= 200; i++) {
-    const r = claimOnDevice(state, "2026-11-11");
-    assert.equal(r.claim.allowed, true, `lookup ${i}`);
-    state = r.state;
-  }
-  assert.equal(state!.words, 200);
-  const over = claimOnDevice(state, "2026-11-11");
-  assert.deepEqual(over.claim, { allowed: false, used: 200, limit: 200 });
-  assert.equal(over.state.words, 200, "a refused lookup adds nothing");
-});
-
-test("the count starts again on a new day", () => {
-  const r = claimOnDevice({ day: "2026-11-11", words: 200 }, "2026-11-12");
-  assert.deepEqual(r.claim, { allowed: true, used: 1, limit: 200 });
+  const { readFileSync } = await import("node:fs");
+  const sql = readFileSync(new URL("../../../supabase/migrations/0003_translations.sql", import.meta.url), "utf8");
+  assert.match(sql, /lim\s+(constant\s+)?integer\s*(:=|default)\s*200/i);
 });
 
 test("the day turns at the reader's midnight", () => {
