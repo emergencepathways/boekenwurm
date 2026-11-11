@@ -53,3 +53,26 @@ export async function checkForNewVersion(registration?: ServiceWorkerRegistratio
   }
   location.reload();
 }
+
+/**
+ * Me → About → "Check for updates": the same check, started by the reader. Answers "current" when this is the live
+ * version; otherwise the app switches to the new one and reloads.
+ */
+export async function updateNow(): Promise<"current" | "offline"> {
+  let live: string | null = null;
+  try {
+    const r = await fetch(`${import.meta.env.BASE_URL}version.json?t=${Date.now()}`, { cache: "no-store" });
+    if (r.ok) live = ((await r.json()) as { id?: string }).id ?? null;
+  } catch {
+    return "offline";
+  }
+  if (!live) return "offline";
+  if (live === __BUILD_ID__) return "current";
+  try {
+    sessionStorage.removeItem(TRIED);
+  } catch {
+    /* storage blocked */
+  }
+  await checkForNewVersion((await navigator.serviceWorker?.getRegistration().catch(() => undefined)) ?? undefined);
+  return "current";
+}

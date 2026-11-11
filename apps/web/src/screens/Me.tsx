@@ -10,6 +10,7 @@ import { connectionCheck, type CheckReport } from "../lib/check.ts";
 import { appUrl, supabase } from "../lib/supabase.ts";
 import { db, wipeDevice } from "../lib/db.ts";
 import { InstallRow } from "./InstallHelp.tsx";
+import { updateNow } from "../lib/update.ts";
 import { plural, Sheet, TokenPips, toast } from "../ui.tsx";
 import type { Settings } from "../lib/types.ts";
 
@@ -115,8 +116,25 @@ export function Me() {
         <p className="small">Boekenwurm is a reading game for learners of Dutch. Your books stay private: on this device, and in your own account when you sign in.</p>
         <DictionaryCredit />
         <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). Flashcard scheduling by ts-fsrs (MIT).</p>
+        <VersionRow />
       </section>
     </main>
+  );
+}
+
+/** Which version is running, and a way to switch to the newest one without reinstalling. */
+function VersionRow() {
+  const [state, setState] = useState<"idle" | "checking" | "current" | "offline">("idle");
+  return (
+    <div className="row">
+      <span className="small grow">Version <span className="num">{__BUILD_ID__.slice(0, 7)}</span></span>
+      <button className="btn small ghost" type="button" disabled={state === "checking"} onClick={async () => {
+        setState("checking");
+        setState(await updateNow());
+      }}>
+        {state === "checking" ? "Checking…" : state === "current" ? "Up to date ✓" : state === "offline" ? "Offline: try later" : "Check for updates"}
+      </button>
+    </div>
   );
 }
 
