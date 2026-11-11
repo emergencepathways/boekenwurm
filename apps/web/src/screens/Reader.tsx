@@ -12,13 +12,14 @@ import { fetchRemoteText } from "../lib/sync.ts";
 import { claude, AiError } from "../lib/claude.ts";
 import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
-import { lookup, listLemmas } from "../lib/words.ts";
+import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
+import { translateWord, type TranslateResult } from "../lib/translate.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
 import { close, open, setTab } from "../nav.ts";
 import { SECTION_SIZE } from "../lib/pages.ts";
-import type { Book, BookText, Paragraph } from "../lib/types.ts";
+import type { Book, BookText, Meaning, Paragraph } from "../lib/types.ts";
 import { Icon, plural, Sheet, TokenPips, toast } from "../ui.tsx";
 
 type Matched =
@@ -42,6 +43,9 @@ interface RS {
   explained: Map<string, Explained>;
   waiting: boolean;
   showOriginal: boolean;
+  /** Words being looked up (no dictionary meaning yet), or found to have none: base form -> state. */
+  lookups: Map<string, "pending" | "none" | "offline">;
+  explaining: Map<string, Promise<AI.Explanation | null>>;
   modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
 }
 
@@ -54,7 +58,7 @@ export function Reader({ bookId }: { bookId: string }) {
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
-    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), waiting: false, showOriginal: false, modal: null,
+    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null,
   }).current;
   const inflight = useRef(new Map<number, Promise<void>>()).current;
 
@@ -145,17 +149,53 @@ export function Reader({ bookId }: { bookId: string }) {
   }
 
   // ---------------------------------------------------------------- tapping and turning
+  /**
+   * A tap reveals a word. It counts (a strike, a word to study) only when a meaning is found: the dictionary or the
+   * reader's word list at once, otherwise Google Translate, the word's two parts as a compound, or Claude with the
+   * reader's key. When none finds one, the tap is free (lib/meaning.ts).
+   */
   function tap(i: number) {
     if (!r.session?.current) return;
     const tok = para().tokens[i];
     r.sel = i;
     if (tok.k === "word") {
       const d = look(tok.t);
-      const before = E.status(r.session).used;
-      r.session = E.reveal(r.session, { lemma: d.lemma, surface: tok.t, at: Date.now() });
-      if (E.status(r.session).used > before) r.sentences[d.lemma] ??= sentenceAround(para().text, tok.t);
-      explain(i);
+      if (d.meaning) countTap(i, d.lemma, tok.t);
+      else void findMeaning(i, d.lemma, tok.t);
     }
+    bump();
+  }
+
+  function countTap(i: number, lemma: string, surface: string) {
+    if (!r.session?.current) return;
+    const before = E.status(r.session).used;
+    r.session = E.reveal(r.session, { lemma, surface, at: Date.now() });
+    if (E.status(r.session).used > before) r.sentences[lemma] ??= sentenceAround(para().text, surface);
+    void explain(i);
+  }
+
+  async function findMeaning(i: number, lemma: string, surface: string) {
+    const state = r.lookups.get(lemma);
+    if (state === "pending" || state === "none") return; // "offline" tries again
+    r.lookups.set(lemma, "pending");
+    bump();
+    const where = r.session?.current?.paragraphId;
+    let meaning: Meaning | null = null;
+    let offline = false;
+    const t = await translateWord(surface).catch((): TranslateResult => ({ ok: false, reason: "offline" }));
+    if (t.ok) meaning = { en: t.text, nl: null, from: "translation" };
+    else offline = t.reason === "offline";
+    meaning ??= compoundMeaning(surface);
+    if (!meaning && getState().hasKey) {
+      const x = await explain(i);
+      if (x && (x.meaningEn || x.meaningNl)) meaning = { en: x.meaningEn || null, nl: x.meaningNl || null, from: "claude" };
+    }
+    if (meaning) {
+      r.lookups.delete(lemma);
+      await saveMeaning(lemma, meaning);
+      // Count it only if the reader is still on the paragraph they tapped in.
+      if (r.session?.current?.paragraphId === where) countTap(i, lemma, surface);
+    } else r.lookups.set(lemma, offline && !navigator.onLine ? "offline" : "none");
     bump();
   }
 
@@ -261,17 +301,19 @@ export function Reader({ bookId }: { bookId: string }) {
     return job;
   }
 
-  function explain(i: number) {
+  function explain(i: number): Promise<AI.Explanation | null> {
     const tok = para().tokens[i];
     const k = `${r.pos}|${i}|${para().matched ? "m" : "o"}`;
-    if (!getState().hasKey || tok.k !== "word" || r.explained.has(k)) return;
+    if (!getState().hasKey || tok.k !== "word") return Promise.resolve(null);
+    const have = r.explaining.get(k);
+    if (have) return have;
     const sentence = sentenceAround(para().text, tok.t);
     const level = getState().profile.progress.level;
     const model = getState().profile.settings.models.words;
     const cacheKey = `x|${hash(sentence)}|${tok.t.toLowerCase()}|${level}|${model}`;
     const lemma = look(tok.t).lemma;
     r.explained.set(k, { status: "pending" });
-    (async () => {
+    const job = (async () => {
       const cached = await db.get<AI.Explanation>("cache", cacheKey);
       if (cached) return cached;
       const data = AI.parseExplanation(await claude(AI.explainPrompt(tok.t, sentence, level as AI.Cefr), model), tok.t);
@@ -282,9 +324,15 @@ export function Reader({ bookId }: { bookId: string }) {
         r.explained.set(k, { status: "done", data });
         // The meaning in this sentence becomes the back of the word's flashcard.
         void saveMeaning(lemma, { en: data.meaningEn || null, nl: data.meaningNl || null, from: "claude" });
+        return data;
       })
-      .catch((e) => r.explained.set(k, { status: "error", error: e instanceof AiError ? e.message : "Couldn't explain this word." }))
+      .catch((e) => {
+        r.explained.set(k, { status: "error", error: e instanceof AiError ? e.message : "Couldn't explain this word." });
+        return null;
+      })
       .finally(bump);
+    r.explaining.set(k, job);
+    return job;
   }
 
   async function setMode(next: "original" | "match") {
@@ -496,6 +544,7 @@ export function Reader({ bookId }: { bookId: string }) {
     const why = lang === "nl" ? (onStreak ? "Dutch explanation: you're on a streak." : "Dutch explanation from B1.") : "";
     const k = `${r.pos}|${r.sel}|${para().matched ? "m" : "o"}`;
     const x = r.explained.get(k);
+    const lookup = r.lookups.get(d.lemma);
     return (
       <>
         <div className="head">
@@ -508,13 +557,17 @@ export function Reader({ bookId }: { bookId: string }) {
           lang === "nl" && m.nl ? <div className="meaning nl" lang="nl">{m.nl}</div> : m.en ? (
             <>
               <div className="meaning">{m.en}</div>
+              {m.from === "translation" && <span className="note">Not in the dictionary: translated by Google Translate.</span>}
+              {m.from === "compound" && <span className="note">Not in the dictionary as one word: its two parts.</span>}
               {lang === "nl" && <span className="note">No Dutch explanation for this word yet, so here is the English.</span>}
             </>
           ) : null
-        ) : !x ? (
-          <span className="note">
-            {hasKey ? "Not in the dictionary. The reveal still counts, and the word goes on your list." : "Not in the dictionary. The reveal still counts and the word goes on your list. With your Claude key (Me → Claude), you see what it means in this sentence."}
-          </span>
+        ) : lookup === "pending" ? (
+          <span className="note" aria-live="polite">Not in the dictionary. Looking it up…</span>
+        ) : lookup === "offline" ? (
+          <span className="note">You're offline, so this word couldn't be looked up. This tap doesn't count; tap it again when you're back online.</span>
+        ) : lookup === "none" && x?.status !== "done" ? (
+          <span className="note">No meaning found for this word, so this tap doesn't count: no strike, and nothing to study.</span>
         ) : null}
         {why && <span className="note">{why}</span>}
         {x?.status === "pending" && <span className="note">Checking this sentence…</span>}

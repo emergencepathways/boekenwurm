@@ -93,7 +93,7 @@ export interface Meaning {
   en: string | null;
   nl: string | null;
   article?: string | null;
-  from: "list" | "dictionary" | "claude";
+  from: "list" | "dictionary" | "translation" | "compound" | "claude";
 }
 
 export interface CardState {

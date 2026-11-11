@@ -65,4 +65,6 @@ The owner's material, when a session has it: books in `~/Documents/Books/Dutch/`
 - Every rule change comes with a test that states the rule in numbers (see `test/checkpoint.test.ts`).
 - Keep the engine pure: no I/O, no clocks (pass `now`), no randomness.
 - Never run level matching on the owner's books from a session; tests use invented text and mocked replies.
-- Never add a Boekenwurm-owned AI key or a server that calls a model: AI runs only on the reader's own key.
+- Never add a Boekenwurm-owned AI key or a server that calls a model: AI runs only on the reader's own key. The one
+  owner-paid service is Google Cloud Translation for single tapped words (decided by the owner, 2026-11-11): keep its key
+  restricted to the site and the Translation API, and never send more than the tapped word.

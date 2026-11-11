@@ -1,7 +1,8 @@
 // End-to-end check of the built app in a real browser at phone size, with Claude's replies mocked and Supabase
 // unreachable (the app must work fully on the device). The EPUB is built here from invented sentences; no real
 // book text is used.
-//   npm run build && node test/e2e.mjs [path-to-playwright] [screenshot-dir]
+//   VITE_GOOGLE_TRANSLATE_KEY=e2e-test-key npm run build && node test/e2e.mjs [path-to-playwright] [screenshot-dir]
+// (the key is a stand-in: Google Translate is mocked below, like Claude)
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
@@ -106,6 +107,17 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && !/supabase|Failed to load resource|fonts\.g|Estimating resolution/i.test(m.text()) && errors.push(m.text()));
 await ctx.route("https://api.anthropic.com/**", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" } }) : mockClaude(r)));
 await ctx.route(/supabase\.co/, (r) => r.abort());
+// Google Translate, mocked: a word comes back translated, except "Elke", which comes back unchanged (no meaning).
+const translated = [];
+let translateReferer = null;
+await ctx.route("https://translation.googleapis.com/**", async (r) => {
+  if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" } });
+  const q = JSON.parse(r.request().postData() || "{}").q ?? "";
+  translated.push(q);
+  translateReferer = r.request().headers().referer ?? null;
+  const text = q.toLowerCase() === "elke" ? q : `${q} (in English)`;
+  await r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ data: { translations: [{ translatedText: text }] } }) });
+});
 await ctx.route("**/dict/nl.json", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(DICT) }));
 await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 
@@ -146,18 +158,36 @@ await page.locator(".para .w", { hasText: /^fietst$/ }).click();
 check((await page.locator(".pip.used").count()) === 1, "one strike used after one tap");
 check(await page.locator(".def .meaning", { hasText: "to cycle" }).isVisible(), "dictionary meaning shown for an inflected form");
 check(await page.locator(".def .lemma", { hasText: "fietsen" }).isVisible(), "base form from the dictionary's form table (fietst -> fietsen)");
+check(translated.length === 0, "a word the dictionary knows isn't sent to Google Translate");
 await page.locator(".para .w", { hasText: /^fietst$/ }).click();
 check((await page.locator(".pip.used").count()) === 1, "tapping the same word again is not a second strike");
 await shot("04-reader");
 await page.getByRole("button", { name: "Undo tap" }).click();
 check((await page.locator(".pip.used").count()) === 0, "undo within 5 seconds takes the strike back");
 await page.locator(".para .w", { hasText: /^markt$/ }).click();
+step("a word the dictionary doesn't know: Google Translate, or no strike when there's no meaning");
+await page.locator(".para .w", { hasText: /^Elke$/ }).click();
+await page.getByText(/No meaning found for this word, so this tap doesn't count/).waitFor();
+check((await page.locator(".pip.used").count()) === 1, "no meaning found: no strike (still 1, for markt)");
+await page.locator(".para .w", { hasText: /^verse$/ }).click();
+await page.getByText("Not in the dictionary: translated by Google Translate.").waitFor();
+check((await page.locator(".pip.used").count()) === 2, "a meaning from Google Translate: the tap counts");
+check(await page.locator(".def .meaning", { hasText: "verse (in English)" }).isVisible(), "the translation is shown");
+check(translated.join(",") === "Elke,verse", "only the tapped word is sent to Google Translate");
+check(translateReferer === base, "the request carries the site's address, so a site-locked key is accepted");
+await page.locator(".para .w", { hasText: /^verse$/ }).click();
+check(translated.length === 2, "a word translated once isn't sent again");
+await shot("04b-translated");
 for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Next page →" }).click();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "three pages turned");
 
 step("reader: run out of strikes ends the session with a study list");
 const n = await page.locator(".strikes .pip").count();
-for (let i = 0; i < n; i++) await page.locator(".para .w:not(.name):not(.rev)").nth(0).click();
+for (let i = 0; i < n; i++) {
+  await page.locator(".para .w:not(.name):not(.rev)").nth(0).click();
+  // A word that has to be translated counts once its meaning arrives.
+  await page.waitForFunction((k) => document.querySelectorAll(".pip.used").length >= k, i + 1, { timeout: 10000 });
+}
 await page.getByRole("button", { name: "Next page →" }).click();
 await page.getByRole("heading", { name: /streak lasted|last strike|passed 1 paragraph|passed 3|lasted/ }).waitFor();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "summary offers to study the words");
@@ -211,6 +241,19 @@ await shot("09-matched");
 await page.getByRole("button", { name: "Back to Home" }).click();
 check((await page.locator(".bookbtn").count()) === 2, "both books are on the shelf");
 check((await page.locator(".continue").textContent()).includes("Testboek"), "Continue reading points at the book opened last");
+
+step("delete a book from its ••• button");
+await page.getByRole("button", { name: /Options for Marktdag/ }).click();
+await page.getByRole("button", { name: "Delete this book…" }).click();
+check(await page.getByText(/Your words and flashcards stay/).isVisible(), "deleting says what goes and what stays");
+await shot("10b-delete");
+await page.getByRole("button", { name: "Delete book" }).click();
+await page.getByText("Deleted “Marktdag”.").waitFor();
+check((await page.locator(".bookbtn").count()) === 1, "the book is gone from the shelf");
+await page.reload();
+await page.locator(".continue").waitFor();
+check((await page.locator(".bookbtn").count()) === 1, "and stays gone after a reload");
+check(Number(await page.locator(".studycard .big").textContent()) >= 1, "its words stay on the Study card");
 await shot("10-home-two-books");
 
 step("photo flow: camera explanation, then a library photo fallback");

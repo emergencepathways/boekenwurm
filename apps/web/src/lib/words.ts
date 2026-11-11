@@ -9,6 +9,7 @@
 import { createLemmatizer, type IrregularData, type Lemmatizer } from "@boekenwurm/dutch";
 import irregularJson from "@data/nl/irregular-verbs.json";
 import type { Dictionary } from "./dictionary.ts";
+import { splitCompound } from "./meaning.ts";
 import type { Meaning, WordList } from "./types.ts";
 
 const IRREGULAR = irregularJson as unknown as IrregularData;
@@ -57,6 +58,27 @@ export function meaningOf(lemma: string, meanings: Record<string, Meaning>): Mea
   const d = dict?.lemmas[lemma];
   if (d) return { en: d[0], nl: meanings[lemma]?.nl ?? null, article: d[1], from: "dictionary" };
   return meanings[lemma] ?? null;
+}
+
+/** A dictionary word's base form, or null when neither the dictionary nor the reader's word list knows it. */
+function knownBase(w: string): string | null {
+  if (list?.entries[w]) return w;
+  if (dict?.lemmas[w]) return w;
+  const f = dict?.forms[w];
+  return f && dict?.lemmas[f] ? f : null;
+}
+
+/**
+ * A meaning for a Dutch compound the dictionary doesn't list, from its two parts: "fietsenstalling" ->
+ * "fiets (bicycle) + stalling (storage)". Null when it doesn't split into two known words.
+ */
+export function compoundMeaning(surface: string): Meaning | null {
+  const c = splitCompound(surface, knownBase);
+  if (!c) return null;
+  const gloss = (w: string) => (list?.entries[w]?.gloss ?? dict?.lemmas[w]?.[0] ?? "").split(/[;,]/)[0].trim();
+  const [l, r] = [gloss(c.left), gloss(c.right)];
+  if (!l || !r) return null;
+  return { en: `${c.left} (${l}) + ${c.right} (${r})`, nl: null, article: dict?.lemmas[c.right]?.[1] ?? null, from: "compound" };
 }
 
 /** Words the reader is taken to know from their imported list (the textbook). */

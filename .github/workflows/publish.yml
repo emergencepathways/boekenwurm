@@ -3,6 +3,8 @@
 #
 # One-time setup in the GitHub repository (Settings → Secrets and variables → Actions):
 #   Secrets  VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY   public by design; row-level security protects the data
+#            VITE_GOOGLE_TRANSLATE_KEY (optional)               ships in the app: restrict it to boekenwurm.pages.dev and the
+#                                                               Cloud Translation API, with a daily quota (ARCHITECTURE.md)
 #            CLOUDFLARE_API_TOKEN                              a token with the "Cloudflare Pages: Edit" permission
 #            CLOUDFLARE_ACCOUNT_ID                             from the Cloudflare dashboard
 #   Variable CLOUDFLARE_PROJECT (optional)                     the Pages project name; default "boekenwurm"
@@ -106,7 +108,11 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_GOOGLE_TRANSLATE_KEY: ${{ secrets.VITE_GOOGLE_TRANSLATE_KEY }}
         run: |
+          if [ -z "$VITE_GOOGLE_TRANSLATE_KEY" ]; then
+            echo "::warning::No Google Translate key: words the dictionary doesn't know fall back to compounds and Claude only."
+          fi
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
             echo "::warning::Supabase secrets are not available to this run; the app is built without sign-in."
           fi

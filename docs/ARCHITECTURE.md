@@ -179,7 +179,13 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 
 ## Security and privacy
 
-- Content-security policy: scripts from the app only; network to Supabase, `api.anthropic.com`, and the one-time
+- Google Cloud Translation for words the dictionary doesn't know: the owner's key (`VITE_GOOGLE_TRANSLATE_KEY`,
+  an Actions secret) ships in the app, so in Google Cloud it is restricted to the site (HTTP referrers
+  `boekenwurm.pages.dev/*`), to the Cloud Translation API only, and to a daily quota of about 16,000 characters,
+  which keeps a month inside the free 500,000. Only the single tapped word is sent, never a sentence; each word is
+  translated once and kept on the device. Requests send the site's origin (the page itself sends no referrer).
+- Content-security policy: scripts from the app only; network to Supabase, `api.anthropic.com`,
+  `translation.googleapis.com`, and the one-time
   download of the free text-recognition model.
 - The Claude key never leaves the device except to Anthropic; it is not synced to Supabase. Boekenwurm has no key of
   its own and no server that calls a model.
