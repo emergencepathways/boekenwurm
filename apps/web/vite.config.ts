@@ -11,6 +11,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
 const require = createRequire(import.meta.url);
 
+// Every build has its own id, published as /version.json so a running app can tell it is out of date (src/lib/update.ts).
+const BUILD_ID = process.env.GITHUB_SHA?.slice(0, 12) || new Date().toISOString().replace(/\D/g, "").slice(0, 14) + Math.random().toString(36).slice(2, 6);
+function versionFile(): Plugin {
+  return {
+    name: "boekenwurm-version",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ id: BUILD_ID }) });
+    },
+  };
+}
+
 // "/" on Cloudflare Pages and in development; set VITE_BASE when hosting under a sub-path.
 const base = process.env.VITE_BASE || "/";
 
@@ -74,13 +86,16 @@ function contentSecurityPolicy(): Plugin {
 
 export default defineConfig({
   base,
+  define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
   plugins: [
     react(),
     tesseractAssets(),
     contentSecurityPolicy(),
+    versionFile(),
     VitePWA({
       registerType: "autoUpdate",
-      injectRegister: "auto",
+      // Registered in src/main.tsx, so a new version takes over as soon as it is downloaded.
+      injectRegister: false,
       includeAssets: ["icons/apple-touch-icon.png", "icons/favicon.svg"],
       manifest: {
         id: base,
@@ -105,6 +120,10 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
         globIgnores: ["tesseract/**", "dict/**"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // A new version takes over at once (with the reload in src/main.tsx), and old caches are cleared.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         navigateFallback: "index.html",
         runtimeCaching: [
           {

@@ -6,3 +6,4 @@ interface ImportMetaEnv {
   /** Google Cloud Translation key, restricted to this site and the Translation API (see lib/translate.ts). */
   readonly VITE_GOOGLE_TRANSLATE_KEY?: string;
 }
+declare const __BUILD_ID__: string;
