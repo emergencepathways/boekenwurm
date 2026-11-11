@@ -4,6 +4,7 @@
   python -m boekenwurm_ingest check --json BOOK.epub        full reports as JSON
   python -m boekenwurm_ingest paragraphs BOOK.epub OUT.json Dutch paragraphs with tap tokens and base forms
   python -m boekenwurm_ingest textbook BOOK.pdf [--out DIR] private word list from your own textbook
+  python -m boekenwurm_ingest dictionary DUTCH.jsonl OUT.json the open dictionary (Wiktionary + wordfreq)
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import json
 import os
 import sys
 
-from . import gate, lemma, textbook
+from . import dictionary, gate, lemma, textbook
 from .tokenize import countable_lemmas, lowercase_vocabulary, to_json, tokenize
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -108,6 +109,16 @@ def cmd_textbook(args) -> int:
     return 0
 
 
+def cmd_dictionary(args) -> int:
+    d = dictionary.build(dictionary.read_jsonl(args.source), dictionary.wordfreq_zipf(), max_lemmas=args.max_lemmas)
+    if len(d["lemmas"]) < args.min_lemmas:
+        print(f"Only {len(d['lemmas'])} words: the source doesn't look like the Dutch Wiktionary extract.", file=sys.stderr)
+        return 2
+    dictionary.write(args.out, d)
+    print(f"{len(d['lemmas'])} words, {len(d['forms'])} forms -> {args.out} ({os.path.getsize(args.out) // 1024} KB)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="boekenwurm_ingest")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -128,6 +139,12 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("pdf")
     t.add_argument("--out", default=os.path.join(PRIVATE, "textbook"))
     t.set_defaults(fn=cmd_textbook)
+    d = sub.add_parser("dictionary", help="the open Dutch dictionary from a Wiktionary extract and wordfreq")
+    d.add_argument("source", help="wiktextract JSONL with Dutch entries (kaikki.org), plain or .gz")
+    d.add_argument("out")
+    d.add_argument("--max-lemmas", type=int, default=40000)
+    d.add_argument("--min-lemmas", type=int, default=5000, help="fail below this many words (a wrong source file)")
+    d.set_defaults(fn=cmd_dictionary)
     args = ap.parse_args(argv)
     return args.fn(args)
 
