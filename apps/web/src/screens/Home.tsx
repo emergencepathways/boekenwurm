@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { currentTitle, nextLevel } from "@boekenwurm/engine";
 import { bookProgress } from "@boekenwurm/books";
-import { deleteBook, dueCards, saveBook, SAMPLE_ID, useStore } from "../lib/store.ts";
+import { deleteBook, dueCards, saveBook, useStore } from "../lib/store.ts";
 import { open } from "../nav.ts";
 import type { Book } from "../lib/types.ts";
 import { bookShare, Cover, LevelPicker, plural, Sheet, TokenPips, toast } from "../ui.tsx";
@@ -29,7 +29,7 @@ export function Home() {
   const due = dueCards().length;
   const totalCards = Object.keys(cards).length;
   const shelf = books.filter((b) => b.status !== "archived");
-  const last = [...shelf].filter((b) => b.position.at).sort((a, b) => (b.position.at ?? 0) - (a.position.at ?? 0))[0] ?? shelf.find((b) => b.id === SAMPLE_ID);
+  const last = [...shelf].filter((b) => b.position.at).sort((a, b) => (b.position.at ?? 0) - (a.position.at ?? 0))[0] ?? shelf[0];
   const next = nextLevel(profile.progress.level);
 
   return (
@@ -45,6 +45,19 @@ export function Home() {
         </div>
       </header>
 
+      {!shelf.length && (
+        <section className="panel firstbook">
+          <h2>Add your first book</h2>
+          <p>Read Dutch books you own, paragraph by paragraph. Any of these works:</p>
+          <ul className="small muted" style={{ margin: 0, paddingLeft: "1.2em", display: "grid", gap: 4 }}>
+            <li>an <b>EPUB</b> ebook without copy protection,</li>
+            <li>a <b>PDF</b>, with text or scanned,</li>
+            <li>a <b>printed book</b>: photograph its pages.</li>
+          </ul>
+          <button className="btn primary" type="button" onClick={() => open({ name: "add" })}>Add a book</button>
+        </section>
+      )}
+
       {last && (
         <button className="continue" type="button" onClick={() => open({ name: "reader", bookId: last.id })}>
           <Cover book={last} showRing={false} />
@@ -59,17 +72,17 @@ export function Home() {
         </button>
       )}
 
-      <button className="studycard" type="button" onClick={() => open({ name: "study-session" })} disabled={!totalCards}>
+      {totalCards > 0 && <button className="studycard" type="button" onClick={() => open({ name: "study-session" })}>
         <span className="big">{due}</span>
         <span className="grow">
           <b>Study words</b>
           <span className="small muted">
-            {totalCards ? (due ? `${plural(due, "word")} due for review` : "Nothing due right now. Well done.") : "Words you tap while reading become flashcards here."}
+            {due ? `${plural(due, "word")} due for review` : "Nothing due right now. Well done."}
           </span>
         </span>
-      </button>
+      </button>}
 
-      <section className="stack">
+      {shelf.length > 0 && <section className="stack">
         <div className="shelf-head">
           <h2>My books</h2>
           <span className="small muted">{plural(shelf.length, "book")}</span>
@@ -84,7 +97,7 @@ export function Home() {
           ))}
         </div>
         <p className="note">Tap a book to read. Press and hold for its details.</p>
-      </section>
+      </section>}
 
       {details && <BookDetails book={details} onClose={() => setDetails(null)} />}
     </main>
@@ -140,38 +153,34 @@ function BookDetails({ book, onClose }: { book: Book; onClose: () => void }) {
           {book.scan?.level && <span className="small">Graded about {book.scan.level}</span>}
         </div>
       </div>
-      {book.id !== SAMPLE_ID && (
-        <>
-          <div className="field">
-            <span>Book level</span>
-            <LevelPicker
-              label="Book level"
-              value={book.level}
-              onChange={(level) => void saveBook({ ...book, level, levelSource: "reader" }).then(() => toast(`Level set to ${level}.`))}
-            />
-          </div>
-          {book.source === "photo" && (
-            <button className="btn" type="button" onClick={() => (onClose(), open({ name: "photo", bookId: book.id }))}>
-              Add pages
-            </button>
-          )}
-          <button
-            className="btn small ghost"
-            type="button"
-            onClick={() => void saveBook({ ...book, position: { ...book.position, ord: 0 }, pagesRead: [] }).then(() => toast("Back to the start."))}
-          >
-            Start again from the beginning
-          </button>
-          {confirm ? (
-            <button className="btn danger" type="button" onClick={() => void deleteBook(book.id).then(() => (toast("Book removed."), onClose()))}>
-              Remove for good, on every device
-            </button>
-          ) : (
-            <button className="btn small ghost" type="button" onClick={() => setConfirm(true)} style={{ color: "var(--strike)" }}>
-              Remove this book…
-            </button>
-          )}
-        </>
+      <div className="field">
+        <span>Book level</span>
+        <LevelPicker
+          label="Book level"
+          value={book.level}
+          onChange={(level) => void saveBook({ ...book, level, levelSource: "reader" }).then(() => toast(`Level set to ${level}.`))}
+        />
+      </div>
+      {book.source === "photo" && (
+        <button className="btn" type="button" onClick={() => (onClose(), open({ name: "photo", bookId: book.id }))}>
+          Add pages
+        </button>
+      )}
+      <button
+        className="btn small ghost"
+        type="button"
+        onClick={() => void saveBook({ ...book, position: { ...book.position, ord: 0 }, pagesRead: [] }).then(() => toast("Back to the start."))}
+      >
+        Start again from the beginning
+      </button>
+      {confirm ? (
+        <button className="btn danger" type="button" onClick={() => void deleteBook(book.id).then(() => (toast("Book removed."), onClose()))}>
+          Remove for good, on every device
+        </button>
+      ) : (
+        <button className="btn small ghost" type="button" onClick={() => setConfirm(true)} style={{ color: "var(--strike)" }}>
+          Remove this book…
+        </button>
       )}
       <div className="actions">
         <button className="btn primary" type="button" onClick={() => (onClose(), open({ name: "reader", bookId: book.id }))}>

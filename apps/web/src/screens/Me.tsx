@@ -109,13 +109,25 @@ export function Me() {
 
       <section className="panel">
         <h3>About</h3>
-        <p className="small">
-          Boekenwurm is a reading game for learners of Dutch. Sample story written for Boekenwurm. On-device page reading by Tesseract (Apache-2.0).
-          The open dictionary (Wiktionary, CC BY-SA) is coming.
-        </p>
-        <p className="small"><a href={`${import.meta.env.BASE_URL}playtest/`} style={{ color: "var(--leaf)" }}>The first playtest</a> is still online for reference.</p>
+        <p className="small">Boekenwurm is a reading game for learners of Dutch. Your books stay private: on this device, and in your own account when you sign in.</p>
+        <DictionaryCredit />
+        <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). Flashcard scheduling by ts-fsrs (MIT).</p>
       </section>
     </main>
+  );
+}
+
+function DictionaryCredit() {
+  const d = useStore((s) => s.dictionary);
+  if (d === undefined) return <p className="small">Loading the dictionary…</p>;
+  if (!d) return <p className="small">This build has no dictionary, so words show meanings only from your word list or Claude.</p>;
+  return (
+    <p className="small">
+      Dictionary: {d.words.toLocaleString()} Dutch words and {d.forms.toLocaleString()} word forms, built {d.built}. Meanings and word forms from{" "}
+      <a href="https://en.wiktionary.org" style={{ color: "var(--leaf)" }}>Wiktionary</a> via{" "}
+      <a href="https://kaikki.org" style={{ color: "var(--leaf)" }}>wiktextract</a>; word frequencies from{" "}
+      <a href="https://github.com/rspeer/wordfreq" style={{ color: "var(--leaf)" }}>wordfreq</a>. Both CC BY-SA 4.0; the dictionary is shared under the same licence.
+    </p>
   );
 }
 
@@ -388,8 +400,8 @@ function YourData() {
     const data = {
       exported: new Date().toISOString(),
       profile: { displayName: s.profile.displayName, settings: s.profile.settings, progress: s.profile.progress },
-      books: s.books.filter((b) => b.id !== "sample"),
-      paragraphs: texts.filter((t) => (t as { bookId: string }).bookId !== "sample"),
+      books: s.books,
+      paragraphs: texts,
       words: s.wordbook, meanings: s.meanings, examples: s.examples, cards: s.cards,
     };
     const a = document.createElement("a");

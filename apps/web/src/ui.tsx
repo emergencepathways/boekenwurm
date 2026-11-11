@@ -55,7 +55,7 @@ export function Cover({ book, showRing = true }: { book: Book; showRing?: boolea
       ) : (
         <div className="made" style={{ ["--c" as string]: colourFor(book.title) }}>
           <b lang="nl">{book.title}</b>
-          <small>{book.author ?? (book.source === "sample" ? "Sample story" : "")}</small>
+          <small>{book.author ?? ""}</small>
         </div>
       )}
       {book.level && <span className="lvl">{book.level}</span>}

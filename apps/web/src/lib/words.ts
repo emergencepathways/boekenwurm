@@ -1,62 +1,65 @@
 /**
  * From a tapped word to its base form and meaning.
  *
- * Base forms come from packages/dutch: irregular verbs always, regular inflections when a word list knows the
- * result. Meanings come from, in order: the sample story's glossary, the reader's imported word list, and
- * meanings Claude gave for this word earlier. The open Wiktionary dictionary (ARCHITECTURE.md, "Word lists") will
- * slot in as the default list once its build script exists.
+ * Base forms, in order: the open dictionary's form table (Wiktionary: liep -> lopen, huizen -> huis), then
+ * packages/dutch (irregular verbs always, regular inflections when a known word results). Meanings, in order: the
+ * reader's own imported word list (their textbook), the open dictionary, and meanings Claude gave for this word
+ * in a sentence earlier.
  */
 import { createLemmatizer, type IrregularData, type Lemmatizer } from "@boekenwurm/dutch";
 import irregularJson from "@data/nl/irregular-verbs.json";
-import sample from "virtual:sample-story";
+import type { Dictionary } from "./dictionary.ts";
 import type { Meaning, WordList } from "./types.ts";
 
 const IRREGULAR = irregularJson as unknown as IrregularData;
 
-/** form -> [lemma, English, Dutch explanation] */
-const SAMPLE_GLOSSARY = sample.glossary as Record<string, [string, string, string]>;
-
 let lemmatizer: Lemmatizer = createLemmatizer(IRREGULAR);
 let list: WordList | null = null;
+let dict: Dictionary | null = null;
 
-/** Rebuild the base-form finder when the word list changes (its words make regular forms safe to undo). */
-export function setWordList(next: WordList | null): void {
-  list = next;
-  const lexicon = new Set<string>(next ? Object.keys(next.entries) : []);
-  for (const [lemma] of Object.values(SAMPLE_GLOSSARY)) lexicon.add(lemma.toLowerCase());
+function rebuild(): void {
+  const lexicon = new Set<string>(list ? Object.keys(list.entries) : []);
+  if (dict) for (const w of Object.keys(dict.lemmas)) lexicon.add(w);
   lemmatizer = createLemmatizer(IRREGULAR, lexicon);
 }
-setWordList(null);
+
+/** The reader's imported word list changed (its words make regular forms safe to undo). */
+export function setWordList(next: WordList | null): void {
+  list = next;
+  rebuild();
+}
+
+export function setDictionary(next: Dictionary | null): void {
+  dict = next;
+  rebuild();
+}
 
 export interface Lookup {
   lemma: string;
   meaning: Meaning | null;
 }
 
-export function lookup(surface: string, opts: { sample?: boolean; meanings?: Record<string, Meaning> } = {}): Lookup {
+export function baseForm(surface: string): string {
   const w = surface.toLowerCase();
-  if (opts.sample) {
-    const g = SAMPLE_GLOSSARY[w];
-    if (g) return { lemma: g[0].toLowerCase(), meaning: { en: g[1], nl: g[2], from: "sample" } };
-  }
-  const lemma = lemmatizer.lemma(w);
-  const e = list?.entries[lemma];
-  if (e?.gloss) return { lemma, meaning: { en: e.gloss, nl: null, article: e.article, from: "list" } };
-  return { lemma, meaning: opts.meanings?.[lemma] ?? null };
+  if (list?.entries[w]) return w;
+  return dict?.forms[w] ?? (dict?.lemmas[w] ? w : lemmatizer.lemma(w));
 }
 
-/** The meaning for a flashcard's back, from any source. */
+export function lookup(surface: string, opts: { meanings?: Record<string, Meaning> } = {}): Lookup {
+  const lemma = baseForm(surface);
+  return { lemma, meaning: meaningOf(lemma, opts.meanings ?? {}) };
+}
+
+/** The meaning for a tapped word or a flashcard's back, from any source. */
 export function meaningOf(lemma: string, meanings: Record<string, Meaning>): Meaning | null {
   const e = list?.entries[lemma];
   if (e?.gloss) return { en: e.gloss, nl: null, article: e.article, from: "list" };
-  if (meanings[lemma]) return meanings[lemma];
-  const g = Object.values(SAMPLE_GLOSSARY).find(([l]) => l.toLowerCase() === lemma);
-  return g ? { en: g[1], nl: g[2], from: "sample" } : null;
+  const d = dict?.lemmas[lemma];
+  if (d) return { en: d[0], nl: meanings[lemma]?.nl ?? null, article: d[1], from: "dictionary" };
+  return meanings[lemma] ?? null;
 }
 
-export const listInfo = () => (list ? { name: list.name, size: Object.keys(list.entries).length } : null);
-
-/** The reader's known words: the word list plus words met often and rarely revealed. */
+/** Words the reader is taken to know from their imported list (the textbook). */
 export function listLemmas(): string[] {
   return list ? Object.keys(list.entries) : [];
 }

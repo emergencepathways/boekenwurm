@@ -6,37 +6,13 @@ import { readFileSync, mkdirSync, copyFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
 const require = createRequire(import.meta.url);
 
-// Served under /boekenwurm/ on GitHub Pages; "/" for local development.
+// "/" on Cloudflare Pages and in development; set VITE_BASE when hosting under a sub-path.
 const base = process.env.VITE_BASE || "/";
-
-/**
- * The sample story lives once, in the playtest (apps/playtest/src/sample.js + story.txt). This turns it into
- * a module at build time, so the app and the playtest can never drift apart.
- */
-function sampleStory(): Plugin {
-  const id = "virtual:sample-story";
-  const sampleJs = join(repo, "apps", "playtest", "src", "sample.js");
-  const storyTxt = join(repo, "apps", "playtest", "src", "story.txt");
-  return {
-    name: "boekenwurm-sample-story",
-    resolveId: (s) => (s === id ? "\0" + id : null),
-    load(s) {
-      if (s !== "\0" + id) return null;
-      this.addWatchFile(sampleJs);
-      this.addWatchFile(storyTxt);
-      const ctx: { SAMPLE?: Record<string, unknown> } = {};
-      vm.runInNewContext(readFileSync(sampleJs, "utf8") + "\nthis.SAMPLE = SAMPLE;", ctx);
-      const sample = { ...ctx.SAMPLE, paragraphs: readFileSync(storyTxt, "utf8").trim().split("\n") };
-      return `export default ${JSON.stringify(sample)};`;
-    },
-  };
-}
 
 /**
  * Free page reading runs Tesseract on the device. Its worker, engine and Dutch model are copied into the app
@@ -100,7 +76,6 @@ export default defineConfig({
   base,
   plugins: [
     react(),
-    sampleStory(),
     tesseractAssets(),
     contentSecurityPolicy(),
     VitePWA({
@@ -128,16 +103,20 @@ export default defineConfig({
       workbox: {
         // The app shell is precached; the big on-device reading files are cached the first time they are used.
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
-        globIgnores: ["tesseract/**", "playtest/**"],
+        globIgnores: ["tesseract/**", "dict/**"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: "index.html",
-        // The old playtest lives under /playtest/ on the same site; it is not part of the app.
-        navigateFallbackDenylist: [/\/playtest(\/|$)/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.includes("/tesseract/"),
             handler: "CacheFirst",
             options: { cacheName: "boekenwurm-reader-model", expiration: { maxEntries: 8 } },
+          },
+          {
+            // The open dictionary: served from the cache at once, refreshed in the background after a new deploy.
+            urlPattern: ({ url }) => url.pathname.endsWith("/dict/nl.json"),
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "boekenwurm-dictionary", expiration: { maxEntries: 2 } },
           },
           {
             urlPattern: ({ url }) => url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com",

@@ -12,7 +12,8 @@ node test/e2e.mjs [path-to-playwright] [screenshot-dir]   # browser test at phon
 ```
 
 Sign-in and sync need `.env.local` (git-ignored) with the project's URL and publishable key; copy `.env.example`.
-Without it the app runs on the device only. The GitHub Pages build takes both from the repository's Actions secrets.
+Without it the app runs on the device only. The deploy (`.github/workflows/publish.yml`, to Cloudflare Pages) takes
+both from the repository's Actions secrets.
 
 ## Layout
 
@@ -21,8 +22,10 @@ Without it the app runs on the device only. The GitHub Pages build takes both fr
   (Tesseract on the device), `claude.ts` (the reader's own key), `srs.ts` (FSRS), `check.ts` (connection check).
 - `src/screens/` — Home, Reader (the playtest's reader), Study, Me, AddBook, PhotoBook (camera), Welcome, InstallHelp.
 - The reading rules come from `packages/engine`, base forms from `packages/dutch`, Claude prompts and checks from
-  `packages/ai`, page stitching and PDF text from `packages/books`. The sample story is read from `apps/playtest/src`
-  at build time, so there is one copy.
+  `packages/ai`, page stitching and PDF text from `packages/books`.
+- Nothing is preloaded: a new reader starts with an empty shelf. The one built-in resource is the open dictionary,
+  `public/dict/nl.json`, built by `python -m boekenwurm_ingest dictionary` at deploy time (not committed). Without it,
+  words have no dictionary meaning but everything else works.
 
 ## Privacy
 

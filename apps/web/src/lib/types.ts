@@ -2,6 +2,7 @@ import type { CefrLevel, Preset, Progress, WordBook } from "@boekenwurm/engine";
 import type { BookLevel } from "@boekenwurm/ai";
 import type { Token, VerdictKind } from "./text.ts";
 
+/** "sample" is in the database enum from the playtest era; the app no longer creates it. */
 export type BookSource = "sample" | "epub" | "pdf" | "photo";
 export type BookStatus = "processing" | "ready" | "failed" | "archived";
 export type ReadMode = "original" | "match";
@@ -84,12 +85,12 @@ export interface WordDelta {
   example: string | null;
 }
 
-/** A meaning shown on the back of a flashcard, from the sample's glossary, a word list or Claude. */
+/** A meaning shown on a tapped word or a flashcard: from the reader's word list, the open dictionary or Claude. */
 export interface Meaning {
   en: string | null;
   nl: string | null;
   article?: string | null;
-  from: "sample" | "list" | "claude";
+  from: "list" | "dictionary" | "claude";
 }
 
 export interface CardState {

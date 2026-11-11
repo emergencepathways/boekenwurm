@@ -156,7 +156,7 @@ export function StudySession({ lemmas }: { lemmas?: string[] }) {
               <div className="answer">
                 {(() => {
                   const m = meaningOf(lemma, meanings);
-                  if (!m) return <span className="muted">No meaning saved for this word yet. With your Claude key, tapping it while reading saves its meaning in that sentence.</span>;
+                  if (!m) return <span className="muted">Not in the dictionary. With your Claude key, tapping this word while reading saves its meaning in that sentence.</span>;
                   return (
                     <>
                       {m.article && <span className="muted">{m.article} </span>}

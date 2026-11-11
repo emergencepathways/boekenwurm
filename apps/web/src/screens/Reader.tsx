@@ -7,7 +7,7 @@ import { useEffect, useReducer, useRef } from "react";
 import * as E from "@boekenwurm/engine";
 import * as AI from "@boekenwurm/ai";
 import { pagesFinished } from "@boekenwurm/books";
-import { bookById, getState, loadText, recordFinished, recordToken, saveBook, saveMeaning, updateProfile, useStore, SAMPLE_ID } from "../lib/store.ts";
+import { bookById, getState, loadText, recordFinished, recordToken, saveBook, saveMeaning, updateProfile, useStore } from "../lib/store.ts";
 import { fetchRemoteText } from "../lib/sync.ts";
 import { claude, AiError } from "../lib/claude.ts";
 import { db } from "../lib/db.ts";
@@ -81,7 +81,7 @@ export function Reader({ bookId }: { bookId: string }) {
       const names = text.paragraphs.flatMap((p) => p.tokens.filter((t) => t.k === "name").map((t) => t.t));
       r.isName = nameTest(text.paragraphs.map((p) => p.text), names);
       r.pos = Math.min(r.book!.position.ord, text.paragraphs.length - 1);
-      r.book = await saveBook({ ...r.book!, position: { ...r.book!.position, at: Date.now() } }, { sync: book.id !== SAMPLE_ID });
+      r.book = await saveBook({ ...r.book!, position: { ...r.book!.position, at: Date.now() } });
       startNewSession();
       bump();
     })();
@@ -100,9 +100,8 @@ export function Reader({ bookId }: { bookId: string }) {
 
   // ---------------------------------------------------------------- helpers
   const book = r.book;
-  const isSample = book?.id === SAMPLE_ID;
   const mode = book?.position.mode ?? "original";
-  const look = (surface: string) => lookup(surface, { sample: isSample, meanings: getState().meanings });
+  const look = (surface: string) => lookup(surface, { meanings: getState().meanings });
   const original = (): Paragraph => r.text!.paragraphs[r.pos];
   const para = (): { text: string; tokens: Token[]; matched: boolean } => {
     const m = mode === "match" ? r.matched.get(r.pos) : null;
@@ -172,7 +171,7 @@ export function Reader({ bookId }: { bookId: string }) {
       b.source === "photo"
         ? [...new Set([...b.pagesRead, ...pagesFinished(r.text.paragraphs.map((p) => ({ text: p.text, pageNumber: p.pageNumber, seqs: [] })), ord - 1)])].sort((x, y) => x - y)
         : b.pagesRead;
-    r.book = await saveBook({ ...b, position: { ...b.position, ord, at: Date.now() }, pagesRead }, { sync: b.id !== SAMPLE_ID });
+    r.book = await saveBook({ ...b, position: { ...b.position, ord, at: Date.now() }, pagesRead });
   }
 
   async function turn() {
@@ -289,7 +288,7 @@ export function Reader({ bookId }: { bookId: string }) {
 
   async function setMode(next: "original" | "match") {
     const b = bookById(bookId)!;
-    r.book = await saveBook({ ...b, position: { ...b.position, mode: next } }, { sync: b.id !== SAMPLE_ID });
+    r.book = await saveBook({ ...b, position: { ...b.position, mode: next } });
     r.modal = null;
     r.matched.clear();
     void leave();
@@ -477,7 +476,7 @@ export function Reader({ bookId }: { bookId: string }) {
           ) : null
         ) : !x ? (
           <span className="note">
-            {hasKey ? "Not in your word list yet. The reveal still counts, and the word goes on your list." : "Not in your word list yet. The reveal counts and the word goes on your list. Add your Claude key under Me to see what it means in this sentence."}
+            {hasKey ? "Not in the dictionary. The reveal still counts, and the word goes on your list." : "Not in the dictionary. The reveal still counts and the word goes on your list. With your Claude key (Me → Claude), you see what it means in this sentence."}
           </span>
         ) : null}
         {why && <span className="note">{why}</span>}
@@ -514,7 +513,7 @@ export function Reader({ bookId }: { bookId: string }) {
               <thead><tr><th>Word</th><th>Meaning</th><th>Today</th><th>All time</th></tr></thead>
               <tbody>
                 {s.list.map((w) => {
-                  const m = lookup(w.forms[0], { sample: isSample, meanings }).meaning;
+                  const m = lookup(w.forms[0], { meanings }).meaning;
                   return (
                     <tr key={w.lemma}>
                       <td><b lang="nl">{w.lemma}</b><div className="forms">{w.forms.join(", ")}</div></td>

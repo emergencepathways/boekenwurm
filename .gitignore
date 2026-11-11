@@ -26,3 +26,6 @@ __pycache__/
 .env.*
 !.env.example
 .DS_Store
+
+# The open dictionary is built at deploy time (python -m boekenwurm_ingest dictionary)
+apps/web/public/dict/

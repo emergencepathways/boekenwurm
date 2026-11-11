@@ -1,0 +1,30 @@
+# Cloudflare Pages response headers (https://developers.cloudflare.com/pages/configuration/headers/).
+# The content-security policy itself is a <meta> tag in index.html, so the app is equally strict on any host.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
+  X-Frame-Options: DENY
+
+# Built files have a content hash in their name: cache them for a year.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The page, the service worker and the manifest must be checked on every visit, or updates get stuck.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
+/registerSW.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+
+# The free page-reading model changes rarely; the dictionary is rebuilt with each deploy.
+/tesseract/*
+  Cache-Control: public, max-age=2592000
+/dict/*
+  Cache-Control: public, max-age=86400

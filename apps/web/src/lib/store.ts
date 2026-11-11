@@ -5,10 +5,9 @@
 import { useSyncExternalStore } from "react";
 import * as E from "@boekenwurm/engine";
 import type { CefrLevel, Session } from "@boekenwurm/engine";
-import sample from "virtual:sample-story";
 import { db } from "./db.ts";
-import { countable, nameTest, tokenize } from "./text.ts";
-import { setWordList } from "./words.ts";
+import { setDictionary, setWordList } from "./words.ts";
+import { loadDictionary } from "./dictionary.ts";
 import { hasKey } from "./claude.ts";
 import { newCard, type Rating, review } from "./srs.ts";
 import {
@@ -23,8 +22,6 @@ import {
   type WordDelta,
   type WordList,
 } from "./types.ts";
-
-export const SAMPLE_ID = "sample";
 
 export interface SyncState {
   status: "off" | "idle" | "syncing" | "error" | "offline";
@@ -44,6 +41,8 @@ export interface State {
   user: { id: string; email: string | null } | null;
   sync: SyncState;
   hasKey: boolean;
+  /** The open dictionary: undefined while loading, null when this build has none. */
+  dictionary: { words: number; forms: number; built: string; attribution: string } | null | undefined;
 }
 
 const now = () => Date.now();
@@ -64,6 +63,7 @@ let state: State = {
   user: null,
   sync: { status: "off", lastAt: null, error: null },
   hasKey: false,
+  dictionary: undefined,
 };
 
 const listeners = new Set<() => void>();
@@ -83,31 +83,15 @@ export function useStore<T>(select: (s: State) => T): T {
 // The sync listens for this; changes are pushed a few seconds later in one go.
 const changed = () => window.dispatchEvent(new Event("boekenwurm:changed"));
 
-const sortBooks = (books: Book[]) =>
-  [...books].sort((a, b) => (a.id === SAMPLE_ID ? 1 : 0) - (b.id === SAMPLE_ID ? 1 : 0) || b.updatedAt - a.updatedAt);
+const sortBooks = (books: Book[]) => [...books].sort((a, b) => b.updatedAt - a.updatedAt);
 
 // ---------------------------------------------------------------- start
 
-function sampleBook(): { book: Book; text: BookText } {
-  const isName = nameTest(sample.paragraphs, sample.names);
-  const paragraphs = sample.paragraphs.map((t) => {
-    const tokens = tokenize(t, isName);
-    return { text: t, tokens, countable: countable(tokens), pageNumber: null };
-  });
-  const t0 = Date.UTC(2026, 10, 9);
-  return {
-    book: {
-      id: SAMPLE_ID, source: "sample", title: sample.title, author: "Boekenwurm", isbn: null, level: "A2", levelSource: "reader",
-      scan: null, status: "ready", pageCount: null, pagesRead: [], position: { ord: 0, mode: "original" },
-      paragraphCount: paragraphs.length, coverPath: null, hasCover: false, createdAt: t0, updatedAt: t0, dirty: false,
-      textSynced: true, textRemote: false, nextSeq: 0,
-    },
-    text: { bookId: SAMPLE_ID, paragraphs },
-  };
-}
+/** An earlier version of the app preloaded a sample story under this id; it is removed from devices on start. */
+const LEGACY_SAMPLE_ID = "sample";
 
 export async function init(): Promise<void> {
-  const [profile, books, wordbook, meanings, examples, cards, list] = await Promise.all([
+  const [profile, stored, wordbook, meanings, examples, cards, list] = await Promise.all([
     db.get<Profile>("kv", "profile"),
     db.all<Book>("books"),
     db.get<WordBook>("kv", "wordbook"),
@@ -116,17 +100,12 @@ export async function init(): Promise<void> {
     db.get<Record<string, CardState>>("kv", "cards"),
     db.get<WordList>("kv", "wordlist"),
   ]);
-  // The sample story is rebuilt from the app on every start (its text may improve); only its position is kept.
-  const s = sampleBook();
-  const savedSample = books.find((b) => b.id === SAMPLE_ID);
-  if (savedSample) s.book.position = savedSample.position;
-  await db.put("books", s.book);
-  await db.put("texts", s.text);
+  if (stored.some((b) => b.id === LEGACY_SAMPLE_ID)) await Promise.all([db.del("books", LEGACY_SAMPLE_ID), db.del("texts", LEGACY_SAMPLE_ID)]);
   setWordList(list ?? null);
   setState({
     ready: true,
     profile: profile ? { ...freshProfile(), ...profile, settings: { ...DEFAULT_SETTINGS, ...profile.settings, models: { ...DEFAULT_SETTINGS.models, ...profile.settings?.models } } } : freshProfile(),
-    books: sortBooks([...books.filter((b) => b.id !== SAMPLE_ID), s.book]),
+    books: sortBooks(stored.filter((b) => b.id !== LEGACY_SAMPLE_ID)),
     wordbook: wordbook ?? {},
     meanings: meanings ?? {},
     examples: examples ?? {},
@@ -135,6 +114,11 @@ export async function init(): Promise<void> {
     hasKey: hasKey(),
   });
   window.addEventListener("boekenwurm:key", () => setState({ hasKey: hasKey() }));
+  // The open dictionary loads in the background; reading works without it and gains meanings once it's in.
+  void loadDictionary().then((d) => {
+    setDictionary(d);
+    setState({ dictionary: d ? { words: Object.keys(d.lemmas).length, forms: Object.keys(d.forms).length, built: d.built, attribution: d.attribution } : null });
+  });
 }
 
 // ---------------------------------------------------------------- profile
@@ -157,7 +141,7 @@ export async function adoptProfile(p: Profile): Promise<void> {
 export const bookById = (id: string) => state.books.find((b) => b.id === id) ?? null;
 
 export async function saveBook(book: Book, opts: { sync?: boolean; touch?: boolean } = {}): Promise<Book> {
-  const b: Book = { ...book, updatedAt: opts.touch === false ? book.updatedAt : now(), dirty: book.id !== SAMPLE_ID && opts.sync !== false ? true : book.dirty };
+  const b: Book = { ...book, updatedAt: opts.touch === false ? book.updatedAt : now(), dirty: opts.sync !== false ? true : book.dirty };
   setState({ books: sortBooks([...state.books.filter((x) => x.id !== b.id), b]) });
   await db.put("books", b);
   if (b.dirty && opts.sync !== false) changed();
@@ -176,7 +160,6 @@ export const loadCover = (bookId: string) => db.get<Blob>("blobs", `cover:${book
 export const saveCover = (bookId: string, blob: Blob) => db.put("blobs", blob, `cover:${bookId}`);
 
 export async function deleteBook(id: string): Promise<void> {
-  if (id === SAMPLE_ID) return;
   setState({ books: state.books.filter((b) => b.id !== id) });
   await Promise.all([db.del("books", id), db.del("texts", id), db.del("blobs", `cover:${id}`)]);
   const gone = ((await db.get<string[]>("kv", "deletedBooks")) ?? []).concat(id);
@@ -230,7 +213,7 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
 
   const row: SessionRow = {
     id: s.id,
-    book_id: f.book.id === SAMPLE_ID ? null : f.book.id,
+    book_id: f.book.id,
     started_at: new Date(f.startedAt).toISOString(),
     ended_at: new Date(t).toISOString(),
     preset: state.profile.settings.preset,

@@ -7,7 +7,7 @@ import type { Progress } from "@boekenwurm/engine";
 import { supabase } from "./supabase.ts";
 import { db, wipeDevice } from "./db.ts";
 import {
-  adoptBook, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook, SAMPLE_ID,
+  adoptBook, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook,
 } from "./store.ts";
 import { bookToRow, mergeProgress, rowToBook, serverWins, wordbookFrom, type BookRow, type WordStatRow } from "./merge.ts";
 import { fromRow } from "./srs.ts";
@@ -110,7 +110,7 @@ async function syncProfile(sb: SB, userId: string) {
 }
 
 async function pushBooks(sb: SB, userId: string) {
-  for (const book of getState().books.filter((b) => b.id !== SAMPLE_ID && (b.dirty || !b.textSynced))) {
+  for (const book of getState().books.filter((b) => b.dirty || !b.textSynced)) {
     let b = book;
     if (b.hasCover && !b.coverPath) {
       const blob = await loadCover(b.id);
@@ -195,7 +195,7 @@ async function pullBooks(sb: SB, since: number) {
   const onServer = new Set(all.map((r) => r.id));
   // Removed on another device: forget it here too (only books this device has already synced).
   for (const b of getState().books)
-    if (b.id !== SAMPLE_ID && !b.dirty && b.textSynced && !onServer.has(b.id)) {
+    if (!b.dirty && b.textSynced && !onServer.has(b.id)) {
       await Promise.all([db.del("books", b.id), db.del("texts", b.id), db.del("blobs", `cover:${b.id}`)]);
       setState({ books: getState().books.filter((x) => x.id !== b.id) });
     }
