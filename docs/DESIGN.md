@@ -333,9 +333,11 @@ anywhere except `private/`.
   Translation API and a daily quota inside the free tier; only the tapped word is sent. Readers can delete books from the ••• button on each
   cover. 2026-11-11.
 - Photographed books: the reader sets the first page to read and the last page, and progress counts the pages
-  between; photos come in sections of up to 20 per visit; each photo's place is fixed when it is taken (page number,
-  else its neighbours, else capture order) and a retake keeps that place; reading is in order, with Go to page.
-  2026-11-11.
+  between; photos come in sections of up to 20 per visit; a retake keeps the photo's place; reading is in order, with
+  Go to page. 2026-11-11.
+- Photographed pages are numbered by capture order from the first page, not by the number read from the photo
+  (stylised page numbers were misread). The number read is shown next to each page's number; a difference is
+  flagged and the reader can change the number, and the photos after it follow. 2026-11-11.
 - Hosted on Cloudflare Pages with a generic address (`*.pages.dev`), deployed by GitHub Actions; nothing is preloaded
   in the app except the open dictionary. 2026-11-11.
 - The app: a web app that installs to the home screen (no app stores), React + Vite, Supabase (EU) with email-link

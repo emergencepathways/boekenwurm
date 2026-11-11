@@ -111,15 +111,18 @@ Bottom tab bar, like a native app: **Home · Study · Me**. The reader opens ful
 3. **Pages, in sections of up to 20 photos.** Each visit to the camera is one section, capped at 20 photos so a
    sitting stays manageable; at 20 the camera closes and offers the review, then reading. Each photo is read in the
    background: one Claude request per page with a key, or on-device recognition in free mode.
-4. **The order is fixed when a photo is taken** (`apps/web/src/lib/pages.ts`, `placePages` in `packages/books`):
-   - by the printed page number, read from the photo (on the device: a full-page pass, then a digits-only pass over
-     the top and bottom strips, where a lone number is read far better), or typed by the reader;
-   - otherwise from the photos taken before and after it (11, ?, 13 → 12), when the numbers fit;
-   - otherwise by capture order, right after the photo taken before it.
-   A number read outside the chosen pages (a smudge read as "1", a year in a running head) is not trusted.
-5. **Review, in reading order.** Photos that need a look are flagged: unreadable, no page number, outside the chosen
-   pages, the same page twice, or words the device was unsure of. The reader types a missing number or **retakes**
-   the photo: a retake replaces the photo *in its slot*, so fixing a page never changes the order.
+4. **Pages are numbered in the order they are taken** (`apps/web/src/lib/pages.ts`): first page 7, so the second
+   photo is page 8, whatever number can or can't be read on it. Reading printed page numbers proved unreliable with
+   stylised fonts, so the number read from the photo (on the device: a full-page pass, then a digits-only pass over
+   the top and bottom strips) is only shown next to the page number, as a check. Where the two differ, the photo is
+   flagged. The reader can change any page's number: it is kept as typed, and each photo after it without a typed
+   number is the page after the furthest one so far (7, 8, then 10 typed: 11, 12…; taken 9, 10, 12, 11 and fixed:
+   the next photo is still 13). The book reads in page-number order. A new section carries on after the furthest
+   page. Books photographed before this rule keep their order (`keepEarlierOrder`).
+5. **Review, in reading order.** Photos that need a look are flagged: unreadable, a number read that differs from
+   the page number (readings outside the chosen pages are ignored), outside the chosen pages, the same page twice, or
+   words the device was unsure of. The reader uses the number read, keeps the one in order, types another, or
+   **retakes** the photo: a retake replaces the photo *in its slot*, so it keeps its number and place.
 6. Paragraphs that run over a page break are joined, and words hyphenated across lines or pages are rejoined. The
    reader stays on the same paragraph when an earlier page arrives later.
 7. **Reading** is in order by default; **Go to page** jumps anywhere photographed (a jump starts a fresh run and

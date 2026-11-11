@@ -274,6 +274,14 @@ td .forms { color: var(--muted); font-size: 0.82rem; }
 .thumb.done .img { border-color: var(--leaf); }
 .thumb.failed .img, .thumb.check .img { border-color: var(--strike); }
 .thumb .img .spinner { position: absolute; inset: 0; margin: auto; }
+.thumb .seen { font-weight: 500; color: var(--muted); }
+.thumb .seen.off { color: var(--strike); font-weight: 700; }
+.pagenums { display: flex; gap: 10px; }
+.pagenums > span { flex: 1; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.pagenums small { font: 500 0.72rem var(--ui); color: var(--muted); }
+.pagenums b { font-size: 1.3rem; }
+.pagenums .off { border-color: var(--strike); }
+.pagenums .off b { color: var(--strike); }
 .coverpick { width: 132px; }
 .uncertain { display: flex; flex-wrap: wrap; gap: 6px; }
 .uncertain input { width: auto; min-width: 7ch; padding: 6px 8px; min-height: 36px; font-family: var(--read); }

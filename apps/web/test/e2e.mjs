@@ -353,36 +353,47 @@ await shot("12-photo-details");
 await page.getByRole("button", { name: /photograph the pages/ }).click();
 check(await page.getByText(/Section 1: photograph up to 20 pages in order, starting at page 9/).waitFor().then(() => true, () => false), "section 1 starts at the first page");
 
-step("pages taken out of order, one without its number, one blurry");
-// Taken in this order: 9, 10 (number cut off), 12, 11, then a blurry photo where 13 should be.
+step("pages are numbered in the order taken; the number read from each photo is shown next to it");
+// Taken in this order: 9, 10 (number cut off), 12, 11 (out of order), then a blurry photo where 13 should be.
 for (const f of [await pagePhoto(9), await pagePhoto(10, { number: false }), await pagePhoto(12), await pagePhoto(11), await pagePhoto(13, { blank: true })])
   await page.locator("input[type=file][multiple]").setInputFiles(f);
-await page.locator(".thumb .spinner").first().waitFor({ state: "detached", timeout: 180000 }).catch(() => {});
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
-const labels = async () => (await page.locator(".thumb > span:last-child").allTextContents()).map((t) => t.trim());
-const first = await labels();
-console.log("    thumbnails in reading order:", first.join(" | "));
-check(first[0].startsWith("p. 9") && first.some((l) => l.startsWith("p. 11")) && first.indexOf(first.find((l) => l.startsWith("p. 11"))) < first.indexOf(first.find((l) => l.startsWith("p. 12"))), "pages taken 12-then-11 are put back in page order");
-check(first[1].startsWith("#2"), "the photo without a number keeps its capture place, right after page 9");
-check(first.some((l) => l.includes("⚑")), "unclear photos are flagged");
+const thumbs = async () => {
+  const pg = (await page.locator(".thumb .pg").allTextContents()).map((t) => t.trim());
+  const seen = (await page.locator(".thumb .seen").allTextContents()).map((t) => t.trim());
+  return pg.map((t, i) => `${t} (${seen[i]})`);
+};
+const nums = async () => (await page.locator(".thumb .pg").allTextContents()).map((t) => t.match(/\d+/)[0]).join(",");
+const first = await thumbs();
+console.log("    thumbnails:", first.join(" | "));
+check((await nums()) === "9,10,11,12,13", "photos are pages 9 to 13 in the order taken, whatever was read on them");
+check(first[1].includes("read –") && first[2].includes("read 12") && first[3].includes("read 11"), "the number read from each photo is shown next to its page number");
+check(first[2].includes("⚑") && first[3].includes("⚑") && !first[1].includes("⚑"), "a different number read is flagged; no number read is not");
+check((await page.locator(".thumb .seen.off").count()) === 2, "and the differing readings are marked");
+check(await page.getByText("Next photo: page 14").isVisible(), "the next photo will be page 14");
 await shot("13-pages-flagged");
 
-step("review: type the missing number; retake the blurry photo in its place");
+step("review: use the numbers read for the two swapped pages, retake the blurry photo in its place");
 await page.getByRole("button", { name: "Review", exact: true }).click();
 await page.locator("[aria-label='Check this page']").waitFor();
-check(await page.getByText(/No page number was found/).isVisible(), "the unnumbered photo asks for its page number");
-await page.getByLabel("Page number").fill("10");
-await page.getByRole("button", { name: "Save" }).click();
-// The review moves on to the next flagged photo: the blurry one. Retake it.
+check(await page.getByText(/In order this is page 11, but the photo seems to show page 12/).isVisible(), "the review explains the difference");
+await page.getByRole("button", { name: "Use 12" }).click();
+check((await nums()) === "9,10,12,13,14", "changing page 11 to 12: the photos after it follow (13, 14)");
+await page.locator("[aria-label='Check this page']").waitFor();
+check(await page.getByText(/In order this is page 13, but the photo seems to show page 11/).waitFor({ timeout: 5000 }).then(() => true, () => false), "the next difference is the page taken out of order");
+await page.getByRole("button", { name: "Use 11" }).click();
+check((await nums()) === "9,10,11,12,13", "typing 11 back moves it before 12, and the photo after it stays 13");
+// The review moves on to the blurry photo. Retake it.
 await page.locator("[aria-label='Check this page']").waitFor();
 await page.getByRole("button", { name: "Retake photo" }).click();
 await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(13));
 await page.getByText("Photo replaced. It keeps its place in the book.").waitFor();
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
-const after = await labels();
+const after = await thumbs();
 console.log("    after review:", after.join(" | "));
-check(after.slice(0, 5).map((l) => l.replace(/[^\d]/g, "")).join(",") === "9,10,11,12,13", "after the review the pages read 9, 10, 11, 12, 13");
+check((await nums()) === "9,10,11,12,13", "after the review the pages read 9, 10, 11, 12, 13");
 check(after.length === 5, "the retake replaced the photo instead of adding one");
+check(after.filter((t) => t.includes("*")).length === 2, "the two numbers changed by hand are marked");
 await shot("14-pages-ordered");
 
 step("reading the photographed book in order, and going to a page");
