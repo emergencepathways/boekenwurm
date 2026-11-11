@@ -81,8 +81,20 @@ type SB = NonNullable<typeof supabase>;
 async function pushDeletes(sb: SB) {
   const gone = (await db.get<string[]>("kv", "deletedBooks")) ?? [];
   if (!gone.length) return;
+  // The rows (paragraphs and pages go with the book), then its files in the reader's private folders.
   check(await sb.from("books").delete().in("id", gone));
-  await db.put("kv", [], "deletedBooks");
+  const uid = getState().user?.id;
+  if (uid) {
+    await sb.storage.from("covers").remove(gone.map((id) => `${uid}/${id}.jpg`));
+    for (const id of gone) {
+      for (const bucket of ["pages", "books"]) {
+        const { data } = await sb.storage.from(bucket).list(`${uid}/${id}`, { limit: 1000 });
+        if (data?.length) await sb.storage.from(bucket).remove(data.map((f) => `${uid}/${id}/${f.name}`));
+      }
+    }
+  }
+  const now = (await db.get<string[]>("kv", "deletedBooks")) ?? [];
+  await db.put("kv", now.filter((id) => !gone.includes(id)), "deletedBooks");
 }
 
 async function syncProfile(sb: SB, userId: string) {

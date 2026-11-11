@@ -161,7 +161,11 @@ export const saveCover = (bookId: string, blob: Blob) => db.put("blobs", blob, `
 
 export async function deleteBook(id: string): Promise<void> {
   setState({ books: state.books.filter((b) => b.id !== id) });
-  await Promise.all([db.del("books", id), db.del("texts", id), db.del("blobs", `cover:${id}`)]);
+  // Everything of the book on this device: its text, cover, page photos and their readings, cached adaptations.
+  await Promise.all([
+    db.del("books", id), db.del("texts", id), db.del("blobs", `cover:${id}`), db.delPrefix("blobs", `page:${id}:`),
+    db.del("kv", `pages:${id}`), db.delPrefix("cache", `m|${id}|`),
+  ]);
   const gone = ((await db.get<string[]>("kv", "deletedBooks")) ?? []).concat(id);
   await db.put("kv", gone, "deletedBooks");
   changed();

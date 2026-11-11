@@ -53,6 +53,9 @@ export const db = {
     run(store, "readwrite", (s) => (key === undefined ? s.put(value) : s.put(value, key))).then(() => undefined),
   del: (store: StoreName, key: IDBValidKey) => run(store, "readwrite", (s) => s.delete(key)).then(() => undefined),
   clear: (store: StoreName) => run(store, "readwrite", (s) => s.clear()).then(() => undefined),
+  /** Delete every key that starts with `prefix` (string keys only), e.g. all of a book's page photos. */
+  delPrefix: (store: StoreName, prefix: string) =>
+    run(store, "readwrite", (s) => s.delete(IDBKeyRange.bound(prefix, prefix + "\uffff"))).then(() => undefined),
   available: () => open().then(Boolean),
 };
 

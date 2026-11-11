@@ -96,7 +96,7 @@ export function Home() {
             <BookTile key={b.id} book={b} onLong={() => setDetails(b)} />
           ))}
         </div>
-        <p className="note">Tap a book to read. Press and hold for its details.</p>
+        <p className="note">Tap a book to read. Tap ••• for its level, pages, or to delete it.</p>
       </section>}
 
       {details && <BookDetails book={details} onClose={() => setDetails(null)} />}
@@ -116,6 +116,7 @@ function BookTile({ book, onLong }: { book: Book; onLong: () => void }) {
   };
   const up = () => clearTimeout(timer);
   return (
+    <div className="booktile">
     <button
       className="bookbtn"
       type="button"
@@ -135,6 +136,10 @@ function BookTile({ book, onLong }: { book: Book; onLong: () => void }) {
       <Cover book={book} />
       <span className="t" lang="nl">{book.title}</span>
     </button>
+    <button className="bookmore" type="button" onClick={onLong} aria-label={`Options for ${book.title}: level, pages, delete`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+    </button>
+    </div>
   );
 }
 
@@ -175,12 +180,22 @@ function BookDetails({ book, onClose }: { book: Book; onClose: () => void }) {
         Start again from the beginning
       </button>
       {confirm ? (
-        <button className="btn danger" type="button" onClick={() => void deleteBook(book.id).then(() => (toast("Book removed."), onClose()))}>
-          Remove for good, on every device
-        </button>
+        <div className="verdict bad">
+          <b>Delete “{book.title}”?</b>
+          <span className="small">
+            The book{book.source === "photo" ? ", its page photos" : ""} and your place in it are deleted from this device and your account. Your words and
+            flashcards stay. This can't be undone.
+          </span>
+          <div className="actions">
+            <button className="btn danger" type="button" onClick={() => void deleteBook(book.id).then(() => (toast(`Deleted “${book.title}”.`), onClose()))}>
+              Delete book
+            </button>
+            <button className="btn ghost" type="button" onClick={() => setConfirm(false)}>Keep it</button>
+          </div>
+        </div>
       ) : (
         <button className="btn small ghost" type="button" onClick={() => setConfirm(true)} style={{ color: "var(--strike)" }}>
-          Remove this book…
+          Delete this book…
         </button>
       )}
       <div className="actions">

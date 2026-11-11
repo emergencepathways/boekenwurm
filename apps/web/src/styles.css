@@ -153,6 +153,10 @@ textarea { font-family: var(--read); line-height: 1.5; min-height: 120px; }
 .shelf-head { display: flex; align-items: baseline; justify-content: space-between; }
 .shelf-head h2 { font: 700 1.15rem var(--display); margin: 0; }
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 18px 14px; }
+.booktile { position: relative; }
+.bookmore { position: absolute; top: 4px; right: 4px; width: 32px; height: 32px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: rgb(255 255 255 / 0.88); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); cursor: pointer; }
+.bookmore svg { width: 18px; height: 18px; fill: currentColor; }
 .bookbtn { display: grid; gap: 6px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .bookbtn .t { font: 600 0.84rem/1.25 var(--ui); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .cover { position: relative; aspect-ratio: 2 / 3; border-radius: 6px 10px 10px 6px; overflow: hidden; box-shadow: var(--shadow);
