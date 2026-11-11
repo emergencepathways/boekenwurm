@@ -29,7 +29,7 @@ const colourFor = (s: string) => PALETTE[[...s].reduce((a, c) => (a * 31 + c.cha
 
 /** Share of the book read: paragraphs for files, printed pages for photographed books. */
 export function bookShare(b: Book): number {
-  if (b.source === "photo" && b.pageCount) return bookProgress(b.pageCount, b.pagesRead).share;
+  if (b.source === "photo" && b.pageCount) return bookProgress(b.pageCount, b.pagesRead, b.firstPage ?? 1).share;
   return b.paragraphCount ? Math.min(1, b.position.ord / b.paragraphCount) : 0;
 }
 

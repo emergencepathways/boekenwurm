@@ -18,7 +18,10 @@ export interface Book {
   levelSource: "reader" | "graded" | null;
   scan: (BookLevel & { verdict?: VerdictKind; note?: string }) | null;
   status: BookStatus;
+  /** Last printed page of the book (progress runs firstPage..pageCount). */
   pageCount: number | null;
+  /** First printed page the reader reads: after the title pages and, if they choose, the prologue. Default 1. */
+  firstPage?: number;
   /** Printed page numbers finished (photographed books). */
   pagesRead: number[];
   /** Where the reader is, how they read it, and when they last opened it (for "Continue reading"). */

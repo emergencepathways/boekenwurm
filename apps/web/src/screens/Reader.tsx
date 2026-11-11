@@ -3,7 +3,7 @@
  * the level-up offer and badges, the end-of-session study list, and, with the reader's own Claude key,
  * Match my level (with Show original) and words in their sentence.
  */
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
 import * as AI from "@boekenwurm/ai";
 import { pagesFinished } from "@boekenwurm/books";
@@ -17,6 +17,7 @@ import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
 import { close, open, setTab } from "../nav.ts";
+import { SECTION_SIZE } from "../lib/pages.ts";
 import type { Book, BookText, Paragraph } from "../lib/types.ts";
 import { Icon, plural, Sheet, TokenPips, toast } from "../ui.tsx";
 
@@ -41,7 +42,7 @@ interface RS {
   explained: Map<string, Explained>;
   waiting: boolean;
   showOriginal: boolean;
-  modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | null;
+  modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
 }
 
 export function Reader({ bookId }: { bookId: string }) {
@@ -331,11 +332,16 @@ export function Reader({ bookId }: { bookId: string }) {
       <TopBar
         title={book.title}
         right={
-          above || mode === "match" ? (
-            <button className="btn small" type="button" onClick={() => ((r.modal = { kind: "match" }), bump())}>
-              {mode === "match" ? `Matched to ${progress.level}` : "Match my level"}
+          <>
+            <button className="btn small ghost" type="button" onClick={() => ((r.modal = { kind: "goto" }), bump())} aria-label="Go to a page">
+              {hasPages() ? `p. ${pageAt(r.pos) ?? "?"}` : "Go to"}
             </button>
-          ) : null
+            {(above || mode === "match") && (
+              <button className="btn small" type="button" onClick={() => ((r.modal = { kind: "match" }), bump())}>
+                {mode === "match" ? `Matched to ${progress.level}` : "Match my level"}
+              </button>
+            )}
+          </>
         }
       />
       {r.summary ? (
@@ -352,8 +358,39 @@ export function Reader({ bookId }: { bookId: string }) {
       {r.modal?.kind === "offer" && progress.offer && renderOffer()}
       {r.modal?.kind === "badge" && renderBadge(r.modal.badge)}
       {r.modal?.kind === "match" && renderMatch()}
+      {r.modal?.kind === "goto" && renderGoto()}
     </main>
   );
+
+  // ---------------------------------------------------------------- pages: where the reader is, going to a page
+  function hasPages(): boolean {
+    return Boolean(r.text?.paragraphs.some((p) => p.pageNumber != null));
+  }
+  function pageAt(ord: number): number | null {
+    const ps = r.text?.paragraphs ?? [];
+    for (let i = Math.min(ord, ps.length - 1); i >= 0; i--) if (ps[i].pageNumber != null) return ps[i].pageNumber;
+    return null;
+  }
+  /** The page after the last one photographed (photographed books), or null when the book is complete. */
+  function nextUnphotographed(): number | null {
+    const nums = (r.text?.paragraphs ?? []).map((p) => p.pageNumber).filter((n): n is number => n != null);
+    const next = (nums.length ? Math.max(...nums) : (book?.firstPage ?? 1) - 1) + 1;
+    return book?.pageCount != null && next > book.pageCount ? null : next;
+  }
+  /**
+   * Jump to another place in the book. Reading is in order by default; a jump ends the current run (what was read
+   * so far still counts) and starts a fresh one at the new paragraph. Skipped pages aren't marked as read.
+   */
+  async function jumpTo(ord: number) {
+    r.modal = null;
+    if (!r.text || ord === r.pos) return bump();
+    await leave();
+    r.pos = Math.max(0, Math.min(ord, r.text.paragraphs.length - 1));
+    const b = bookById(bookId);
+    if (b) r.book = await saveBook({ ...b, position: { ...b.position, ord: r.pos, at: Date.now() } });
+    startNewSession();
+    bump();
+  }
 
   function renderPage() {
     const s = r.session!;
@@ -391,7 +428,7 @@ export function Reader({ bookId }: { bookId: string }) {
         >
           <div className="folio">
             <span>{book!.title}</span>
-            <span className="num">{r.pos + 1} / {r.text!.paragraphs.length}</span>
+            <span className="num">{pageAt(r.pos) != null ? `p. ${pageAt(r.pos)} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
           </div>
           {mode === "match" && renderMatchedLine(p.matched)}
           <p className="para" lang="nl">
@@ -503,7 +540,7 @@ export function Reader({ bookId }: { bookId: string }) {
       <section className="panel">
         <h2 className="big">
           {s.kind === "complete"
-            ? atBookEnd ? "You've read every page photographed so far." : `You read to the end. ${plural(s.streakLength, "paragraph")} passed in a row.`
+            ? atBookEnd ? (nextUnphotographed() == null ? "You've read the whole book. Gefeliciteerd!" : "You've read every page photographed so far.") : `You read to the end. ${plural(s.streakLength, "paragraph")} passed in a row.`
             : s.streakLength >= 2 ? `Your streak lasted ${s.streakLength} paragraphs.` : s.streakLength === 1 ? "You passed 1 paragraph this time." : "That paragraph used your last strike."}
         </h2>
         <p>{s.list.length ? `You revealed ${plural(s.list.length, "word")}. The ones you've needed most often come first.` : "You didn't reveal a single word."}</p>
@@ -534,11 +571,21 @@ export function Reader({ bookId }: { bookId: string }) {
             </button>
           )}
           {atBookEnd ? (
-            <button className="btn" type="button" onClick={() => open({ name: "photo", bookId })}>Add pages</button>
+            nextUnphotographed() != null && (
+              <button className="btn" type="button" onClick={() => open({ name: "photo", bookId })}>
+                Photograph the next pages
+              </button>
+            )
           ) : (
             <button className="btn" type="button" onClick={() => (startNewSession(), bump())}>Keep reading</button>
           )}
         </div>
+        {atBookEnd && nextUnphotographed() != null && (
+          <div className="verdict">
+            <b>Next section: up to {SECTION_SIZE} pages, from page {nextUnphotographed()}</b>
+            <span className="small">Photograph them in order; each one slots into its place in the book.</span>
+          </div>
+        )}
         {canPrompt() && !isStandalone() && (
           <div className="verdict">
             <b>Keep Boekenwurm on your home screen</b>
@@ -592,6 +639,19 @@ export function Reader({ bookId }: { bookId: string }) {
     );
   }
 
+  function renderGoto() {
+    return (
+      <GotoSheet
+        paragraphs={r.text!.paragraphs}
+        current={r.pos}
+        isPhoto={book!.source === "photo"}
+        onGo={(ord) => void jumpTo(ord)}
+        onClose={() => ((r.modal = null), bump())}
+        onPhotograph={() => open({ name: "photo", bookId })}
+      />
+    );
+  }
+
   function renderMatch() {
     const sc = book!.scan;
     return (
@@ -622,6 +682,55 @@ export function Reader({ bookId }: { bookId: string }) {
       </Sheet>
     );
   }
+}
+
+function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto }: {
+  paragraphs: Paragraph[];
+  current: number;
+  onGo: (ord: number) => void;
+  onClose: () => void;
+  onPhotograph: () => void;
+  isPhoto: boolean;
+}) {
+  const nums = paragraphs.map((p) => p.pageNumber).filter((n): n is number => n != null);
+  const byPage = nums.length > 0;
+  const [value, setValue] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const min = byPage ? Math.min(...nums) : 1;
+  const max = byPage ? Math.max(...nums) : paragraphs.length;
+  const pages = [...new Set(nums)].sort((a, b) => a - b);
+  const missing: string[] = [];
+  for (let i = 1; i < pages.length; i++) if (pages[i] - pages[i - 1] > 1) missing.push(pages[i] - pages[i - 1] === 2 ? `${pages[i - 1] + 1}` : `${pages[i - 1] + 1}–${pages[i] - 1}`);
+  const go = () => {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 1) return setNote(byPage ? "Type a page number." : "Type a paragraph number.");
+    if (!byPage) return n > paragraphs.length ? setNote(`This book has ${paragraphs.length} paragraphs.`) : onGo(n - 1);
+    if (n > max) return setNote(`Page ${n} isn't ${isPhoto ? "photographed" : "in this book"} yet. The furthest page is ${max}.`);
+    const i = paragraphs.findIndex((p) => p.pageNumber != null && p.pageNumber >= n);
+    if (i < 0) return setNote(`Page ${n} isn't in this book.`);
+    const landed = paragraphs[i].pageNumber!;
+    if (landed !== n) setNote(`Page ${n} isn't ${isPhoto ? "photographed" : "available"}; going to page ${landed}.`);
+    onGo(i);
+  };
+  return (
+    <Sheet label="Go to a page" onClose={onClose}>
+      <h2 className="big" style={{ fontSize: "1.35rem" }}>{byPage ? "Go to a page" : "Go to a paragraph"}</h2>
+      <p className="muted" style={{ margin: 0 }}>
+        {byPage ? `This book has pages ${min}–${max}${isPhoto ? " photographed" : ""}.` : `This book has ${paragraphs.length} paragraphs; you're at ${current + 1}.`}
+        {missing.length > 0 && ` Missing: page ${missing.join(", ")}.`} Reading carries on in order from wherever you go.
+      </p>
+      <form className="row" onSubmit={(e) => (e.preventDefault(), go())}>
+        <input type="number" inputMode="numeric" min={1} value={value} onChange={(e) => (setValue(e.target.value), setNote(null))} placeholder={byPage ? "Page" : "Paragraph"} style={{ maxWidth: 140 }} aria-label={byPage ? "Page number" : "Paragraph number"} autoFocus />
+        <button className="btn primary" type="submit">Go</button>
+      </form>
+      {note && <p className="small" style={{ margin: 0 }}>{note}</p>}
+      <div className="actions">
+        <button className="btn small" type="button" onClick={() => onGo(0)}>Back to the start</button>
+        {isPhoto && <button className="btn small ghost" type="button" onClick={onPhotograph}>Photograph more pages</button>}
+        <button className="btn small ghost" type="button" onClick={onClose}>Close</button>
+      </div>
+    </Sheet>
+  );
 }
 
 function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {

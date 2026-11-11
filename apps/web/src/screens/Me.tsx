@@ -370,7 +370,7 @@ function ConnectionCheck() {
       {report && (
         <>
           {report.schemaLoaded === true && <div className="verdict"><b>Schema loaded</b><span className="small">All tables, the counter function{report.lines.some((l) => l.name.startsWith("Storage") && l.ok) ? " and storage" : ""} are in place.</span></div>}
-          {report.schemaLoaded === false && <div className="verdict bad"><b>Schema not loaded</b><span className="small">Run supabase/migrations/0001_init.sql in the Supabase SQL Editor, then check again.</span></div>}
+          {report.schemaLoaded === false && <div className="verdict bad"><b>Schema not loaded</b><span className="small">Run the files in supabase/migrations in the Supabase SQL Editor, in order, then check again.</span></div>}
           {report.host && <p className="small num">{report.host}</p>}
           <div className="checklist">
             {report.lines.map((l) => (

@@ -1,16 +1,18 @@
 /**
  * Photographing a printed book (ARCHITECTURE.md, "Photographing a book you own"):
  *   1. cover (Claude reads title, author and ISBN with a key; typed in free mode),
- *   2. details: page count, the book's level (both required), ISBN,
- *   3. pages: the camera stays open; each photo is read in the background, one Claude request per page with a key
- *      or on the device for free, where words it was unsure of are shown for a quick check.
- * Pages are stitched into paragraphs across page breaks, and progress counts printed pages.
+ *   2. details: the first page to read and the last page (progress counts the pages between), the book's level, ISBN,
+ *   3. pages, in sections of up to 20 photos per visit: each photo is read in the background (Claude with a key, the
+ *      device for free) and placed in the book at once, by its page number or its neighbours' (lib/pages.ts).
+ *      Flagged photos are reviewed in reading order; a retake replaces the photo in its place, so the order holds.
+ * Pages are stitched into paragraphs across page breaks, in page order.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CefrLevel } from "@boekenwurm/engine";
 import { normalizeIsbn } from "@boekenwurm/ai";
-import { stitch, type PageText } from "@boekenwurm/books";
-import { bookById, saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
+import { bookProgress } from "@boekenwurm/books";
+import { bookById, loadText, saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
+import { arrange, flags, isBusy, keepPosition, nextPage, nextSection, SECTION_SIZE, stitchBook, type PageEntry, type Placed, type Range } from "../lib/pages.ts";
 import { newBook, readCover, readPhotoPage, toParagraphs } from "../lib/books.ts";
 import { downscale, COVER_SIDE, OCR_SIDE } from "../lib/images.ts";
 import { checkBook } from "../lib/text.ts";
@@ -19,15 +21,6 @@ import { stopReader } from "../lib/ocr.ts";
 import { AiError } from "../lib/claude.ts";
 import { close, open } from "../nav.ts";
 import { Icon, LevelPicker, plural, toast } from "../ui.tsx";
-
-interface PageEntry {
-  seq: number;
-  status: "queued" | "reading" | "done" | "check" | "failed";
-  page: PageText | null;
-  problems: string[];
-  uncertain: string[];
-  by: "claude" | "device" | null;
-}
 
 const EXPLAINED = "boekenwurm-camera-explained";
 const explained = () => {
@@ -42,7 +35,7 @@ export function PhotoBook({ bookId }: { bookId?: string }) {
   const existing = bookId ? bookById(bookId) : null;
   const [step, setStep] = useState<"why" | "cover" | "details" | "pages">(existing ? "pages" : explained() ? "cover" : "why");
   const [cover, setCover] = useState<Blob | null>(null);
-  const [details, setDetails] = useState({ title: "", author: "", isbn: "", pages: "", level: null as CefrLevel | null });
+  const [details, setDetails] = useState<Details>({ title: "", author: "", isbn: "", firstPage: "1", lastPage: "", level: null });
   const [id, setId] = useState<string | null>(existing?.id ?? null);
 
   useEffect(() => () => void stopReader(), []);
@@ -79,7 +72,7 @@ export function PhotoBook({ bookId }: { bookId?: string }) {
           onSave={async () => {
             const book = newBook({
               source: "photo", title: details.title.trim(), author: details.author.trim() || null, isbn: normalizeIsbn(details.isbn),
-              pageCount: Number(details.pages), level: details.level, levelSource: "reader", status: "processing", hasCover: true,
+              firstPage: Number(details.firstPage), pageCount: Number(details.lastPage), level: details.level, levelSource: "reader", status: "processing", hasCover: true,
             });
             await saveCover(book.id, cover);
             await saveBook(book);
@@ -267,20 +260,33 @@ function CoverStep({ onDone }: { onDone: (b: Blob, read: { title: string; author
 
 // ---------------------------------------------------------------- 2. details
 
+interface Details {
+  title: string;
+  author: string;
+  isbn: string;
+  firstPage: string;
+  lastPage: string;
+  level: CefrLevel | null;
+}
+
 function DetailsStep({ cover, details, onChange, onRetake, onSave }: {
   cover: Blob;
-  details: { title: string; author: string; isbn: string; pages: string; level: CefrLevel | null };
-  onChange: (d: typeof details) => void;
+  details: Details;
+  onChange: (d: Details) => void;
   onRetake: () => void;
   onSave: () => Promise<void>;
 }) {
   const [url] = useState(() => URL.createObjectURL(cover));
   const [saving, setSaving] = useState(false);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
-  const pages = Number(details.pages);
+  const first = Number(details.firstPage);
+  const last = Number(details.lastPage);
+  const firstOk = Number.isInteger(first) && first >= 1 && first <= 5000;
+  const lastOk = Number.isInteger(last) && last >= 1 && last <= 5000;
+  const orderOk = !firstOk || !lastOk || first <= last;
   const isbnOk = !details.isbn.trim() || normalizeIsbn(details.isbn) != null;
-  const ok = details.title.trim() && Number.isInteger(pages) && pages >= 1 && pages <= 5000 && details.level && isbnOk;
-  const set = (patch: Partial<typeof details>) => onChange({ ...details, ...patch });
+  const ok = details.title.trim() && firstOk && lastOk && orderOk && details.level && isbnOk;
+  const set = (patch: Partial<Details>) => onChange({ ...details, ...patch });
   return (
     <>
       <h1 className="big">About this book</h1>
@@ -295,11 +301,21 @@ function DetailsStep({ cover, details, onChange, onRetake, onSave }: {
             <label className="field"><span>Author</span><input value={details.author} onChange={(e) => set({ author: e.target.value })} maxLength={200} /></label>
           </div>
         </div>
-        <label className="field">
-          <span>Number of pages</span>
-          <input type="number" inputMode="numeric" min={1} max={5000} value={details.pages} onChange={(e) => set({ pages: e.target.value })} placeholder="The last printed page number" />
-          <span className="note">For your progress: "page 34 of 212".</span>
-        </label>
+        <div className="row" style={{ alignItems: "start" }}>
+          <label className="field grow" style={{ minWidth: 120 }}>
+            <span>First page to read</span>
+            <input type="number" inputMode="numeric" min={1} max={5000} value={details.firstPage} onChange={(e) => set({ firstPage: e.target.value })} />
+          </label>
+          <label className="field grow" style={{ minWidth: 120 }}>
+            <span>Last page</span>
+            <input type="number" inputMode="numeric" min={1} max={5000} value={details.lastPage} onChange={(e) => set({ lastPage: e.target.value })} placeholder="e.g. 212" />
+          </label>
+        </div>
+        <span className="note">
+          Start where you want to begin: skip the title pages and contents, and the prologue too if you like.{" "}
+          {firstOk && lastOk && orderOk ? <b>That's {plural(last - first + 1, "page")} to read.</b> : null}
+        </span>
+        {!orderOk && <span className="error">The first page comes after the last page. Check both numbers.</span>}
         <div className="field">
           <span>The book's level</span>
           <LevelPicker value={details.level} onChange={(level) => set({ level })} label="The book's level" />
@@ -325,32 +341,51 @@ function PagesStep({ bookId }: { bookId: string }) {
   const preferFree = useStore((s) => s.profile.settings.preferFreeReading);
   const book = useStore((s) => s.books.find((b) => b.id === bookId) ?? null);
   const useClaude = hasKey && !preferFree;
+  const range: Range = { firstPage: book?.firstPage ?? 1, lastPage: book?.pageCount ?? null };
   const [pages, setPages] = useState<PageEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [section, setSection] = useState(1);
   const [progress, setProgress] = useState<string | null>(null);
   const [checking, setChecking] = useState<number | null>(null);
+  const [retaking, setRetaking] = useState<number | null>(null);
+  const [thumbVersion, setThumbVersion] = useState(0); // a retake changes the photo under the same slot
   const queue = useRef<Array<{ seq: number; blob: Blob }>>([]);
   const working = useRef(false);
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
 
-  // Pages read earlier (when adding more pages to a book).
+  // Pages photographed before. This visit is a new section of up to 20 photos.
   useEffect(() => {
-    void db.get<PageEntry[]>("kv", `pages:${bookId}`).then((saved) => saved && setPages(saved));
+    void db.get<PageEntry[]>("kv", `pages:${bookId}`).then((saved) => {
+      const list = saved ?? [];
+      pagesRef.current = list;
+      setPages(list);
+      setSection(nextSection(list));
+      setLoaded(true);
+    });
   }, [bookId]);
 
   const persist = useCallback(
     async (list: PageEntry[]) => {
       await db.put("kv", list, `pages:${bookId}`);
-      const accepted = list.filter((p) => p.status === "done" && p.page).map((p) => p.page!);
       const b = bookById(bookId);
       if (!b) return;
-      const stitched = stitch(accepted);
+      // Pages are placed in reading order before stitching, so the book reads in order whatever was taken when.
+      const stitched = stitchBook(list, rangeRef.current);
       // The same language and spelling check as files, on what was read.
-      const verdict = checkBook(stitched.paragraphs.map((p) => p.text));
+      const verdict = checkBook(stitched.map((p) => p.text));
       const keep = new Set(verdict.paragraphs);
-      const paragraphs = toParagraphs(stitched.paragraphs.filter((p) => keep.has(p.text.replace(/\s+/g, " ").trim()) || p.text.split(/\s+/).length < 8));
+      const paragraphs = toParagraphs(stitched.filter((p) => keep.has(p.text.replace(/\s+/g, " ").trim()) || p.text.split(/\s+/).length < 8));
+      // The reader stays on the paragraph they were at, even when an earlier page arrives later.
+      const old = await loadText(bookId);
+      const ord = keepPosition(old?.paragraphs ?? [], b.position.ord, paragraphs);
       await saveText({ bookId, paragraphs });
-      await saveBook({ ...b, paragraphCount: paragraphs.length, status: paragraphs.length ? "ready" : "processing", textSynced: false, nextSeq: Math.max(b.nextSeq, ...list.map((p) => p.seq + 1)) });
+      await saveBook({
+        ...b, paragraphCount: paragraphs.length, status: paragraphs.length ? "ready" : "processing", textSynced: false,
+        position: { ...b.position, ord }, nextSeq: Math.max(b.nextSeq, ...list.map((p) => p.seq + 1)),
+      });
     },
     [bookId],
   );
@@ -369,34 +404,59 @@ function PagesStep({ bookId }: { bookId: string }) {
       const job = queue.current.shift()!;
       update(job.seq, { status: "reading" });
       try {
-        const r = await readPhotoPage(job.blob, job.seq, useClaude, (p, s) => setProgress(s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"));
+        const r = await readPhotoPage(job.blob, job.seq, useClaude, (p, s) => setProgress(s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"), { lastPage: rangeRef.current.lastPage });
         // Unsure words don't hold a page back: it is used at once and flagged for an optional quick check.
         const status: PageEntry["status"] = r.problems.length ? "check" : "done";
         await persist(update(job.seq, { status, page: r.page, problems: r.problems, uncertain: r.uncertain, by: r.by }));
       } catch (e) {
-        update(job.seq, { status: "failed", problems: [e instanceof AiError ? e.message : (e as Error).message || "Couldn't read this page."] });
+        await persist(update(job.seq, { status: "failed", problems: [e instanceof AiError ? e.message : (e as Error).message || "Couldn't read this page."] }));
       }
       setProgress(null);
     }
     working.current = false;
   }, [persist, useClaude]);
 
-  const add = async (photo: Blob) => {
+  /**
+   * A new photo: it claims the next slot in this visit's section at once (so several photos picked together get
+   * distinct slots, in the order picked, and the section stops at 20), then is stored and read in the background.
+   */
+  const add = (photo: Blob) => {
+    if (pagesRef.current.filter((p) => p.section === section).length >= SECTION_SIZE) {
+      toast(`This section is full: ${SECTION_SIZE} photos. Read them, then photograph the next section.`);
+      return;
+    }
     const seq = Math.max(bookById(bookId)?.nextSeq ?? 0, ...pagesRef.current.map((p) => p.seq + 1));
-    const small = await downscale(photo, OCR_SIDE, 0.9).catch(() => photo);
-    const entry: PageEntry = { seq, status: "queued", page: null, problems: [], uncertain: [], by: null };
+    const entry: PageEntry = { seq, section, status: "queued", page: null, problems: [], uncertain: [], by: null };
     const next = [...pagesRef.current, entry];
     pagesRef.current = next;
     setPages(next);
+    void (async () => {
+      const small = await downscale(photo, OCR_SIDE, 0.9).catch(() => photo);
+      await db.put("blobs", small, `page:${bookId}:${seq}`);
+      setThumbVersion((v) => v + 1);
+      const b = bookById(bookId);
+      if (b && b.nextSeq <= seq) await saveBook({ ...b, nextSeq: seq + 1 }, { sync: false });
+      queue.current.push({ seq, blob: small });
+      queue.current.sort((x, y) => x.seq - y.seq);
+      void work();
+    })();
+  };
+
+  /** A retake: the new photo replaces the old one in the same slot, so its place in the book doesn't change. */
+  const replace = async (seq: number, photo: Blob) => {
+    setRetaking(null);
+    const small = await downscale(photo, OCR_SIDE, 0.9).catch(() => photo);
     await db.put("blobs", small, `page:${bookId}:${seq}`);
-    await saveBook({ ...bookById(bookId)!, nextSeq: seq + 1 }, { sync: false });
+    update(seq, { status: "queued", page: null, problems: [], uncertain: [], by: null });
+    setThumbVersion((v) => v + 1);
     queue.current.push({ seq, blob: small });
     void work();
+    toast("Photo replaced. It keeps its place in the book.");
   };
 
   const retry = async (seq: number) => {
     const blob = await db.get<Blob>("blobs", `page:${bookId}:${seq}`);
-    if (!blob) return toast("That photo isn't on this device any more. Take it again.");
+    if (!blob) return toast("That photo isn't on this device any more. Retake it.");
     update(seq, { status: "queued", problems: [] });
     queue.current.push({ seq, blob });
     void work();
@@ -411,72 +471,135 @@ function PagesStep({ bookId }: { bookId: string }) {
     await persist(next);
   };
 
-  const done = pages.filter((p) => p.status === "done").length;
-  const busy = pages.some((p) => p.status === "queued" || p.status === "reading");
-  const needCheck = pages.filter((p) => p.status === "check" || p.status === "failed" || p.uncertain.length);
-  const printed = pages.filter((p) => p.page?.pageNumber).map((p) => p.page!.pageNumber!);
+  const placed = arrange(pages, range);
+  const flagged = placed.filter((p) => flags(p, placed, range).length);
+  const inSection = pages.filter((p) => p.section === section).length;
+  const full = inSection >= SECTION_SIZE;
+  const ready = pages.filter((p) => p.status === "done").length;
+  const busy = pages.filter(isBusy).length;
+  const startAt = nextPage(pages, range);
+  const retakeOf = retaking != null ? placed.find((p) => p.entry.seq === retaking) : null;
+  const read = book?.pageCount ? bookProgress(book.pageCount, placed.filter((p) => p.entry.status === "done" && p.pageNumber != null).map((p) => p.pageNumber!), range.firstPage) : null;
+
+  const openNext = (afterSeq: number | null) => {
+    const i = afterSeq == null ? -1 : flagged.findIndex((p) => p.entry.seq === afterSeq);
+    const next = flagged[i + 1] ?? null;
+    setChecking(next ? next.entry.seq : null);
+  };
+
+  if (!loaded) return <div className="spinner" />;
 
   return (
     <>
       <h1 className="big">The pages</h1>
       <p className="muted" style={{ margin: 0 }}>
-        Photograph pages in order, one after another. {useClaude ? "Claude reads each page (one request per page)." : "Each page is read on this device, for free."}
-        {book?.pageCount ? ` ${plural(done, "page")} of ${book.pageCount} read so far.` : ""}
+        {retakeOf
+          ? `Retake ${retakeOf.pageNumber != null ? `page ${retakeOf.pageNumber}` : `photo ${retakeOf.entry.seq + 1}`}. It goes back in the same place.`
+          : full
+            ? `This section is done: ${SECTION_SIZE} photos.`
+            : `Section ${section}: photograph up to ${SECTION_SIZE} pages in order, starting at page ${startAt}. ${useClaude ? "Claude reads each page (one request per page)." : "Each page is read on this device, for free."}`}
       </p>
-      <Camera onPhoto={(b) => void add(b)} hint="One page per photo, flat and in good light, filling the frame." />
+
+      {retakeOf ? (
+        <>
+          <Camera key={`retake-${retaking}`} onPhoto={(b) => void replace(retakeOf.entry.seq, b)} hint="Flat, in good light, the whole page in the frame, with its page number." />
+          <button className="btn ghost" type="button" onClick={() => setRetaking(null)}>Cancel the retake</button>
+        </>
+      ) : full ? (
+        <section className="panel">
+          <h2>{flagged.length ? `Check ${plural(flagged.length, "flagged page")}, then read` : "All set: time to read"}</h2>
+          <p>
+            Read these pages before photographing more. When you reach the end, Boekenwurm asks for the next {SECTION_SIZE}, from page {startAt}.
+          </p>
+          <div className="actions">
+            {flagged.length > 0 && <button className="btn" type="button" onClick={() => openNext(null)}>Review flagged pages</button>}
+            <button className="btn primary" type="button" disabled={!ready} onClick={() => open({ name: "reader", bookId })}>Start reading</button>
+          </div>
+        </section>
+      ) : (
+        <>
+          <Camera key="camera" onPhoto={add} hint="One page per photo, flat and in good light, with the page number in the frame." />
+          <p className="small muted num" style={{ margin: 0, textAlign: "center" }}>{inSection} of {SECTION_SIZE} in this section</p>
+        </>
+      )}
       {progress && <p className="small muted" aria-live="polite" style={{ margin: 0 }}>{progress}</p>}
 
-      {pages.length > 0 && (
-        <div className="thumbs" aria-label="Photographed pages">
-          {pages.map((p) => (
-            <button key={p.seq} type="button" className={`thumb ${p.status}`} onClick={() => p.status !== "queued" && p.status !== "reading" && setChecking(p.seq)} style={{ background: "none", border: 0, padding: 0, cursor: "pointer" }}>
-              <PageThumb bookId={bookId} seq={p.seq} spinning={p.status === "queued" || p.status === "reading"} />
-              <span>{p.page?.pageNumber ? `p. ${p.page.pageNumber}` : `#${p.seq + 1}`}{p.status === "check" || (p.status === "done" && p.uncertain.length) ? " ⚑" : p.status === "failed" ? " ✗" : ""}</span>
-            </button>
-          ))}
+      {placed.length > 0 && (
+        <div className="thumbs" aria-label="Photographed pages, in reading order">
+          {placed.map((p) => {
+            const f = flags(p, placed, range);
+            const label = p.pageNumber != null ? `p. ${p.pageNumber}${p.guessed ? "?" : ""}` : `#${p.entry.seq + 1}`;
+            return (
+              <button key={p.entry.seq} type="button" className={`thumb ${p.entry.status}${f.length && p.entry.status === "done" ? " check" : ""}`}
+                onClick={() => !isBusy(p.entry) && setChecking(p.entry.seq)} style={{ background: "none", border: 0, padding: 0, cursor: "pointer" }}
+                aria-label={`${label}${f.length ? ", needs a look" : ""}`}>
+                <PageThumb bookId={bookId} seq={p.entry.seq} spinning={isBusy(p.entry)} version={thumbVersion} />
+                <span>{label}{p.entry.status === "failed" ? " ✗" : f.length ? " ⚑" : ""}</span>
+              </button>
+            );
+          })}
         </div>
       )}
-      {needCheck.length > 0 && <p className="small" style={{ margin: 0 }}>⚑ Tap a flagged page to check it: a few words were hard to read, or the photo needs retaking.</p>}
-      {printed.length > 1 && <Gaps printed={printed} />}
+      {flagged.length > 0 && !full && (
+        <p className="small" style={{ margin: 0 }}>
+          ⚑ {plural(flagged.length, "page")} {flagged.length === 1 ? "needs" : "need"} a look.{" "}
+          <button className="btn small ghost" type="button" onClick={() => openNext(null)}>Review</button>
+        </p>
+      )}
+      {read && <p className="small muted" style={{ margin: 0 }}>{plural(read.pagesRead, "page")} of {read.pageCount} in the book so far.</p>}
+      <Gaps numbers={placed.map((p) => p.pageNumber).filter((n): n is number => n != null)} />
 
-      {checking != null && (
+      {checking != null && placed.find((p) => p.entry.seq === checking) && (
         <CheckPage
-          entry={pages.find((p) => p.seq === checking)!}
+          key={checking}
+          placed={placed.find((p) => p.entry.seq === checking)!}
+          reasons={flags(placed.find((p) => p.entry.seq === checking)!, placed, range)}
+          position={flagged.findIndex((p) => p.entry.seq === checking)}
+          total={flagged.length}
           bookId={bookId}
-          onAccept={async (page) => {
+          version={thumbVersion}
+          onSave={async (patch) => {
+            await persist(update(checking, patch));
+            openNext(checking);
+          }}
+          onRetake={() => {
+            setRetaking(checking);
             setChecking(null);
-            await persist(update(page.seq, { status: "done", page, problems: [], uncertain: [] }));
+            window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           onRetry={() => (setChecking(null), void retry(checking))}
           onRemove={() => void remove(checking)}
+          onNext={() => openNext(checking)}
           onClose={() => setChecking(null)}
         />
       )}
 
-      <div className="actions">
-        <button className="btn primary" type="button" disabled={!done} onClick={() => open({ name: "reader", bookId })}>
-          {busy ? `Start reading (${plural(pages.filter((p) => p.status === "queued" || p.status === "reading").length, "page")} still reading)` : "Start reading"}
-        </button>
-        <button className="btn ghost" type="button" onClick={close}>Add more later</button>
-      </div>
+      {!full && !retakeOf && (
+        <div className="actions">
+          <button className="btn primary" type="button" disabled={!ready} onClick={() => open({ name: "reader", bookId })}>
+            {busy ? `Start reading (${plural(busy, "page")} still reading)` : "Start reading"}
+          </button>
+          <button className="btn ghost" type="button" onClick={close}>Add more later</button>
+        </div>
+      )}
     </>
   );
 }
 
-function Gaps({ printed }: { printed: number[] }) {
-  const s = [...new Set(printed)].sort((a, b) => a - b);
+function Gaps({ numbers }: { numbers: number[] }) {
+  const s = [...new Set(numbers)].sort((a, b) => a - b);
   const gaps: string[] = [];
   for (let i = 1; i < s.length; i++) if (s[i] - s[i - 1] > 1) gaps.push(s[i] - s[i - 1] === 2 ? `${s[i - 1] + 1}` : `${s[i - 1] + 1}–${s[i] - 1}`);
-  return gaps.length ? <p className="small muted" style={{ margin: 0 }}>Missing so far: page {gaps.join(", ")}. Reading skips over gaps.</p> : null;
+  return gaps.length ? <p className="small muted" style={{ margin: 0 }}>Missing so far: page {gaps.join(", ")}. Reading skips over gaps; photograph them any time and they slot into place.</p> : null;
 }
 
-function PageThumb({ bookId, seq, spinning }: { bookId: string; seq: number; spinning: boolean }) {
+function PageThumb({ bookId, seq, spinning, version = 0 }: { bookId: string; seq: number; spinning: boolean; version?: number }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let u: string | null = null;
     void db.get<Blob>("blobs", `page:${bookId}:${seq}`).then((b) => b && setUrl((u = URL.createObjectURL(b))));
     return () => void (u && URL.revokeObjectURL(u));
-  }, [bookId, seq]);
+  }, [bookId, seq, version]);
   return (
     <span className="img">
       {url && <img src={url} alt="" />}
@@ -485,32 +608,62 @@ function PageThumb({ bookId, seq, spinning }: { bookId: string; seq: number; spi
   );
 }
 
-/** A page that needs a look: problems to fix by retaking, or words the device reader was unsure of. */
-function CheckPage({ entry, bookId, onAccept, onRetry, onRemove, onClose }: {
-  entry: PageEntry;
+/**
+ * A photo that needs a look, in reading order (1 of N): its page number (typed when none was read), words the
+ * device reader was unsure of, or a problem that needs a retake. A retake replaces the photo in its place.
+ */
+function CheckPage({ placed, reasons, position, total, bookId, version, onSave, onRetake, onRetry, onRemove, onNext, onClose }: {
+  placed: Placed;
+  reasons: string[];
+  position: number;
+  total: number;
   bookId: string;
-  onAccept: (p: PageText & { seq: number }) => void;
+  version: number;
+  onSave: (patch: Partial<PageEntry>) => void;
+  onRetake: () => void;
   onRetry: () => void;
   onRemove: () => void;
+  onNext: () => void;
   onClose: () => void;
 }) {
+  const entry = placed.entry;
   const [fixes, setFixes] = useState<Record<string, string>>(() => Object.fromEntries(entry.uncertain.map((w) => [w, w])));
-  const accept = () => {
-    if (!entry.page) return;
-    const re = (w: string) => new RegExp(`(?<![\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}])`, "gu");
-    const paragraphs = entry.page.paragraphs.map((t) => Object.entries(fixes).reduce((acc, [from, to]) => (to && to !== from ? acc.replace(re(from), to) : acc), t));
-    onAccept({ ...entry.page, paragraphs, seq: entry.seq });
+  const [number, setNumber] = useState(placed.pageNumber != null ? String(placed.pageNumber) : "");
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const typed = Number(number);
+  const numberOk = !number.trim() || (Number.isInteger(typed) && typed >= 1 && typed <= 5000);
+  const save = () => {
+    const patch: Partial<PageEntry> = {};
+    if (number.trim() && numberOk && (typed !== placed.pageNumber || placed.guessed)) patch.manualPage = typed;
+    if (entry.page) {
+      const re = (w: string) => new RegExp(`(?<![\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}])`, "gu");
+      const paragraphs = entry.page.paragraphs.map((t) => Object.entries(fixes).reduce((acc, [from, to]) => (to && to !== from ? acc.replace(re(from), to) : acc), t));
+      patch.page = { ...entry.page, paragraphs };
+      patch.uncertain = [];
+      if (entry.status === "check") patch.status = "done";
+    }
+    onSave(patch);
   };
+  const title = placed.pageNumber != null ? `Page ${placed.pageNumber}${placed.guessed ? " (worked out from the pages around it)" : ""}` : `Photo ${entry.seq + 1}`;
   return (
     <section className="panel" aria-label="Check this page">
       <div className="row">
-        <PageThumb bookId={bookId} seq={entry.seq} spinning={false} />
+        <PageThumb bookId={bookId} seq={entry.seq} spinning={false} version={version} />
         <div className="grow">
-          <b>{entry.page?.pageNumber ? `Page ${entry.page.pageNumber}` : `Photo ${entry.seq + 1}`}</b>
-          <div className="small muted">{entry.status === "done" ? "Read" : entry.status === "failed" ? "Couldn't be read" : "Needs a quick check"}{entry.by === "device" ? " · read on this device" : entry.by === "claude" ? " · read by Claude" : ""}</div>
+          <b>{title}</b>
+          <div className="small muted">
+            {position >= 0 ? `${position + 1} of ${total} to check · ` : ""}
+            {entry.status === "done" ? "Read" : entry.status === "failed" ? "Couldn't be read" : "Needs a retake"}
+            {entry.by === "device" ? " on this device" : entry.by === "claude" ? " by Claude" : ""}
+          </div>
         </div>
       </div>
-      {entry.problems.map((p) => <p key={p} className="error" style={{ margin: 0 }}>{p}</p>)}
+      {reasons.map((r) => <p key={r} className="small" style={{ margin: 0, color: "var(--strike)" }}>{r}</p>)}
+      <label className="field">
+        <span>Page number</span>
+        <input type="number" inputMode="numeric" min={1} max={5000} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="As printed on the page" style={{ maxWidth: 160 }} />
+        {!numberOk && <span className="error">Type the page number as a whole number.</span>}
+      </label>
       {entry.uncertain.length > 0 && (
         <>
           <p>These words were hard to read. Correct any that are wrong:</p>
@@ -523,18 +676,24 @@ function CheckPage({ entry, bookId, onAccept, onRetry, onRemove, onClose }: {
       )}
       {entry.page && entry.page.paragraphs.length > 0 && (
         <details>
-          <summary className="small">Show the text read from this page</summary>
+          <summary className="small">Show the text read from this photo</summary>
           {entry.page.paragraphs.map((t, i) => <p key={i} lang="nl" style={{ fontFamily: "var(--read)", color: "var(--ink)", marginTop: 8 }}>{t}</p>)}
         </details>
       )}
       <div className="actions">
-        {entry.page && entry.page.paragraphs.length > 0 && (entry.status !== "done" || entry.uncertain.length > 0) && (
-          <button className="btn primary small" type="button" onClick={accept}>{entry.status === "done" ? "Save corrections" : "Use this page anyway"}</button>
-        )}
-        <button className="btn small" type="button" onClick={onRetry}>Read again</button>
-        <button className="btn small ghost" type="button" onClick={onRemove}>Remove (retake it)</button>
+        {(entry.page || number.trim()) && <button className="btn primary small" type="button" disabled={!numberOk} onClick={save}>{entry.status === "done" ? "Save" : "Use this photo anyway"}</button>}
+        <button className="btn small" type="button" onClick={onRetake}>Retake photo</button>
+        {entry.status === "failed" && <button className="btn small ghost" type="button" onClick={onRetry}>Read again</button>}
+        {total > 1 && <button className="btn small ghost" type="button" onClick={onNext}>Next</button>}
         <button className="btn small ghost" type="button" onClick={onClose}>Close</button>
       </div>
+      {confirmRemove ? (
+        <button className="btn small danger" type="button" onClick={onRemove}>Remove this photo from the book</button>
+      ) : (
+        <button className="btn small ghost" type="button" style={{ justifySelf: "start", color: "var(--muted)" }} onClick={() => setConfirmRemove(true)}>
+          Not a page of this book? Remove it…
+        </button>
+      )}
     </section>
   );
 }

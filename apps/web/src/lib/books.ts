@@ -102,7 +102,13 @@ export interface PageResult {
   model: string | null;
 }
 
-export async function readPhotoPage(photo: Blob, seq: number, useClaude: boolean, onProgress?: (p: number, s: string) => void): Promise<PageResult> {
+export async function readPhotoPage(
+  photo: Blob,
+  seq: number,
+  useClaude: boolean,
+  onProgress?: (p: number, s: string) => void,
+  range: { lastPage?: number | null } = {},
+): Promise<PageResult> {
   if (useClaude) {
     const model = getState().profile.settings.models.vision;
     const img = await downscale(photo, CLAUDE_SIDE);
@@ -117,7 +123,7 @@ export async function readPhotoPage(photo: Blob, seq: number, useClaude: boolean
     };
   }
   const img = await downscale(photo, OCR_SIDE, 0.9);
-  const r = await readPageOnDevice(img, seq, onProgress);
+  const r = await readPageOnDevice(img, seq, onProgress, range);
   const problems = r.quality < 0.8 ? ["Many words were hard to read. Retake the photo flat, closer and in good light."] : [];
   const words = r.page.paragraphs.join(" ").match(/\p{L}+/gu) ?? [];
   if (words.length < 15) problems.push("Very little text was found on this page. Retake the photo closer and in good light.");

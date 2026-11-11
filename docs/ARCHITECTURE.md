@@ -104,14 +104,27 @@ Bottom tab bar, like a native app: **Home · Study · Me**. The reader opens ful
 
 1. **Cover** (required): take a photo. With a key, Claude reads the title and author from it; in free mode the reader
    types them. Either way the reader confirms before saving.
-2. **Details**: number of pages (required, for progress), the book's level (A1–C2, required for now), ISBN
-   (optional: photograph the back cover or type it).
-3. **Pages**: the camera stays open; the reader photographs pages one after another. Each photo becomes paragraphs
-   in the background: one Claude request per page with a key, or on-device recognition in free mode, where words it
-   was unsure of are highlighted for a quick check (a page under 80% sure asks for a retake). The page number printed
-   on the page is read too, so progress is "page 34 of 212" even when pages are skipped.
-4. Paragraphs that run over a page break are joined, and words hyphenated across lines or pages are rejoined.
-5. The book appears on Home with its cover and progress. More pages can be added any time ("Add pages").
+2. **Details**: the **first page to read** and the **last page** (both required). Books often have title pages,
+   contents and a prologue before the story; the reader starts where they want, prologue included or not, and
+   progress counts only those pages (pages 9 to 212 are 204 pages). Then the book's level (A1–C2, required for now)
+   and ISBN (optional).
+3. **Pages, in sections of up to 20 photos.** Each visit to the camera is one section, capped at 20 photos so a
+   sitting stays manageable; at 20 the camera closes and offers the review, then reading. Each photo is read in the
+   background: one Claude request per page with a key, or on-device recognition in free mode.
+4. **The order is fixed when a photo is taken** (`apps/web/src/lib/pages.ts`, `placePages` in `packages/books`):
+   - by the printed page number, read from the photo (on the device: a full-page pass, then a digits-only pass over
+     the top and bottom strips, where a lone number is read far better), or typed by the reader;
+   - otherwise from the photos taken before and after it (11, ?, 13 → 12), when the numbers fit;
+   - otherwise by capture order, right after the photo taken before it.
+   A number read outside the chosen pages (a smudge read as "1", a year in a running head) is not trusted.
+5. **Review, in reading order.** Photos that need a look are flagged: unreadable, no page number, outside the chosen
+   pages, the same page twice, or words the device was unsure of. The reader types a missing number or **retakes**
+   the photo: a retake replaces the photo *in its slot*, so fixing a page never changes the order.
+6. Paragraphs that run over a page break are joined, and words hyphenated across lines or pages are rejoined. The
+   reader stays on the same paragraph when an earlier page arrives later.
+7. **Reading** is in order by default; **Go to page** jumps anywhere photographed (a jump starts a fresh run and
+   doesn't mark skipped pages as read). At the end of the photographed pages, the reader is asked for the next
+   section: up to 20 pages, from the page after the last one photographed.
 
 Camera access: the app asks the first time the reader taps **Take photo**, after a short screen that says why. On
 phones the back camera is used (`facingMode: environment`, or `<input capture="environment">` as the fallback that
@@ -126,8 +139,9 @@ See `supabase/migrations/0001_init.sql`. Every table carries `user_id` and row-l
 their own rows; storage buckets are private with the same rule (`{user_id}/…` paths).
 
 - `profiles` — level, settings, badges, streak tokens.
-- `books` — source (`epub`, `pdf`, `photo`, `sample`), title, author, ISBN, cover path, page count, level (set by the
-  reader for photographed books; graded for files), status, last position.
+- `books` — source (`epub`, `pdf`, `photo`, `sample`), title, author, ISBN, cover path, first page to read and last
+  page (`first_page`, `page_count`; migration 0002), level (set by the reader for photographed books; graded for
+  files), status, last position.
 - `book_pages` — for photographed books: page number, photo path, recognition status and model.
 - `paragraphs` — book, order, page, text, tokens with base forms; matched versions per level live in
   `paragraph_versions` (reader-only, regenerated on level change).

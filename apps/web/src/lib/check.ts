@@ -49,6 +49,11 @@ export async function connectionCheck(): Promise<CheckReport> {
     else lines.push({ name: `Table ${t}`, ok: false, detail: error.message });
   }
 
+  // Migration 0002: the first page of a printed book.
+  const fp = await supabase.from("books").select("first_page", { head: true });
+  const fpMissing = Boolean(fp.error) && /first_page/.test(fp.error?.message ?? "");
+  lines.push({ name: "Books: first page (0002)", ok: !fp.error, detail: fpMissing ? "Missing: run supabase/migrations/0002_first_page.sql in the SQL Editor" : fp.error ? fp.error.message : "Found" });
+
   // The counter function: an empty word breaks its check constraint, so it answers without adding a row.
   const fn = await supabase.rpc("add_word_stats", { p_lemma: "", p_reveals: 0, p_encounters: 0, p_last_revealed: null, p_example: null });
   const fnMissing = fn.error?.code === "PGRST202" || /could not find the function/i.test(fn.error?.message ?? "");
@@ -64,6 +69,6 @@ export async function connectionCheck(): Promise<CheckReport> {
     lines.push({ name: `Storage ${b}`, ok: !error, detail: error ? (/not found/i.test(error.message) ? "Missing: run the schema in the SQL Editor" : error.message) : "Private, your folder only" });
   }
 
-  const schemaLoaded = tablesOk === TABLES.length && !fnMissing ? true : tablesOk === 0 ? false : null;
+  const schemaLoaded = tablesOk === TABLES.length && !fnMissing && !fp.error ? true : tablesOk === 0 ? false : null;
   return { host: supabaseHost, lines, schemaLoaded };
 }

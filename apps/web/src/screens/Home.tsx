@@ -13,8 +13,8 @@ const greeting = () => {
 
 function where(b: Book): string {
   if (b.source === "photo" && b.pageCount) {
-    const p = bookProgress(b.pageCount, b.pagesRead);
-    return p.furthestPage ? `Page ${p.furthestPage} of ${p.pageCount}` : `${p.pageCount} pages`;
+    const p = bookProgress(b.pageCount, b.pagesRead, b.firstPage ?? 1);
+    return p.furthestPage ? `Page ${p.furthestPage} of ${b.pageCount}` : `Pages ${b.firstPage ?? 1}–${b.pageCount}`;
   }
   if (!b.paragraphCount) return b.textRemote ? "On your other device: opens here when you tap it" : "";
   return `Paragraph ${Math.min(b.position.ord + 1, b.paragraphCount)} of ${b.paragraphCount}`;
@@ -161,9 +161,10 @@ function BookDetails({ book, onClose }: { book: Book; onClose: () => void }) {
           onChange={(level) => void saveBook({ ...book, level, levelSource: "reader" }).then(() => toast(`Level set to ${level}.`))}
         />
       </div>
+      {book.source === "photo" && <PageRange book={book} />}
       {book.source === "photo" && (
         <button className="btn" type="button" onClick={() => (onClose(), open({ name: "photo", bookId: book.id }))}>
-          Add pages
+          Photograph more pages
         </button>
       )}
       <button
@@ -189,5 +190,29 @@ function BookDetails({ book, onClose }: { book: Book; onClose: () => void }) {
         <button className="btn ghost" type="button" onClick={onClose}>Close</button>
       </div>
     </Sheet>
+  );
+}
+
+/** First page to read and last page of a photographed book; progress counts the pages between. */
+function PageRange({ book }: { book: Book }) {
+  const [first, setFirst] = useState(String(book.firstPage ?? 1));
+  const [last, setLast] = useState(String(book.pageCount ?? ""));
+  const f = Number(first);
+  const l = Number(last);
+  const ok = Number.isInteger(f) && Number.isInteger(l) && f >= 1 && l >= f && l <= 5000;
+  const changed = f !== (book.firstPage ?? 1) || l !== book.pageCount;
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="row" style={{ alignItems: "end" }}>
+        <label className="field grow"><span>First page to read</span><input type="number" inputMode="numeric" min={1} value={first} onChange={(e) => setFirst(e.target.value)} /></label>
+        <label className="field grow"><span>Last page</span><input type="number" inputMode="numeric" min={1} value={last} onChange={(e) => setLast(e.target.value)} /></label>
+        {changed && (
+          <button className="btn small" type="button" disabled={!ok} onClick={() => void saveBook({ ...book, firstPage: f, pageCount: l }).then(() => toast(`Pages ${f}–${l}: ${l - f + 1} pages to read.`))}>
+            Save
+          </button>
+        )}
+      </div>
+      {!ok && <span className="error">The first page must come before the last page.</span>}
+    </div>
   );
 }

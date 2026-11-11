@@ -103,7 +103,7 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 const page = await ctx.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
-page.on("console", (m) => m.type() === "error" && !/supabase|Failed to load resource|fonts\.g/i.test(m.text()) && errors.push(m.text()));
+page.on("console", (m) => m.type() === "error" && !/supabase|Failed to load resource|fonts\.g|Estimating resolution/i.test(m.text()) && errors.push(m.text()));
 await ctx.route("https://api.anthropic.com/**", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" } }) : mockClaude(r)));
 await ctx.route(/supabase\.co/, (r) => r.abort());
 await ctx.route("**/dict/nl.json", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(DICT) }));
@@ -218,6 +218,109 @@ await page.getByRole("button", { name: "Add a book" }).click();
 await page.getByRole("button", { name: /Photograph a book/ }).click();
 check(await page.getByText("Boekenwurm will ask to use your camera").isVisible(), "camera permission is explained first");
 await shot("11-camera-why");
+
+// ---------------------------------------------------------------- a printed book, photographed out of order
+// Page photos are drawn here (invented Dutch text, a printed page number at the foot) and read by the free
+// on-device reader, exactly as on a phone. Claude is off for this book (free mode).
+const STORY = {
+  9: ["Het was nog vroeg toen Lotte haar fiets uit de schuur haalde en naar het station reed om de trein te halen.", "Op het perron stonden al veel mensen te wachten, de meesten met een kop koffie in hun hand."],
+  10: ["De trein kwam precies op tijd en Lotte vond een plek bij het raam, naast een oude man met een krant.", "Buiten zag ze de weilanden voorbij schieten, met koeien en hier en daar een molen in de verte."],
+  11: ["In Utrecht stapte ze over op een andere trein, die veel voller was en waar ze moest blijven staan.", "Een vrouw met een grote hond probeerde ook een plekje te vinden, wat niet zo makkelijk was."],
+  12: ["Toen ze eindelijk op haar werk aankwam, was de vergadering al begonnen en keek iedereen naar haar.", "Ze ging snel zitten en deed alsof ze precies wist waar het gesprek over ging."],
+  13: ["Na de vergadering at ze een broodje kaas in de kantine en belde ze haar moeder om te vertellen hoe het ging.", "Haar moeder lachte en zei dat ze morgen gewoon een trein eerder moest nemen."],
+};
+async function pagePhoto(n, { number = true, blank = false } = {}) {
+  const p = await browser.newPage({ viewport: { width: 700, height: 950 } });
+  const body = blank
+    ? `<div style="filter:blur(14px);opacity:.25">${(STORY[n] ?? STORY[9]).map((t) => `<p>${t}</p>`).join("")}</div>`
+    : `${(STORY[n] ?? []).map((t) => `<p>${t}</p>`).join("")}${number ? `<div style="position:absolute;bottom:40px;left:0;right:0;text-align:center">${n}</div>` : ""}`;
+  await p.setContent(`<html><body style="margin:0;background:#fbfaf5"><div style="position:relative;height:950px;padding:70px 80px;box-sizing:border-box;font:26px/1.55 'Liberation Serif',Georgia,serif;color:#222;text-align:justify">${body}</div></body></html>`);
+  const buffer = await p.screenshot({ type: "jpeg", quality: 90 });
+  await p.close();
+  return { name: `pagina-${n}.jpg`, mimeType: "image/jpeg", buffer };
+}
+async function coverPhoto() {
+  const p = await browser.newPage({ viewport: { width: 400, height: 600 } });
+  await p.setContent(`<body style="margin:0;background:#2d5a7a;color:#fff;font:bold 48px Georgia;padding:60px">Een dag van Lotte</body>`);
+  const buffer = await p.screenshot({ type: "jpeg" });
+  await p.close();
+  return { name: "cover.jpg", mimeType: "image/jpeg", buffer };
+}
+
+step("photograph a printed book: first page 9, last page 212");
+await page.evaluate(() => (localStorage.removeItem("boekenwurm-claude-key"), window.dispatchEvent(new Event("boekenwurm:key"))));
+await page.getByRole("button", { name: "Take photo" }).click();
+await page.locator("input[type=file][multiple]").setInputFiles(await coverPhoto());
+await page.getByLabel("Title").fill("Een dag van Lotte");
+await page.getByLabel("First page to read").fill("9");
+await page.getByLabel("Last page").fill("212");
+check(await page.getByText("That's 204 pages to read.").isVisible(), "pages 9 to 212 are 204 pages to read");
+await page.getByRole("group", { name: "The book's level" }).getByRole("button", { name: "A2" }).click();
+await shot("12-photo-details");
+await page.getByRole("button", { name: /photograph the pages/ }).click();
+check(await page.getByText(/Section 1: photograph up to 20 pages in order, starting at page 9/).waitFor().then(() => true, () => false), "section 1 starts at the first page");
+
+step("pages taken out of order, one without its number, one blurry");
+// Taken in this order: 9, 10 (number cut off), 12, 11, then a blurry photo where 13 should be.
+for (const f of [await pagePhoto(9), await pagePhoto(10, { number: false }), await pagePhoto(12), await pagePhoto(11), await pagePhoto(13, { blank: true })])
+  await page.locator("input[type=file][multiple]").setInputFiles(f);
+await page.locator(".thumb .spinner").first().waitFor({ state: "detached", timeout: 180000 }).catch(() => {});
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
+const labels = async () => (await page.locator(".thumb > span:last-child").allTextContents()).map((t) => t.trim());
+const first = await labels();
+console.log("    thumbnails in reading order:", first.join(" | "));
+check(first[0].startsWith("p. 9") && first.some((l) => l.startsWith("p. 11")) && first.indexOf(first.find((l) => l.startsWith("p. 11"))) < first.indexOf(first.find((l) => l.startsWith("p. 12"))), "pages taken 12-then-11 are put back in page order");
+check(first[1].startsWith("#2"), "the photo without a number keeps its capture place, right after page 9");
+check(first.some((l) => l.includes("⚑")), "unclear photos are flagged");
+await shot("13-pages-flagged");
+
+step("review: type the missing number; retake the blurry photo in its place");
+await page.getByRole("button", { name: "Review", exact: true }).click();
+await page.locator("[aria-label='Check this page']").waitFor();
+check(await page.getByText(/No page number was found/).isVisible(), "the unnumbered photo asks for its page number");
+await page.getByLabel("Page number").fill("10");
+await page.getByRole("button", { name: "Save" }).click();
+// The review moves on to the next flagged photo: the blurry one. Retake it.
+await page.locator("[aria-label='Check this page']").waitFor();
+await page.getByRole("button", { name: "Retake photo" }).click();
+await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(13));
+await page.getByText("Photo replaced. It keeps its place in the book.").waitFor();
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
+const after = await labels();
+console.log("    after review:", after.join(" | "));
+check(after.slice(0, 5).map((l) => l.replace(/[^\d]/g, "")).join(",") === "9,10,11,12,13", "after the review the pages read 9, 10, 11, 12, 13");
+check(after.length === 5, "the retake replaced the photo instead of adding one");
+await shot("14-pages-ordered");
+
+step("reading the photographed book in order, and going to a page");
+await page.getByRole("button", { name: /^Start reading/ }).click();
+await page.locator(".para .w").first().waitFor();
+check((await page.locator(".folio .num").textContent()).startsWith("p. 9"), "reading starts at page 9");
+check((await page.locator(".para").textContent()).startsWith("Het was nog vroeg"), "with page 9's first paragraph");
+await page.getByRole("button", { name: "Go to a page" }).click();
+await page.getByLabel("Page number").fill("12");
+await page.getByRole("button", { name: "Go", exact: true }).click();
+check(await page.waitForFunction(() => document.querySelector(".folio .num")?.textContent?.startsWith("p. 12"), null, { timeout: 10000 }).then(() => true, () => false), "Go to page 12 lands on page 12");
+await shot("15-reader-page-12");
+// Read to the end of what's photographed: the app asks for the next section.
+const nextSection = page.getByText(/Next section: up to 20 pages, from page 14/);
+for (let i = 0; i < 20 && !(await nextSection.isVisible()); i++)
+  await page.getByRole("button", { name: "Next page →" }).click({ timeout: 3000 }).catch(() => {});
+await nextSection.waitFor();
+check(true, "at the end of the photographed pages, the next section is offered from page 14");
+await shot("16-next-section");
+
+step("a section stops at 20 photos");
+await page.getByRole("button", { name: "Photograph the next pages" }).click();
+check(await page.getByText(/Section 2: photograph up to 20 pages in order, starting at page 14/).waitFor().then(() => true, () => false), "section 2 starts at page 14");
+const blanks = await Promise.all(Array.from({ length: 21 }, (_, i) => pagePhoto(14 + i, { blank: true })));
+await page.locator("input[type=file][multiple]").setInputFiles(blanks.map((b, i) => ({ ...b, name: `leeg-${i}.jpg` })));
+await page.getByText("This section is done: 20 photos.").waitFor({ timeout: 60000 });
+check((await page.locator(".thumb").count()) === 25, "20 photos were taken in section 2 (the 21st was not)");
+check((await page.locator("video").count()) === 0 && (await page.getByRole("button", { name: "Take photo" }).count()) === 0, "the camera closes when the section is full");
+await shot("17-section-full");
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 300000 });
+
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.join(" | ") : ""}`);
 await browser.close();

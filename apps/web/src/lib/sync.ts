@@ -17,7 +17,12 @@ let running: Promise<void> | null = null;
 let again = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e));
+function errText(e: unknown): string {
+  const m = e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
+  // The database is missing a newer migration: say which file to run.
+  if (/first_page/.test(m)) return "The database needs an update: run supabase/migrations/0002_first_page.sql in the Supabase SQL Editor.";
+  return m;
+}
 
 function check<T>(r: { data: T; error: { message: string; code?: string } | null }): T {
   if (r.error) throw Object.assign(new Error(r.error.message), { code: r.error.code });

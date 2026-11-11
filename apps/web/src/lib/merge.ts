@@ -35,6 +35,7 @@ export interface BookRow {
   isbn: string | null;
   cover_path: string | null;
   page_count: number | null;
+  first_page?: number;
   level: Book["level"];
   level_source: Book["levelSource"];
   scan: Book["scan"];
@@ -55,6 +56,7 @@ export function bookToRow(b: Book, userId: string): BookRow {
     isbn: b.isbn,
     cover_path: b.coverPath,
     page_count: b.pageCount,
+    first_page: b.firstPage ?? 1,
     level: b.level,
     level_source: b.levelSource,
     scan: b.scan,
@@ -80,6 +82,7 @@ export function rowToBook(r: BookRow, local: Book | null, hasLocalText: boolean)
     scan: r.scan,
     status: r.status,
     pageCount: r.page_count,
+    firstPage: r.first_page ?? 1,
     pagesRead: r.pages_read ?? [],
     position: { ord: Number(pos.ord) || 0, mode: pos.mode === "match" ? "match" : "original", at: Number(pos.at) || undefined },
     paragraphCount: Number(pos.paragraphs) || local?.paragraphCount || 0,
