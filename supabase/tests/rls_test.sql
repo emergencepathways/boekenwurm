@@ -115,6 +115,63 @@ do $$ declare r record; begin
 end $$;
 reset role;
 
+-- access codes (0004): a code opens Google page reading for one reader, who may then read 20 pages a day
+insert into access_codes (code_hash, feature, note) values (access_code_hash('BW-TEST-CODE-0001'), 'google_page_reading', 'test');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  perform claim_page_read('Europe/Amsterdam');
+  raise exception 'FAIL: page reading without a code';
+exception when insufficient_privilege then raise notice 'ok: Google page reading needs a code';
+end $$;
+do $$ begin
+  perform count(*) from access_codes;
+  raise exception 'FAIL: a reader can read the codes table';
+exception when insufficient_privilege then raise notice 'ok: readers cannot read the codes, not even as hashes';
+end $$;
+do $$ begin
+  perform redeem_code('BW-WRONG-CODE');
+  raise exception 'FAIL: a wrong code was accepted';
+exception when invalid_parameter_value then raise notice 'ok: a wrong code is refused';
+end $$;
+do $$ declare f text; r record; i integer; begin
+  f := redeem_code(' bw-test code-0001 ');
+  if f <> 'google_page_reading' then raise exception 'FAIL: the code opened %', f; end if;
+  raise notice 'ok: a code works whatever its case, spaces and dashes';
+  f := redeem_code('BW-TEST-CODE-0001');
+  raise notice 'ok: the same reader can enter their code again';
+  for i in 1..20 loop
+    select * into r from claim_page_read('Europe/Amsterdam');
+    if not r.allowed then raise exception 'FAIL: page % of 20 was refused', i; end if;
+  end loop;
+  select * into r from claim_page_read('Europe/Amsterdam');
+  if r.allowed or r.used <> 20 then raise exception 'FAIL: the 21st page was allowed'; end if;
+  raise notice 'ok: 20 pages a day are read by Google, the 21st is refused';
+end $$;
+do $$ begin
+  insert into feature_access (user_id, feature) values ('00000000-0000-0000-0000-00000000000a', 'google_page_reading');
+  raise exception 'FAIL: a reader granted themselves a feature';
+exception when insufficient_privilege or unique_violation then raise notice 'ok: a reader cannot grant themselves a feature';
+end $$;
+do $$ begin
+  update page_read_usage set pages = 0;
+  if exists (select 1 from page_read_usage where pages = 0) then raise exception 'FAIL: A reset their page count'; end if;
+  raise notice 'ok: a reader cannot reset their page count';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  perform redeem_code('BW-TEST-CODE-0001');
+  raise exception 'FAIL: a used code worked for a second reader';
+exception when invalid_parameter_value then raise notice 'ok: a code works for one reader only';
+end $$;
+do $$ begin
+  if exists (select 1 from feature_access) then raise exception 'FAIL: B sees A''s access'; end if;
+  perform claim_page_read('Europe/Amsterdam');
+  raise exception 'FAIL: B reads pages without a code';
+exception when insufficient_privilege then raise notice 'ok: other readers keep the free reader';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

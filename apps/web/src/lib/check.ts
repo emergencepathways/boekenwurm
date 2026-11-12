@@ -7,7 +7,7 @@ import { getState } from "./store.ts";
 
 export const TABLES = [
   "profiles", "books", "book_pages", "paragraphs", "paragraph_versions",
-  "reading_sessions", "word_stats", "cards", "word_lists", "word_list_entries", "word_meanings", "translation_usage",
+  "reading_sessions", "word_stats", "cards", "word_lists", "word_list_entries", "word_meanings", "translation_usage", "feature_access", "page_read_usage",
 ] as const;
 export const BUCKETS = ["covers", "pages", "books"] as const;
 

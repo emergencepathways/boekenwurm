@@ -11,6 +11,7 @@ import { appUrl, supabase } from "../lib/supabase.ts";
 import { db, wipeDevice } from "../lib/db.ts";
 import { InstallRow } from "./InstallHelp.tsx";
 import { updateNow } from "../lib/update.ts";
+import { GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "../lib/features.ts";
 import { plural, Sheet, TokenPips, toast } from "../ui.tsx";
 import type { Settings } from "../lib/types.ts";
 
@@ -100,6 +101,7 @@ export function Me() {
       </section>
 
       <LookupsSection />
+      <AccessCodeSection />
       <ClaudeSection />
       <WordListSection />
 
@@ -276,6 +278,68 @@ function LookupsSection() {
         <span className="bar grow" aria-label={`${used} of ${limit} lookups used today`}><i style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} /></span>
       </div>
       <p className="small">Your saved meanings: <span className="num">{saved.toLocaleString()}</span> words (from Google, Claude, or typed by you).</p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- access code
+
+/** An access code opens a feature that isn't open to everyone yet: for now, Google page reading. */
+function AccessCodeSection() {
+  const user = useStore((s) => s.user);
+  const features = useStore((s) => s.features);
+  const reads = useStore((s) => s.pageReads);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const on = features.includes(GOOGLE_PAGES);
+  useEffect(() => void (on && pageReadsToday()), [on, user]);
+  const used = reads?.used ?? 0;
+  return (
+    <section className="panel" id="access-code">
+      <h2>Access code</h2>
+      {on ? (
+        <>
+          <p>
+            <b>Google page reading is on.</b> Page photos are read by Google instead of on this device: up to {PAGE_READS_PER_DAY} pages a day, then
+            this device again until midnight.
+          </p>
+          <div className="row">
+            <span className="label">Today</span>
+            <span className="num">{used} of {PAGE_READS_PER_DAY}</span>
+            <span className="bar grow" aria-label={`${used} of ${PAGE_READS_PER_DAY} Google page readings used today`}>
+              <i style={{ width: `${Math.min(100, (used / PAGE_READS_PER_DAY) * 100)}%` }} />
+            </span>
+          </div>
+        </>
+      ) : !user ? (
+        <p>Have an access code? Sign in first: the code is added to your account.</p>
+      ) : (
+        <form
+          className="stack"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            setErr(null);
+            try {
+              await redeemCode(code);
+              setCode("");
+              toast("Code accepted: Google page reading is on.");
+            } catch (x) {
+              setErr((x as Error).message);
+            }
+            setBusy(false);
+          }}
+        >
+          <p style={{ margin: 0 }}>Have an access code? Enter it to turn on a feature that isn't open to everyone yet.</p>
+          <div className="row">
+            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BW-XXXX-XXXX-XXXX-XXXX" aria-label="Access code"
+              autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={40} style={{ flex: 1, minWidth: 0 }} className="num" />
+            <button className="btn primary small" type="submit" disabled={busy || code.trim().length < 6}>{busy ? "Checking…" : "Use code"}</button>
+          </div>
+          {err && <span className="error">{err}</span>}
+        </form>
+      )}
     </section>
   );
 }

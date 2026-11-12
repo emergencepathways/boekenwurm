@@ -45,6 +45,10 @@ export interface State {
   dictionary: { words: number; forms: number; built: string; attribution: string } | null | undefined;
   /** Google Translate lookups today (lib/usage.ts). */
   translations: { day: string; used: number; limit: number } | null;
+  /** Features this reader has through an access code (lib/features.ts). */
+  features: string[];
+  /** Google page readings today (lib/features.ts). */
+  pageReads: { day: string; used: number; limit: number } | null;
 }
 
 const now = () => Date.now();
@@ -67,6 +71,8 @@ let state: State = {
   hasKey: false,
   dictionary: undefined,
   translations: null,
+  features: [],
+  pageReads: null,
 };
 
 const listeners = new Set<() => void>();

@@ -323,6 +323,11 @@ anywhere except `private/`.
 
 ## Decided
 
+- Paragraphs of fewer than 7 words are read together with the next paragraph, for every book. 2026-11-12.
+- Google page reading (Cloud Vision) is tested by the owner behind an access code before it becomes a paid feature:
+  code holders get 20 pages a day, then the device reader, flagged; everyone else keeps the free device reader. Cloud
+  Translation can't read photos, so Vision is the Google service for it. 2026-11-12.
+
 - Google Translate is limited to 200 words per reader per day, counted in the account; every meaning found is saved
   per reader and checked before Google; past the limit the reader connects Claude, types the meaning, or waits.
   2026-11-11. The Google call moved into a Supabase Edge Function so the key stays server-side and the limit can't be

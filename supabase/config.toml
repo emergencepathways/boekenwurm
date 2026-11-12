@@ -6,3 +6,7 @@ project_id = "boekenwurm"
 # The reader's token is checked by the database when the function claims a lookup as them (handler.ts), which
 # also works with Supabase's new JWT signing keys; the gateway check is off so those tokens aren't refused early.
 verify_jwt = false
+
+[functions.read-page]
+# Same as translate: the reader's token is checked by the database (claim_page_read runs as them).
+verify_jwt = false

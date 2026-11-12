@@ -5,13 +5,14 @@
  */
 import * as AI from "@boekenwurm/ai";
 import type { CefrLevel } from "@boekenwurm/engine";
-import type { PageText, StitchedParagraph } from "@boekenwurm/books";
+import { joinShortBlocks, type PageText, type StitchedParagraph } from "@boekenwurm/books";
 import { claude, claudeVision, AiError, hasKey } from "./claude.ts";
 import { db } from "./db.ts";
 import { countable, hash, isOldForm, langOf, nameTest, tokenize } from "./text.ts";
 import { lookup, listLemmas } from "./words.ts";
 import { getState, knownLemmas } from "./store.ts";
 import { readPageOnDevice } from "./ocr.ts";
+import { GOOGLE_PAGES, hasFeature, PAGE_READS_PER_DAY, readPageWithGoogle } from "./features.ts";
 import { downscale, toBase64, CLAUDE_SIDE, OCR_SIDE } from "./images.ts";
 import type { Book, BookText, Paragraph } from "./types.ts";
 
@@ -28,12 +29,13 @@ export function newBook(fields: Partial<Book> & Pick<Book, "source" | "title">):
 
 /** Paragraphs with tap tokens. Names are found across the whole book (DESIGN.md: names are not vocabulary). */
 export function toParagraphs(items: Array<string | StitchedParagraph>): Paragraph[] {
-  const texts = items.map((p) => (typeof p === "string" ? p : p.text));
-  const isName = nameTest(texts);
-  return items.map((p) => {
-    const text = typeof p === "string" ? p : p.text;
+  // Every book, whatever its source: a paragraph under 7 words (a heading, a caption, half a sentence split off by
+  // page recognition) is read together with the one after it (packages/books/src/paragraphs.ts).
+  const blocks = joinShortBlocks(items.map((p) => (typeof p === "string" ? { text: p, pageNumber: null } : p)));
+  const isName = nameTest(blocks.map((b) => b.text));
+  return blocks.map(({ text, pageNumber }) => {
     const tokens = tokenize(text, isName);
-    return { text, tokens, countable: countable(tokens), pageNumber: typeof p === "string" ? null : p.pageNumber };
+    return { text, tokens, countable: countable(tokens), pageNumber };
   });
 }
 
@@ -98,8 +100,10 @@ export interface PageResult {
   /** 0–1; under 0.8 the photo should be retaken (on-device reading). */
   quality: number;
   problems: string[];
-  by: "claude" | "device";
+  by: "claude" | "google" | "device";
   model: string | null;
+  /** Read on the device although the reader has Google page reading (today's 20 used, or Google unreachable). */
+  fallback?: string;
 }
 
 export async function readPhotoPage(
@@ -123,11 +127,26 @@ export async function readPhotoPage(
     };
   }
   const img = await downscale(photo, OCR_SIDE, 0.9);
+  // Google page reading (an access code): Google Cloud Vision reads the page; past today's 20, the device does.
+  let fallback: string | undefined;
+  if (hasFeature(GOOGLE_PAGES)) {
+    onProgress?.(0, "reading with Google");
+    const g = await readPageWithGoogle(img, seq, range);
+    if (g.ok) return { ...g.page, problems: readingProblems(g.page.page, g.page.quality), by: "google", model: "cloud-vision" };
+    fallback =
+      g.reason === "limit" ? `Today's ${PAGE_READS_PER_DAY} Google page readings are used, so this page was read on this device and may be rough. Check its text.`
+      : `Google couldn't read this page just now${g.reason === "offline" ? " (offline)" : ""}, so it was read on this device and may be rough. Check its text.`;
+  }
   const r = await readPageOnDevice(img, seq, onProgress, range);
-  const problems = r.quality < 0.8 ? ["Many words were hard to read. Retake the photo flat, closer and in good light."] : [];
-  const words = r.page.paragraphs.join(" ").match(/\p{L}+/gu) ?? [];
+  return { page: r.page, uncertain: r.uncertain, quality: r.quality, problems: readingProblems(r.page, r.quality), by: "device", model: null, fallback };
+}
+
+/** A photo to retake: too many unsure words, or too little text found. */
+function readingProblems(page: PageText, quality: number): string[] {
+  const problems = quality < 0.8 ? ["Many words were hard to read. Retake the photo flat, closer and in good light."] : [];
+  const words = page.paragraphs.join(" ").match(/\p{L}+/gu) ?? [];
   if (words.length < 15) problems.push("Very little text was found on this page. Retake the photo closer and in good light.");
-  return { page: r.page, uncertain: r.uncertain, quality: r.quality, problems, by: "device", model: null };
+  return problems;
 }
 
 export async function readCover(photo: Blob): Promise<AI.CoverReading> {

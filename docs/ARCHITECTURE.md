@@ -81,8 +81,23 @@ under **Me → Claude**:
 | Match my level | — | ✅ |
 
 The free page reading uses Tesseract.js and its Dutch model (both Apache-2.0), downloaded once (about 4 MB) and cached.
-`packages/books/ocr.ts` turns its lines into the same page shape as Claude's reading and PDF pages, so all three are
+`packages/books/ocr.ts` turns its lines into the same page shape as Claude's reading and PDF pages, so all are
 stitched the same way.
+
+**Google page reading (access code, a test of a future paid tier).** Readers who entered an access code (Me → Access
+code; migration 0004) have their page photos read by Google Cloud Vision's document text detection instead of on the
+device: the `read-page` Edge Function holds the owner's key, claims one of the reader's 20 pages a day with
+`claim_page_read()` (which also refuses readers without access), and returns Vision's paragraphs with their position
+on the page. `packages/books/vision.ts` tells the printed page number (a number alone in the top or bottom tenth of
+the page, the foot first) from a chapter number (alone further in, kept as text). Past the 20, or when Google can't be
+reached, the page is read on the device and flagged so the reader checks it. Codes are stored only as hashes, each
+works for one reader by default, and the owner adds them in the SQL Editor:
+`insert into access_codes (code_hash, feature, note) values (access_code_hash('BW-…'), 'google_page_reading', 'for whom');`
+Cost: the first 1,000 pages a month are free, then about $1.50 per 1,000 (Google's price list, November 2026).
+
+**Paragraphs of fewer than 7 words** (a heading, a caption, half a sentence split off by page recognition) are read
+together with the paragraph after it, for every book whatever its source (`packages/books/paragraphs.ts`). A joined
+block belongs to the page most of its words are on.
 
 ## Screens (mobile first)
 
@@ -201,8 +216,10 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   Claude, or typed by the reader) is saved in `word_meanings` and synced, and the app looks there before asking.
   The owner can see each reader's use in the SQL Editor:
   `select u.email, t.day, t.words from translation_usage t join auth.users u on u.id = t.user_id order by t.day desc;`
-- Content-security policy: scripts from the app only; network to Supabase (including the translate function),
-  `api.anthropic.com`, and the one-time download of the free text-recognition model.
+- Content-security policy: scripts from the app only; network to Supabase (including the translate and read-page
+  functions), `api.anthropic.com`, and the one-time download of the free text-recognition model.
+- Page photos leave the device only for a reader's own Claude key (to Anthropic) or, for access-code holders, to Google
+  Cloud Vision through the read-page function, which doesn't store them. Everyone else's are read on the device.
 - The Claude key never leaves the device except to Anthropic; it is not synced to Supabase. Boekenwurm has no key of
   its own and no server that calls a model.
 - Readers can export everything (JSON) and delete their account and all files (GDPR).

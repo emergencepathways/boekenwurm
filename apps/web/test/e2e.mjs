@@ -124,6 +124,37 @@ await ctx.route("**/functions/v1/translate", async (r) => {
   await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, text, used: lookups.used, limit: 200 }) });
 });
 
+// Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works;
+// Google reads one page, then today's allowance is used up.
+const vision = { calls: 0, limitAfter: 1, redeemed: false };
+await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
+  const { p_code } = JSON.parse(r.request().postData() || "{}");
+  const ok = p_code.replace(/[\s-]/g, "").toUpperCase() === "BWE2ETESTCODE";
+  vision.redeemed ||= ok;
+  await r.fulfill({ status: ok ? 200 : 400, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
+    body: JSON.stringify(ok ? "google_page_reading" : { code: "22023", message: "That code isn't valid" }) });
+});
+await ctx.route("**/rest/v1/feature_access*", (r) => r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
+  body: JSON.stringify(vision.redeemed ? [{ feature: "google_page_reading" }] : []) }));
+await ctx.route("**/functions/v1/read-page", async (r) => {
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+  if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors });
+  const { image } = JSON.parse(r.request().postData() || "{}");
+  vision.calls++;
+  vision.sentJpeg = typeof image === "string" && image.startsWith("/9j/");
+  if (vision.calls > vision.limitAfter) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 20, limit: 20 }) });
+  const box = (y0, y1) => ({ x0: 80, y0, x1: 620, y1 });
+  await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({
+    ok: true, used: 20, limit: 20, width: 700, height: 950,
+    paragraphs: [
+      { text: "1", box: box(200, 260), confidence: 0.99, unsure: [] },
+      { text: "De bus naar het strand vertrok om negen uur precies, en Sem zat helemaal achterin bij het raam.", box: box(300, 420), confidence: 0.98, unsure: [] },
+      { text: "Hij had zijn emmer en schep al op schoot, want hij wilde meteen een kasteel bouwen.", box: box(440, 540), confidence: 0.97, unsure: [] },
+      { text: "5", box: box(890, 915), confidence: 0.99, unsure: [] },
+    ],
+  }) });
+});
+
 // A made-up signed-in session, as supabase-js keeps it, so the reader is signed in without reaching Supabase.
 const supabaseUrl = process.env.VITE_SUPABASE_URL
   || (existsSync(join(here, "..", ".env.local")) && readFileSync(join(here, "..", ".env.local"), "utf8").match(/^VITE_SUPABASE_URL=(.+)$/m)?.[1]?.trim());
@@ -463,6 +494,49 @@ check((await page.locator("video").count()) === 0 && (await page.getByRole("butt
 await shot("17-section-full");
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 300000 });
 
+
+step("access code: Google page reading for one reader, then the device past today's 20");
+await page.getByRole("button", { name: /Done/ }).first().click();
+await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
+const codeBox = page.getByLabel("Access code");
+await codeBox.fill("BW-NOPE-NOPE");
+await page.getByRole("button", { name: "Use code" }).click();
+check(await page.getByText("That code isn't valid").waitFor({ timeout: 5000 }).then(() => true, () => false), "a wrong code is refused");
+await codeBox.fill("bw-e2e test-code");
+await page.getByRole("button", { name: "Use code" }).click();
+await page.getByText("Google page reading is on.", { exact: true }).waitFor();
+check(true, "the right code turns on Google page reading");
+await shot("18-access-code");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+await page.getByRole("button", { name: "Add a book" }).click();
+await page.getByRole("button", { name: /Photograph a book/ }).click();
+await page.locator("input[type=file][multiple]").setInputFiles(await coverPhoto());
+await page.getByLabel("Title").fill("Sem aan zee");
+await page.getByLabel("First page to read").fill("5");
+await page.getByLabel("Last page").fill("40");
+await page.getByRole("group", { name: "The book's level" }).getByRole("button", { name: "A1" }).click();
+await page.getByRole("button", { name: /photograph the pages/ }).click();
+check(await page.getByText(/Google reads each page \(20 a day, then this device\)/).waitFor({ timeout: 5000 }).then(() => true, () => false), "the camera says Google reads the pages");
+await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(9));
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 60000 });
+check(vision.calls === 1 && vision.sentJpeg, "the photo was sent to the read-page function as a JPEG");
+check((await thumbs())[0] === "p. 5 (read 5)", "the page number at the foot is read; the chapter number above the text isn't taken for it");
+await page.locator(".thumb").first().click();
+check(await page.getByText(/Read by Google/).isVisible(), "the page says it was read by Google");
+await page.getByRole("button", { name: "Close" }).click();
+await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(10));
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
+check(vision.calls === 2, "the next photo asked Google too");
+const second = (await thumbs())[1];
+check(second.startsWith("p. 6") && second.includes("⚑"), "past today's 20 it was read on this device, and flagged");
+await page.locator(".thumb").nth(1).click();
+check(await page.getByText(/Today's 20 Google page readings are used, so this page was read on this device/).isVisible(), "the flag explains why");
+check(await page.getByText(/Read on this device/).isVisible(), "and says where it was read");
+await shot("19-google-fallback");
+await page.getByRole("button", { name: "Close" }).click();
+await page.getByRole("button", { name: /^Start reading/ }).click();
+await page.locator(".para").first().waitFor();
+check((await page.locator(".para").first().textContent()).startsWith("1 De bus naar het strand"), "the chapter number is read together with its first paragraph");
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.join(" | ") : ""}`);
 await browser.close();

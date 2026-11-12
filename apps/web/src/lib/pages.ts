@@ -28,7 +28,9 @@ export interface PageEntry {
   page: PageText | null;
   problems: string[];
   uncertain: string[];
-  by: "claude" | "device" | null;
+  by: "claude" | "google" | "device" | null;
+  /** Read on the device although the reader has Google page reading: shown as a gentle flag. */
+  fallback?: string;
   /** A page number the reader typed. It is kept as typed, and the photos taken after it follow on from it. */
   manualPage?: number | null;
   /** The reader saw that the number read from the photo differs, and kept the number in order. */
@@ -107,6 +109,7 @@ export function flags(p: Placed, all: Placed[], range: Range): string[] {
   if (range.lastPage != null && p.pageNumber > range.lastPage) out.push(`Page ${p.pageNumber} is after the last page (${range.lastPage}).`);
   const twin = all.find((q) => q !== p && q.pageNumber === p.pageNumber && q.entry.seq < e.seq);
   if (twin) out.push(`Page ${p.pageNumber} was photographed twice; this later photo is left out unless you change its number.`);
+  if (e.fallback && e.status === "done") out.push(e.fallback);
   if (e.uncertain.length) out.push(`${e.uncertain.length === 1 ? "A word was" : `${e.uncertain.length} words were`} hard to read.`);
   return out;
 }

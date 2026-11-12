@@ -27,9 +27,13 @@ owner asks, and update the design doc and the tests together.
   printed book), `pdf.ts` (PDF text → paragraphs, scanned-PDF detection; pdf.js passed in), `ocr.ts` (free on-device page reading:
   Tesseract lines → paragraphs, words to check).
 - `packages/ai/` also has `photo.ts`: page photos → paragraphs and covers → title/author/ISBN (Claude vision).
+- `packages/books/` also has `vision.ts` (Google Vision's paragraphs → a page: page number vs chapter number) and
+  `paragraphs.ts` (paragraphs under 7 words are joined with the next, for every book).
 - `supabase/` — database schema with owner-only row-level security; `supabase/tests/run.sh` tests it on local Postgres.
   `supabase/functions/translate/` — the Edge Function that holds the Google Translate key and enforces 200 words a
-  day per reader (`handler.ts` is plain TypeScript, tested under Node; `index.ts` is the Deno entry).
+  day per reader; `supabase/functions/read-page/` — Google Cloud Vision for page photos, access-code holders only,
+  20 a day (migration 0004). In each, `handler.ts` is plain TypeScript, tested under Node, and `index.ts` is the Deno
+  entry; `_shared/common.ts` has what they share (CORS, the reader's token, claiming a daily use).
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.
@@ -49,7 +53,7 @@ cd packages/dutch && npm test                                  # base forms (sha
 cd packages/ai && npm test                                     # level work, page photos, covers
 cd packages/books && npm test                                  # stitching, progress, PDF (real-PDF tests need pdf-lib + pdfjs-dist)
 supabase/tests/run.sh                                          # schema + row-level security on local Postgres
-node --test supabase/functions/translate/handler.test.ts       # translate function (daily allowance, one word)
+node --test supabase/functions/*/handler.test.ts               # Edge Functions (translate, read-page)
 node apps/playtest/build.mjs && node apps/playtest/test/e2e.mjs  # reader + browser test (mocked Claude)
 cd services/ingest && python -m unittest discover -s tests -t tests
 python -m boekenwurm_ingest check -v DIR_OR_EPUB...             # import check
@@ -68,7 +72,9 @@ The owner's material, when a session has it: books in `~/Documents/Books/Dutch/`
 - Every rule change comes with a test that states the rule in numbers (see `test/checkpoint.test.ts`).
 - Keep the engine pure: no I/O, no clocks (pass `now`), no randomness.
 - Never run level matching on the owner's books from a session; tests use invented text and mocked replies.
-- Never add a Boekenwurm-owned AI key or a server that calls a model: AI runs only on the reader's own key. The one
-  owner-paid service is Google Cloud Translation for single tapped words (decided by the owner, 2026-11-11): keep its key
-  in the translate function only (never in the app), restricted to the Translation API, and never send more than the
-  tapped word.
+- Never add a Boekenwurm-owned AI key or a server that calls a model: AI runs only on the reader's own key. The
+  owner-paid Google services are decided by the owner: Cloud Translation for single tapped words (2026-11-11; never
+  send more than the tapped word) and Cloud Vision for page photos of access-code holders only (2026-11-12). Keep the
+  Google key in the Edge Functions only (never in the app), restricted to those two APIs, and every use counted
+  against a per-reader daily limit in the database.
+- Access codes are never committed: give the owner the SQL to add one, and store only its hash.

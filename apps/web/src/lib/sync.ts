@@ -3,6 +3,7 @@
  * what changed elsewhere. Runs a few seconds after a change, when the app comes back to the foreground, and when
  * the network returns. Never blocks reading.
  */
+import { loadFeatures } from "./features.ts";
 import type { Progress } from "@boekenwurm/engine";
 import { supabase } from "./supabase.ts";
 import { db, wipeDevice } from "./db.ts";
@@ -22,6 +23,7 @@ function errText(e: unknown): string {
   // The database is missing a newer migration: say which file to run.
   if (/first_page/.test(m)) return "The database needs an update: run supabase/migrations/0002_first_page.sql in the Supabase SQL Editor.";
   if (/word_meanings|translation_usage|claim_translation/.test(m)) return "The database needs an update: run supabase/migrations/0003_translations.sql in the Supabase SQL Editor.";
+  if (/feature_access|page_read_usage|redeem_code|claim_page_read/.test(m)) return "The database needs an update: run supabase/migrations/0004_access_codes.sql in the Supabase SQL Editor.";
   return m;
 }
 
@@ -325,7 +327,8 @@ export function startAuth(): void {
     const u = session?.user ?? null;
     const before = getState().user;
     setState({ user: u ? { id: u.id, email: u.email ?? null } : null });
-    if (!u) return;
+    if (!u) return setState({ features: [], pageReads: null });
+    if (!before || before.id !== u.id) void loadFeatures();
     if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
       void (async () => {
         const owner = await db.get<string>("kv", "owner");

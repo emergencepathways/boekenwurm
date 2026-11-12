@@ -20,6 +20,7 @@ import {
   numberPages, SECTION_SIZE, stitchBook, type PageEntry, type Placed, type Range,
 } from "../lib/pages.ts";
 import { newBook, readCover, readPhotoPage, toParagraphs } from "../lib/books.ts";
+import { GOOGLE_PAGES, PAGE_READS_PER_DAY } from "../lib/features.ts";
 import { downscale, COVER_SIDE, OCR_SIDE } from "../lib/images.ts";
 import { checkBook } from "../lib/text.ts";
 import { db } from "../lib/db.ts";
@@ -347,6 +348,7 @@ function PagesStep({ bookId }: { bookId: string }) {
   const preferFree = useStore((s) => s.profile.settings.preferFreeReading);
   const book = useStore((s) => s.books.find((b) => b.id === bookId) ?? null);
   const useClaude = hasKey && !preferFree;
+  const googlePages = useStore((s) => s.features.includes(GOOGLE_PAGES));
   const range: Range = { firstPage: book?.firstPage ?? 1, lastPage: book?.pageCount ?? null };
   const [pages, setPages] = useState<PageEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -423,10 +425,10 @@ function PagesStep({ bookId }: { bookId: string }) {
       const job = queue.current.shift()!;
       update(job.seq, { status: "reading" });
       try {
-        const r = await readPhotoPage(job.blob, job.seq, useClaude, (p, s) => setProgress(s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"), { lastPage: rangeRef.current.lastPage });
+        const r = await readPhotoPage(job.blob, job.seq, useClaude, (p, s) => setProgress(s === "reading with Google" ? "Google is reading the page…" : s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"), { lastPage: rangeRef.current.lastPage });
         // Unsure words don't hold a page back: it is used at once and flagged for an optional quick check.
         const status: PageEntry["status"] = r.problems.length ? "check" : "done";
-        await persist(update(job.seq, { status, page: r.page, problems: r.problems, uncertain: r.uncertain, by: r.by }));
+        await persist(update(job.seq, { status, page: r.page, problems: r.problems, uncertain: r.uncertain, by: r.by, fallback: r.fallback }));
       } catch (e) {
         await persist(update(job.seq, { status: "failed", problems: [e instanceof AiError ? e.message : (e as Error).message || "Couldn't read this page."] }));
       }
@@ -474,7 +476,7 @@ function PagesStep({ bookId }: { bookId: string }) {
     setRetaking(null);
     const small = await downscale(photo, OCR_SIDE, 0.9).catch(() => photo);
     await db.put("blobs", small, `page:${bookId}:${seq}`);
-    update(seq, { status: "queued", page: null, problems: [], uncertain: [], by: null });
+    update(seq, { status: "queued", page: null, problems: [], uncertain: [], by: null, fallback: undefined });
     setThumbVersion((v) => v + 1);
     queue.current.push({ seq, blob: small });
     void work();
@@ -565,7 +567,7 @@ function PagesStep({ bookId }: { bookId: string }) {
             ? `Photograph page ${fill[0]}${fill.length > 1 ? ` (then ${fill.slice(1).join(", ")})` : ""}. It goes into its place in the book.`
             : full
             ? `This section is done: ${SECTION_SIZE} photos.`
-            : `Section ${section}: photograph up to ${SECTION_SIZE} pages in order${inSection ? "" : `, starting at page ${startAt}`}. ${useClaude ? "Claude reads each page (one request per page)." : "Each page is read on this device, for free."}`}
+            : `Section ${section}: photograph up to ${SECTION_SIZE} pages in order${inSection ? "" : `, starting at page ${startAt}`}. ${useClaude ? "Claude reads each page (one request per page)." : googlePages ? `Google reads each page (${PAGE_READS_PER_DAY} a day, then this device).` : "Each page is read on this device, for free."}`}
       </p>
 
       {askGaps && (
@@ -801,7 +803,7 @@ function CheckPage({ placed, reasons, position, total, bookId, version, onSave, 
           <div className="small muted">
             {position >= 0 ? `${position + 1} of ${total} to check · ` : ""}
             {entry.status === "done" ? "Read" : entry.status === "failed" ? "Couldn't be read" : "Needs a retake"}
-            {entry.by === "device" ? " on this device" : entry.by === "claude" ? " by Claude" : ""}
+            {entry.by === "device" ? " on this device" : entry.by === "claude" ? " by Claude" : entry.by === "google" ? " by Google" : ""}
           </div>
         </div>
       </div>
