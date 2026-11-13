@@ -323,6 +323,11 @@ anywhere except `private/`.
 
 ## Decided
 
+- Colour-coded text (Me → Reading, off by default): a word revealed before is coloured by its reveals in the last
+  14 days, this session included: 1–3 green, 4–6 yellow (amber, for readability), 7 or more red; never revealed,
+  and names, stay plain. Yellow is also underlined dashed and red solid, so colour isn't the only cue. The rule is
+  `wordColor` in packages/engine/words.ts. 2026-11-13.
+
 - Looking back never costs anything: "← Previous" at the end of every paragraph shows the paragraph before (and
   further back), and "Re-read the last paragraph" on the session summary shows the one just finished. Taps there show
   meanings only: no strike, nothing counted, the session waits. The strikes give way to a clear "No strikes here"

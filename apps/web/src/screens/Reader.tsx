@@ -180,6 +180,19 @@ export function Reader({ bookId }: { bookId: string }) {
     bump();
   }
 
+  /**
+   * Colour-coded text (a setting, off by default): a word revealed before is coloured by how often it was revealed in
+   * the last 14 days, counting this session's reveals too (E.wordColor). Names and new words stay plain.
+   */
+  function tint(t: Token): string {
+    if (settings.colorText !== true || t.k !== "word") return "";
+    const lemma = look(t.t).lemma;
+    const s = r.session;
+    const extra = s ? [...s.reveals, ...(s.current?.reveals ?? [])].filter((x) => x.lemma === lemma).map((x) => x.at) : [];
+    const c = E.wordColor(wordbook[lemma], Date.now(), extra);
+    return c ? ` c-${c}` : "";
+  }
+
   /** "Previous": look at the paragraph before (or one more back), without penalty. */
   function lookBack(kind: "previous" | "reread", ord: number) {
     if (!r.text || ord < 0) return;
@@ -554,7 +567,7 @@ export function Reader({ bookId }: { bookId: string }) {
                 <button
                   key={i}
                   type="button"
-                  className={`w ${t.k === "name" ? "name" : revealed.has(look(t.t).lemma) ? "rev" : ""} ${r.sel === i ? "sel" : ""}`}
+                  className={`w ${t.k === "name" ? "name" : revealed.has(look(t.t).lemma) ? "rev" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`}
                   onClick={() => tap(i)}
                 >
                   {t.t}
@@ -602,7 +615,7 @@ export function Reader({ bookId }: { bookId: string }) {
               t.k === "punct" || t.k === "number" ? (
                 <span key={i}>{t.t}</span>
               ) : (
-                <button key={i} type="button" className={`w ${t.k === "name" ? "name" : ""} ${r.sel === i ? "sel" : ""}`} onClick={() => tap(i)}>
+                <button key={i} type="button" className={`w ${t.k === "name" ? "name" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`} onClick={() => tap(i)}>
                   {t.t}
                 </button>
               ),

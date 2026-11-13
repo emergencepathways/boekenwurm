@@ -256,6 +256,25 @@ do $$ begin
 end $$;
 reset role;
 
+-- recent reveals (0007): times of the last 14 days, added from every device, each once
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ declare t timestamptz[]; begin
+  perform add_recent_reveals('lopen', array[now() - interval '20 days', now() - interval '2 days', now() - interval '1 hour']);
+  perform add_recent_reveals('lopen', array[now() - interval '1 hour', now() - interval '5 minutes']);
+  select recent_reveals into t from word_stats where lemma = 'lopen';
+  if array_length(t, 1) <> 3 then raise exception 'FAIL: expected 3 recent times, got %', array_length(t, 1); end if;
+  raise notice 'ok: recent reveal times are added, kept once, and older than 14 days dropped';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  if exists (select 1 from word_stats where lemma = 'lopen') then raise exception 'FAIL: C sees B''s words'; end if;
+  perform add_recent_reveals('lopen', array[now()]);
+  if (select array_length(recent_reveals, 1) from word_stats where lemma = 'lopen') <> 1 then raise exception 'FAIL: C''s times mixed with B''s'; end if;
+  raise notice 'ok: each reader''s reveal times are their own';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

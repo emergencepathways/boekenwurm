@@ -111,10 +111,15 @@ export interface WordStatRow {
   first_seen: string | null;
   last_revealed: string | null;
   example: string | null;
+  /** Reveal times of the last 14 days (migration 0007); absent before that migration. */
+  recent_reveals?: string[] | null;
 }
 
-/** The server's totals plus what this device hasn't sent yet. */
-export function wordbookFrom(rows: WordStatRow[], pending: Record<string, WordDelta>): WordBook {
+/**
+ * The server's totals plus what this device hasn't sent yet. Recent reveal times come from the server when it keeps
+ * them (0007); before that, the device's own are kept (`local`).
+ */
+export function wordbookFrom(rows: WordStatRow[], pending: Record<string, WordDelta>, local: WordBook = {}): WordBook {
   const out: WordBook = {};
   for (const r of rows)
     out[r.lemma] = {
@@ -123,12 +128,14 @@ export function wordbookFrom(rows: WordStatRow[], pending: Record<string, WordDe
       encounters: r.encounters,
       firstSeen: r.first_seen ? Date.parse(r.first_seen) : null,
       lastRevealed: r.last_revealed ? Date.parse(r.last_revealed) : null,
+      recent: r.recent_reveals != null ? r.recent_reveals.map((t) => Date.parse(t)) : local[r.lemma]?.recent,
     };
   for (const [lemma, d] of Object.entries(pending)) {
     const w = (out[lemma] ??= { lemma, reveals: 0, encounters: 0, firstSeen: Date.now(), lastRevealed: null });
     w.reveals += d.reveals;
     w.encounters += d.encounters;
     w.lastRevealed = Math.max(w.lastRevealed ?? 0, d.lastRevealed ?? 0) || null;
+    if (d.recent?.length) w.recent = [...new Set([...(w.recent ?? []), ...d.recent])].sort((a, b) => a - b);
   }
   return out;
 }

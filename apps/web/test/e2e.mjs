@@ -341,6 +341,31 @@ check(await page.getByText("Continue reading").isVisible(), "continue-reading ca
 check((await page.locator(".continue").textContent()).includes("Marktdag"), "it points at the book");
 check(Number(await page.locator(".studycard .big").textContent()) >= 1, "words due on the Study card");
 
+step("colour-coded text: off by default; on, words revealed before are coloured");
+await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
+const colourBox = page.getByRole("checkbox", { name: "Colour-coded text" });
+check(!(await colourBox.isChecked()), "colour-coded text is off by default");
+await colourBox.check();
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+await page.locator(".continue").click();
+await page.locator(".para .w").first().waitFor();
+// Step back through the paragraphs read earlier (no penalty) until one with a word revealed before.
+const colours = () => page.evaluate(() => [...document.querySelectorAll(".para .w")].map((b) => [b.textContent, [...b.classList].find((c) => c.startsWith("c-")) ?? ""]));
+let coloured = await colours();
+for (let i = 0; i < 8 && !coloured.some(([, c]) => c); i++) {
+  const prev = page.getByRole("button", { name: "← Previous" });
+  if (!(await prev.isEnabled())) break;
+  await prev.click();
+  coloured = await colours();
+}
+check(coloured.some(([, c]) => c === "c-green"), "a word revealed before is green (1 to 3 reveals in 14 days)");
+check(coloured.some(([, c]) => c === ""), "words never revealed stay plain");
+check(await page.locator(".para .w.name.c-green, .para .w.name.c-yellow, .para .w.name.c-red").count() === 0, "names are never coloured");
+await shot("06b-colour-text");
+await page.getByRole("button", { name: /Back to where I was/ }).click().catch(() => {});
+await page.getByRole("button", { name: "Home" }).first().click().catch(() => {});
+await page.locator(".tabbar").waitFor();
+
 step("Me: add a Claude key (mocked) and check the connection");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
 await page.getByLabel("Claude API key").fill("sk-ant-test-key");

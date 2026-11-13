@@ -86,6 +86,17 @@ export function Me() {
           </select>
           <span className="note">From B1, and during a streak, meanings are always in Dutch.</span>
         </label>
+        <div className="field">
+          <label className="row">
+            <input type="checkbox" checked={profile.settings.colorText === true} onChange={(e) => setSettings({ colorText: e.target.checked })} />
+            <span>Colour-coded text</span>
+          </label>
+          <span className="note">
+            Words you've revealed before are coloured by how often you needed them in the last 14 days:{" "}
+            <span className="w c-green" lang="nl">1–3 times</span>, <span className="w c-yellow" lang="nl">4–6 times</span>,{" "}
+            <span className="w c-red" lang="nl">7 or more</span>. New words stay plain.
+          </span>
+        </div>
         <label className="field">
           <span>Name</span>
           <input

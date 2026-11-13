@@ -67,3 +67,12 @@ test("word counts are the server's totals plus what this device hasn't sent", ()
   assert.equal(wb.lopen.encounters, 12);
   assert.equal(wb.kaas.reveals, 1);
 });
+
+test("recent reveal times: from the server when it keeps them, else the device's own; unsent ones are added", () => {
+  const row = { lemma: "lopen", reveals: 5, encounters: 9, first_seen: null, last_revealed: null, example: null };
+  const local = { lopen: { lemma: "lopen", reveals: 5, encounters: 9, firstSeen: null, lastRevealed: null, recent: [10, 20] } };
+  const fromServer = wordbookFrom([{ ...row, recent_reveals: ["2026-11-12T10:00:00Z"] }], { lopen: { reveals: 1, encounters: 1, lastRevealed: 30, example: null, recent: [30] } }, local);
+  assert.deepEqual(fromServer.lopen.recent, [Date.parse("2026-11-12T10:00:00Z"), 30].sort((a, b) => a - b));
+  const beforeMigration = wordbookFrom([row], {}, local);
+  assert.deepEqual(beforeMigration.lopen.recent, [10, 20], "without the column, the device keeps its own times");
+});

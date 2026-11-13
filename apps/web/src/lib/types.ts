@@ -61,6 +61,8 @@ export interface Settings {
   models: { match: string; words: string; vision: string };
   /** The free route reads photos on the device even with a key. */
   preferFreeReading: boolean;
+  /** Colour-coded text: words coloured by how often they were revealed in the last 14 days. Off by default. */
+  colorText?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -86,6 +88,8 @@ export interface WordDelta {
   encounters: number;
   lastRevealed: number | null;
   example: string | null;
+  /** Reveal times not yet sent (for the colour-coded text, migration 0007). */
+  recent?: number[];
 }
 
 /** A meaning shown on a tapped word or a flashcard: from the reader's word list, the open dictionary or Claude. */

@@ -211,6 +211,7 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
       encounters: d.encounters + w.encounters,
       lastRevealed: Math.max(d.lastRevealed ?? 0, w.lastRevealed ?? 0) || null,
       example: d.example ?? f.sentences[w.lemma] ?? null,
+      recent: [...(d.recent ?? []), ...(w.recent ?? [])],
     };
   }
 

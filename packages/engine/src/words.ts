@@ -14,6 +14,17 @@ export interface WordStats {
   encounters: number;
   firstSeen: number | null;
   lastRevealed: number | null;
+  /** When the word was revealed in the last RECENT_DAYS days (ms), for the colour-coded text. */
+  recent?: number[];
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+/** The window the colour-coded text counts reveals in. */
+export const RECENT_DAYS = 14;
+
+/** Reveal times still inside the window ending at `now`, oldest first. */
+export function keepRecent(times: number[], now: number): number[] {
+  return times.filter((t) => t > now - RECENT_DAYS * DAY && t <= now).sort((a, b) => a - b);
 }
 
 export type WordBook = Record<string, WordStats>;
@@ -28,8 +39,25 @@ export function applySession(book: WordBook, s: Session, now: number): WordBook 
     const w = touch(r.lemma);
     w.reveals += 1;
     w.lastRevealed = Math.max(w.lastRevealed ?? 0, r.at);
+    w.recent = [...(w.recent ?? []), r.at];
   }
+  for (const w of Object.values(out)) if (w.recent) w.recent = keepRecent(w.recent, now);
   return out;
+}
+
+export type WordColor = "green" | "yellow" | "red";
+
+/**
+ * Colour-coded text (a reader setting): how often a word had to be revealed in the last 14 days, shown before it is
+ * tapped. Never revealed: no colour. Revealed before, and at most 3 times in the window: green; 4 to 6: yellow; 7 or
+ * more: red. `extra` adds reveals not yet in the word book (the session being read).
+ */
+export function wordColor(w: WordStats | undefined, now: number, extra: number[] = []): WordColor | null {
+  if (!(w && w.reveals > 0) && !extra.length) return null;
+  // Older records (before reveal times were kept) count their last reveal, if it is recent.
+  const times = w?.recent ?? (w?.lastRevealed != null ? [w.lastRevealed] : []);
+  const n = keepRecent([...times, ...extra], now).length;
+  return n <= 3 ? "green" : n <= 6 ? "yellow" : "red";
 }
 
 /** Share of encounters in which the word had to be revealed (0 when never met). */

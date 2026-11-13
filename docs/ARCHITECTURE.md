@@ -171,6 +171,8 @@ their own rows; storage buckets are private with the same rule (`{user_id}/…` 
   `paragraph_versions` (reader-only, regenerated on level change).
 - `reading_sessions` and `paragraph_results` — every run: strikes, passes, streak length, token earned.
 - `word_stats` — reveals and encounters per base form; `cards` — flashcard state (FSRS).
+- `word_stats.recent_reveals` — reveal times of the last 14 days (migration 0007), added by every device with
+  `add_recent_reveals()`, for the colour-coded text; until 0007 runs, each device keeps its own.
 - `word_meanings` — meanings the reader found for words the dictionary doesn't know (Google, Claude, typed);
   `translation_usage` — Google lookups per reader per day (migration 0003).
 - `word_lists` and `word_list_entries` — the default dictionary is public read-only data shipped with the app (not a

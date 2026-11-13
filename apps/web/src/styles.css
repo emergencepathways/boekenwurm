@@ -15,6 +15,8 @@
   --strike-soft: #f6dcd6;
   --gold: #b5851c;
   --gold-soft: #f6ead0;
+  /* Colour-coded text: readable on the page (contrast 4.5:1 or more). */
+  --c-green: #2a7543; --c-yellow: #855c00; --c-red: #b3261e;
   --shadow: 0 1px 2px rgb(27 38 34 / 0.06), 0 6px 20px rgb(27 38 34 / 0.07);
   --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --read: "Literata", "Iowan Old Style", Georgia, serif;
@@ -30,6 +32,7 @@
     --paper: #121815; --sheet: #19211d; --ink: #e4ece7; --muted: #9aaba3; --line: #2c3833;
     --leaf: #6cc48f; --leaf-ink: #0f1a14; --leaf-soft: #20382a; --mark: #7d6a1f; --mark-ink: #fff7d6;
     --strike: #ef7b65; --strike-soft: #3e211b; --gold: #e2b54b; --gold-soft: #3a3019;
+    --c-green: #7fd19f; --c-yellow: #ecc65a; --c-red: #ff8f7d;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25); color-scheme: dark;
   }
 }
@@ -37,6 +40,7 @@
   --paper: #121815; --sheet: #19211d; --ink: #e4ece7; --muted: #9aaba3; --line: #2c3833;
   --leaf: #6cc48f; --leaf-ink: #0f1a14; --leaf-soft: #20382a; --mark: #7d6a1f; --mark-ink: #fff7d6;
   --strike: #ef7b65; --strike-soft: #3e211b; --gold: #e2b54b; --gold-soft: #3a3019;
+    --c-green: #7fd19f; --c-yellow: #ecc65a; --c-red: #ff8f7d;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25); color-scheme: dark;
 }
 
@@ -203,6 +207,12 @@ textarea { font-family: var(--read); line-height: 1.5; min-height: 120px; }
 .w.rev { background: var(--mark); color: var(--mark-ink); }
 .w.sel { outline: 2px solid var(--leaf); outline-offset: 1px; }
 .w.name { text-decoration: underline dotted var(--muted); text-underline-offset: 4px; }
+/* Colour-coded text (a setting): words revealed before, by how often in the last 14 days. The underline repeats the
+   colour's meaning without colour: none for green, dashed for yellow, thick for red. */
+.w.c-green { color: var(--c-green); }
+.w.c-yellow { color: var(--c-yellow); text-decoration: underline dashed var(--c-yellow); text-underline-offset: 4px; }
+.w.c-red { color: var(--c-red); text-decoration: underline solid var(--c-red); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.w.rev.c-green, .w.rev.c-yellow, .w.rev.c-red { color: var(--mark-ink); }
 .def { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 6px; min-height: 5em; }
 .def .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
 .def .word { font: 600 1.15rem var(--read); }

@@ -185,6 +185,11 @@ async function pushWordDeltas(sb: SB) {
             p_last_revealed: d.lastRevealed ? new Date(d.lastRevealed).toISOString() : null, p_example: d.example,
           }),
         );
+        // Reveal times for the colour-coded text (0007). Until that migration runs they stay on this device only.
+        if (d.recent?.length) {
+          const { error } = await sb.rpc("add_recent_reveals", { p_lemma: lemma.slice(0, 80), p_times: d.recent.map((t) => new Date(t).toISOString()) });
+          if (error && !/add_recent_reveals|could not find the function/i.test(error.message)) throw new Error(errText(error));
+        }
         sent.push(lemma);
       }),
     );
@@ -193,8 +198,10 @@ async function pushWordDeltas(sb: SB) {
   const latest = (await db.get<Record<string, WordDelta>>("kv", "wordDeltas")) ?? {};
   for (const lemma of sent) {
     const was = deltas[lemma], now = latest[lemma];
-    if (now && was && now.reveals === was.reveals && now.encounters === was.encounters) delete latest[lemma];
-    else if (now && was) latest[lemma] = { ...now, reveals: now.reveals - was.reveals, encounters: now.encounters - was.encounters };
+    const sentTimes = new Set(was?.recent ?? []);
+    const newTimes = (now?.recent ?? []).filter((t) => !sentTimes.has(t));
+    if (now && was && now.reveals === was.reveals && now.encounters === was.encounters && !newTimes.length) delete latest[lemma];
+    else if (now && was) latest[lemma] = { ...now, reveals: now.reveals - was.reveals, encounters: now.encounters - was.encounters, recent: newTimes };
   }
   await db.put("kv", latest, "wordDeltas");
 }
@@ -260,12 +267,16 @@ export async function fetchRemoteText(bookId: string): Promise<BookText | null> 
 async function pullWords(sb: SB) {
   const rows: WordStatRow[] = [];
   for (let from = 0; ; from += 1000) {
-    const page = check(await sb.from("word_stats").select("lemma, reveals, encounters, first_seen, last_revealed, example").range(from, from + 999)) as WordStatRow[];
+    // Recent reveal times exist once migration 0007 has run; until then, the counters alone.
+    const cols = "lemma, reveals, encounters, first_seen, last_revealed, example";
+    let res: { data: unknown; error: { message: string; code?: string } | null } = await sb.from("word_stats").select(`${cols}, recent_reveals`).range(from, from + 999);
+    if (res.error && /recent_reveals/.test(res.error.message)) res = await sb.from("word_stats").select(cols).range(from, from + 999);
+    const page = check(res) as WordStatRow[];
     rows.push(...page);
     if (page.length < 1000) break;
   }
   const pending = (await db.get<Record<string, WordDelta>>("kv", "wordDeltas")) ?? {};
-  await setWordbook(wordbookFrom(rows, pending));
+  await setWordbook(wordbookFrom(rows, pending, getState().wordbook));
   const examples = { ...getState().examples };
   let added = false;
   for (const r of rows) if (r.example && !examples[r.lemma]) (examples[r.lemma] = r.example), (added = true);
