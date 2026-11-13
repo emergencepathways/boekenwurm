@@ -23,6 +23,7 @@ function errText(e: unknown): string {
   // The database is missing a newer migration: say which file to run.
   if (/first_page/.test(m)) return "The database needs an update: run supabase/migrations/0002_first_page.sql in the Supabase SQL Editor.";
   if (/word_meanings|translation_usage|claim_translation/.test(m)) return "The database needs an update: run supabase/migrations/0003_translations.sql in the Supabase SQL Editor.";
+  if (/shared_words|word_reports|report_shared_word/.test(m)) return "The database needs an update: run supabase/migrations/0006_shared_words.sql in the Supabase SQL Editor.";
   if (/feature_access|page_read_usage|redeem_code|claim_page_read/.test(m)) return "The database needs an update: run supabase/migrations/0004_access_codes.sql in the Supabase SQL Editor.";
   return m;
 }

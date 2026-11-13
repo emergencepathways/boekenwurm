@@ -199,6 +199,63 @@ do $$ declare r record; begin
 end $$;
 reset role;
 
+-- shared words (0006): Google's translations for everyone, written by the server only; 3 reports hide one
+insert into auth.users (id) values ('00000000-0000-0000-0000-00000000000c'), ('00000000-0000-0000-0000-00000000000d');
+set role service_role;
+insert into shared_words (word, meaning) values ('fietsenstalling', 'bicycle parking'), ('vuurtoren', 'fire tower');
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select 'B sees shared words: ' || count(*) from shared_words;
+do $$ begin
+  insert into shared_words (word, meaning) values ('huis', 'mouse');
+  raise exception 'FAIL: a reader added a shared word';
+exception when insufficient_privilege then raise notice 'ok: readers cannot add shared words';
+end $$;
+do $$ begin
+  update shared_words set meaning = 'wrong on purpose';
+  raise exception 'FAIL: a reader changed a shared word';
+exception when insufficient_privilege then raise notice 'ok: readers cannot change shared words';
+end $$;
+do $$ begin
+  insert into word_reports (word, meaning) values ('vuurtoren', 'fire tower');
+  raise exception 'FAIL: a reader wrote a report directly';
+exception when insufficient_privilege then raise notice 'ok: reports are made only through report_shared_word';
+end $$;
+do $$ declare hid boolean; begin
+  hid := report_shared_word('Vuurtoren', 'lighthouse');
+  hid := report_shared_word('vuurtoren', 'lighthouse!');
+  if hid then raise exception 'FAIL: hidden after one reader'; end if;
+  if (select count(*) from word_reports) <> 1 then raise exception 'FAIL: a second report by the same reader counted'; end if;
+  if report_shared_word('nietgedeeld', 'x') then raise exception 'FAIL: a word that isn''t shared'; end if;
+  raise notice 'ok: one report per reader per word, with their suggestion';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  if report_shared_word('vuurtoren', 'lighthouse') then raise exception 'FAIL: hidden after two readers'; end if;
+  if (select count(*) from word_reports) <> 1 then raise exception 'FAIL: C sees other readers'' reports'; end if;
+  raise notice 'ok: readers see only their own reports';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000d';
+do $$ begin
+  if not report_shared_word('vuurtoren', 'lighthouse') then raise exception 'FAIL: not hidden after three readers'; end if;
+  if exists (select 1 from shared_words where word = 'vuurtoren') then raise exception 'FAIL: a hidden word is still served'; end if;
+  if not exists (select 1 from shared_words where word = 'fietsenstalling') then raise exception 'FAIL: other words hidden too'; end if;
+  raise notice 'ok: 3 different readers hide a word from everyone until the owner reviews it';
+end $$;
+reset role;
+do $$ begin
+  update shared_words set meaning = 'lighthouse', source = 'owner', hidden = false, reports = 0, reviewed_at = now() where word = 'vuurtoren';
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  if (select meaning from shared_words where word = 'vuurtoren') <> 'lighthouse' then raise exception 'FAIL: the owner''s fix isn''t served'; end if;
+  if report_shared_word('vuurtoren', 'still wrong') then raise exception 'FAIL: reports from before the review still count'; end if;
+  raise notice 'ok: the owner''s fix is served, and reports start again from the review';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

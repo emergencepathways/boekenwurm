@@ -119,9 +119,17 @@ await ctx.route("**/functions/v1/translate", async (r) => {
   if (lookups.used >= 200) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 200, limit: 200 }) });
   const { word } = JSON.parse(r.request().postData() || "{}");
   translated.push(word);
+  // "verse" was already translated for another reader: it comes from the shared store and uses no lookup.
+  if (word.toLowerCase() === "verse")
+    return r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, text: `${word} (in English)`, shared: true }) });
   lookups.used++;
   const text = word.toLowerCase() === "elke" ? word : `${word} (in English)`;
   await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, text, used: lookups.used, limit: 200 }) });
+});
+const reports = [];
+await ctx.route("**/rest/v1/rpc/report_shared_word", async (r) => {
+  reports.push(JSON.parse(r.request().postData() || "{}"));
+  await r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: "false" });
 });
 
 // Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works;
@@ -231,8 +239,9 @@ await page.locator(".para .w", { hasText: /^Elke$/ }).click();
 await page.getByText(/No meaning found for this word, so this tap doesn't count/).waitFor();
 check((await page.locator(".pip.used").count()) === pips0, "no meaning found: no strike");
 await page.locator(".para .w", { hasText: /^verse$/ }).click();
-await page.getByText("Not in the dictionary: translated by Google Translate.").waitFor();
+await page.getByText("Not in the dictionary: translated by Google Translate, shared by Boekenwurm readers.").waitFor();
 check((await page.locator(".pip.used").count()) === pips0 + 1, "a meaning from Google Translate: the tap counts");
+check(true, "a translation another reader already had is marked as shared");
 check(await page.locator(".def .meaning", { hasText: "verse (in English)" }).isVisible(), "the translation is shown");
 check(translated.join(",") === "Elke,verse", "only the tapped word is sent");
 check(lookups.auth === `Bearer ${accessToken}`, "the lookup carries the reader's session, so their own allowance is used");
@@ -241,7 +250,7 @@ check(translated.length === 2, "a word translated once isn't sent again");
 await shot("04b-translated");
 
 step("the daily allowance: 200 Google lookups, then the reader is asked instead");
-check(lookups.used === 2, "each lookup is counted");
+check(lookups.used === 1, "each Google lookup is counted; the shared word used none");
 lookups.used = 200;
 await page.locator(".para .w", { hasText: /^hele$/ }).click();
 await page.getByText(/You've used today's 200 Google Translate lookups/).waitFor();
@@ -259,9 +268,39 @@ check(await page.evaluate(() => new Promise((ok) => {
   const req = indexedDB.open("boekenwurm-app");
   req.onsuccess = () => { const g = req.result.transaction("kv").objectStore("kv").get("meanings"); g.onsuccess = () => ok(g.result?.hele?.en === "whole" && g.result?.verse?.from === "translation"); };
 })), "typed and translated meanings are saved for the reader");
+
+step("a wrong translation: report it, and the reader's own meaning is used from then on");
+const pipsBeforeReport = await page.locator(".pip.used").count();
+await page.locator(".para .w", { hasText: /^verse$/ }).click();
+await page.getByRole("button", { name: "Wrong translation? Report it" }).click();
+await page.getByLabel("Right meaning of verse").fill("fresh");
+await page.getByRole("button", { name: "Report", exact: true }).click();
+await page.locator(".def .meaning", { hasText: "fresh" }).waitFor();
+for (let i = 0; i < 30 && !reports.length; i++) await page.waitForTimeout(100); // the meaning shows first, then the report goes
+check(reports.length === 1 && reports[0].p_word === "verse" && reports[0].p_suggestion === "fresh", "the report names the word and the reader's meaning");
+check(await page.getByText("Your own meaning.").isVisible(), "the reader's meaning replaces the translation for them");
+check((await page.locator(".pip.used").count()) === pipsBeforeReport, "reporting costs no strike");
+await shot("04d-reported");
+
 lookups.used = 3;
 for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Next page →" }).click();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "three pages turned");
+
+step("Previous: look back without penalty, then back to where the reader was");
+const pipsBefore = await page.locator(".pip.used").count();
+await page.getByRole("button", { name: "← Previous" }).click();
+await page.getByText("No strikes here.").waitFor();
+check((await page.locator(".strikes").count()) === 0 && (await page.getByText("Looking back", { exact: true }).isVisible()), "the strikes give way to a clear no-penalty banner");
+check((await page.locator(".folio .num").textContent()).startsWith("3 /"), "the paragraph before is shown");
+await page.locator(".para .w:not(.name)").first().click();
+check((await page.locator(".def .head .word").count()) === 1, "tapping a word there shows its meaning");
+await shot("05a-previous");
+await page.getByRole("button", { name: "← Previous" }).click();
+check((await page.locator(".folio .num").textContent()).startsWith("2 /"), "Previous again goes one more back");
+await page.getByRole("button", { name: "Back to where I was →" }).click();
+await page.locator(".strikes").waitFor();
+check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "back on the paragraph the reader was at");
+check((await page.locator(".pip.used").count()) === pipsBefore, "looking back cost no strike");
 
 step("reader: run out of strikes ends the session with a study list");
 const n = await page.locator(".strikes .pip").count();
@@ -274,6 +313,16 @@ await page.getByRole("button", { name: "Next page →" }).click();
 await page.getByRole("heading", { name: /streak lasted|last strike|passed 1 paragraph|passed 3|lasted/ }).waitFor();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "summary offers to study the words");
 await shot("05-summary");
+
+step("Re-read the paragraph just finished: practice, no strikes");
+await page.getByRole("button", { name: "Re-read the last paragraph" }).click();
+await page.getByText("No strikes here.").waitFor();
+check(await page.getByText("Practice", { exact: true }).isVisible(), "the banner says it's practice");
+await page.locator(".para .w:not(.name)").first().click();
+check((await page.locator(".def .head .word").count()) === 1, "taps show meanings");
+await shot("05b-reread");
+await page.getByRole("button", { name: "Back to the summary" }).click();
+check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "and the summary is back, unchanged");
 
 step("study: flashcards from the revealed words");
 await page.getByRole("button", { name: /Study these/ }).click();

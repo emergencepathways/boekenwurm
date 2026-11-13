@@ -96,6 +96,8 @@ export interface Meaning {
   from: "list" | "dictionary" | "translation" | "compound" | "claude" | "manual";
   /** The word as it was tapped, for meanings the reader's account keeps (word_meanings). */
   word?: string;
+  /** A Google translation another reader's lookup already found (the shared store, migration 0006). */
+  shared?: boolean;
 }
 
 export interface CardState {

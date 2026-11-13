@@ -216,6 +216,11 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   before Google is asked. Readers can read their count in `translation_usage` but not change it, and lookups need an
   account, so the limit can't be skipped from the app or by calling Google directly. Every meaning found (Google,
   Claude, or typed by the reader) is saved in `word_meanings` and synced, and the app looks there before asking.
+  Google's translations are shared by all readers (`shared_words`, migration 0006): the function serves a word another
+  reader already had translated without asking Google or using a lookup, and saves each new translation as the
+  server; readers can read the shared store but never write it. "Wrong translation? Report it" saves the reader's own
+  meaning at once and calls `report_shared_word()`; three different readers hide the word from everyone until the
+  owner fixes or removes it (queries in the table's comment).
   The owner can see each reader's use in the SQL Editor:
   `select u.email, t.day, t.words from translation_usage t join auth.users u on u.id = t.user_id order by t.day desc;`
 - Content-security policy: scripts from the app only; network to Supabase (including the translate and read-page

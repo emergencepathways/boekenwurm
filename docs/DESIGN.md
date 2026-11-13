@@ -323,6 +323,14 @@ anywhere except `private/`.
 
 ## Decided
 
+- Looking back never costs anything: "← Previous" at the end of every paragraph shows the paragraph before (and
+  further back), and "Re-read the last paragraph" on the session summary shows the one just finished. Taps there show
+  meanings only: no strike, nothing counted, the session waits. The strikes give way to a clear "No strikes here"
+  banner. 2026-11-13.
+- Google translations are shared by all readers: a word translated for one reader is served to the next without a
+  Google call or a lookup. A reader can report a wrong one with the right meaning, which is theirs at once; three
+  different readers hide it until the owner reviews it. 2026-11-13.
+
 - Paragraphs of fewer than 7 words are read together with the next paragraph, for every book. 2026-11-12.
 - Google page reading (Cloud Vision) is tested by the owner behind an access code before it becomes a paid feature:
   code holders get 20 pages a day, then the device reader, flagged; everyone else keeps the free device reader. Cloud

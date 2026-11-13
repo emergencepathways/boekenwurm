@@ -11,7 +11,7 @@ import { DAILY_TRANSLATIONS, localDay } from "./usage.ts";
 import { supabase } from "./supabase.ts";
 import { getState, setState } from "./store.ts";
 
-export type TranslateResult = { ok: true; text: string } | { ok: false; reason: "none" | "offline" | "unavailable" | "limit" | "signin" };
+export type TranslateResult = { ok: true; text: string; shared: boolean } | { ok: false; reason: "none" | "offline" | "unavailable" | "limit" | "signin" };
 
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const FUNCTION_URL = `${(import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "")}/functions/v1/translate`;
@@ -22,6 +22,16 @@ function counted(used: number | undefined, limit: number | undefined) {
 }
 
 /** Today's lookups so far, for Me (without using one). Signed out: none, since lookups need an account. */
+/**
+ * Report a shared Google translation as wrong, with the meaning the reader thinks is right (migration 0006). Three
+ * different readers hide it from everyone until the owner reviews it. Returns false when it couldn't be sent.
+ */
+export async function reportTranslation(word: string, suggestion: string): Promise<boolean> {
+  if (!supabase || !getState().user) return false;
+  const { error } = await supabase.rpc("report_shared_word", { p_word: word.toLowerCase(), p_suggestion: suggestion.trim().slice(0, 300) || null });
+  return !error;
+}
+
 export async function lookupsToday(): Promise<{ used: number; limit: number }> {
   const today = localDay(new Date(), timeZone());
   const kept = getState().translations;
@@ -56,11 +66,11 @@ export async function translateWord(word: string, signal?: AbortSignal): Promise
     if ((e as Error).name === "AbortError") throw e;
     return { ok: false, reason: "offline" };
   }
-  const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; reason?: string; used?: number; limit?: number } | null;
+  const body = (await res.json().catch(() => null)) as { ok?: boolean; text?: string; reason?: string; used?: number; limit?: number; shared?: boolean } | null;
   counted(body?.used, body?.limit);
   if (res.status === 429) return { ok: false, reason: "limit" };
   if (res.status === 401) return { ok: false, reason: "signin" };
   if (!res.ok || !body?.ok) return { ok: false, reason: res.status === 400 ? "none" : "unavailable" }; // the tap stays free
   const text = (body.text ?? "").trim();
-  return isUsefulTranslation(word, text) ? { ok: true, text } : { ok: false, reason: "none" };
+  return isUsefulTranslation(word, text) ? { ok: true, text, shared: body.shared === true } : { ok: false, reason: "none" };
 }

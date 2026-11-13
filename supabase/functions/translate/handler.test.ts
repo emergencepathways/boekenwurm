@@ -7,12 +7,22 @@ import { handle, cors, WORD, type Config } from "./handler.ts";
 interface Call { url: string; init: RequestInit }
 
 /** A database that allows `limit` words a day, and a Google that answers "<word> (en)". */
-function world(opts: { used?: number; limit?: number; google?: number; db?: number; dbBody?: unknown } = {}) {
+function world(opts: { used?: number; limit?: number; google?: number; db?: number; dbBody?: unknown; shared?: Record<string, string>; echo?: boolean } = {}) {
+  const shared = { ...(opts.shared ?? {}) };
   const calls: Call[] = [];
   let used = opts.used ?? 0;
   const limit = opts.limit ?? 200;
   const fake = (async (url: string, init: RequestInit) => {
     calls.push({ url, init });
+    if (url.includes("/rest/v1/shared_words?word=eq.")) {
+      const w = decodeURIComponent(url.split("word=eq.")[1].split("&")[0]);
+      return Response.json(shared[w] ? [{ meaning: shared[w] }] : []);
+    }
+    if (url.endsWith("/rest/v1/shared_words")) {
+      const b = JSON.parse(String(init.body));
+      shared[b.word] ??= b.meaning;
+      return new Response(null, { status: 201 });
+    }
     if (url.includes("/rest/v1/rpc/claim_translation")) {
       if (opts.db) return new Response(JSON.stringify(opts.dbBody ?? {}), { status: opts.db });
       const allowed = used < limit;
@@ -22,12 +32,12 @@ function world(opts: { used?: number; limit?: number; google?: number; db?: numb
     if (url.startsWith("https://translation.googleapis.com/")) {
       if (opts.google) return new Response("{}", { status: opts.google });
       const q = JSON.parse(String(init.body)).q;
-      return Response.json({ data: { translations: [{ translatedText: `${q} &#39;(en)&#39;` }] } });
+      return Response.json({ data: { translations: [{ translatedText: opts.echo ? q : `${q} &#39;(en)&#39;` }] } });
     }
     throw new Error(`unexpected ${url}`);
   }) as typeof fetch;
   const config: Config = { supabaseUrl: "https://example.supabase.co", supabaseKey: "sb_publishable_test", googleKey: "google-secret", fetch: fake };
-  return { calls, config, google: () => calls.filter((c) => c.url.includes("googleapis")), used: () => used };
+  return { calls, config, shared, google: () => calls.filter((c) => c.url.includes("googleapis")), used: () => used };
 }
 
 const ask = (word: unknown, headers: Record<string, string> = { authorization: "Bearer reader-token" }, method = "POST") =>
@@ -51,7 +61,7 @@ test("a signed-in reader's word is translated, and only the word is sent to Goog
 test("the lookup is claimed as the reader, with their token and time zone", async () => {
   const w = world();
   await handle(ask("huis"), w.config);
-  const claim = w.calls[0];
+  const claim = w.calls.find((c) => c.url.includes("/rpc/claim_translation"))!;
   assert.match(claim.url, /\/rest\/v1\/rpc\/claim_translation$/);
   const h = claim.init.headers as Record<string, string>;
   assert.equal(h.authorization, "Bearer reader-token");
@@ -141,4 +151,47 @@ test("Google refuses a word: the lookup is given back, with Google's reason", as
   assert.equal(body.detail, "Daily Limit Exceeded");
   assert.equal(body.used, 6);
   assert.deepEqual(refunds.map((b) => JSON.parse(b)), [{ p_user: reader, p_day: "2026-11-13" }]);
+});
+
+test("a word another reader already had translated: served from the shared store, no Google, no lookup used", async () => {
+  const w = world({ used: 5, shared: { vuurtoren: "lighthouse" } });
+  const r = await handle(ask("Vuurtoren"), w.config);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { ok: true, text: "lighthouse", shared: true });
+  assert.equal(w.google().length, 0);
+  assert.equal(w.used(), 5, "the reader's count didn't move");
+  const read = w.calls[0];
+  assert.equal((read.init.headers as Record<string, string>).authorization, "Bearer reader-token", "read as the reader, not the server");
+});
+
+test("a new word: Google's answer is saved for every reader, by the server, without overwriting", async () => {
+  const w = world();
+  w.config.serviceKey = "service-secret";
+  await handle(ask("fietsenstalling"), w.config);
+  const save = w.calls.find((c) => c.url.endsWith("/rest/v1/shared_words") && c.init.method === "POST")!;
+  assert.deepEqual(JSON.parse(String(save.init.body)), { word: "fietsenstalling", meaning: "fietsenstalling '(en)'" });
+  const h = save.init.headers as Record<string, string>;
+  assert.equal(h.authorization, "Bearer service-secret");
+  assert.match(h.prefer, /resolution=ignore-duplicates/);
+  // The next reader gets it from the store.
+  const again = await handle(ask("fietsenstalling"), w.config);
+  assert.equal(((await again.json()) as { shared?: boolean }).shared, true);
+  assert.equal(w.google().length, 1);
+});
+
+test("not shared: a word Google hands back unchanged, or without the server key", async () => {
+  const echo = world({ echo: true });
+  echo.config.serviceKey = "sk";
+  await handle(ask("Elke"), echo.config);
+  const plain = world();
+  await handle(ask("huis"), plain.config);
+  for (const w of [echo, plain]) assert.equal(w.calls.filter((c) => c.init.method === "POST" && c.url.endsWith("/shared_words")).length, 0);
+  assert.equal(echo.google().length, 1, "Google was asked, but the echo wasn't saved");
+});
+
+test("a token the database refuses when reading the shared store means signing in", async () => {
+  const w = world();
+  w.config.fetch = (async () => new Response("{}", { status: 401 })) as typeof fetch;
+  const r = await handle(ask("huis"), w.config);
+  assert.equal(r.status, 401);
 });

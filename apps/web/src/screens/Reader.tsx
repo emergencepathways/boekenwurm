@@ -13,7 +13,7 @@ import { claude, AiError } from "../lib/claude.ts";
 import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
-import { translateWord, type TranslateResult } from "../lib/translate.ts";
+import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
@@ -48,6 +48,13 @@ interface RS {
   lookups: Map<string, "pending" | "none" | "offline" | "limit" | "signin">;
   explaining: Map<string, Promise<AI.Explanation | null>>;
   modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
+  /**
+   * Looking at a paragraph without penalty: one before the current one ("Previous"), or the one just finished, from
+   * the session summary ("Re-read"). Taps show meanings but cost no strike and don't count; the session is untouched.
+   */
+  look: { ord: number; kind: "previous" | "reread"; selBefore: number | null } | null;
+  /** The paragraph read last (before the latest page turn): the one "Re-read" opens. */
+  lastRead: number | null;
 }
 
 export function Reader({ bookId }: { bookId: string }) {
@@ -59,7 +66,7 @@ export function Reader({ bookId }: { bookId: string }) {
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
-    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null,
+    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null,
   }).current;
   const inflight = useRef(new Map<number, Promise<void>>()).current;
 
@@ -108,9 +115,11 @@ export function Reader({ bookId }: { bookId: string }) {
   const book = r.book;
   const mode = book?.position.mode ?? "original";
   const look = (surface: string) => lookup(surface, { meanings: getState().meanings });
-  const original = (): Paragraph => r.text!.paragraphs[r.pos];
+  /** The paragraph on screen: the current one, or the one being looked back at. */
+  const at = (): number => r.look?.ord ?? r.pos;
+  const original = (): Paragraph => r.text!.paragraphs[at()];
   const para = (): { text: string; tokens: Token[]; matched: boolean } => {
-    const m = mode === "match" ? r.matched.get(r.pos) : null;
+    const m = mode === "match" ? r.matched.get(at()) : null;
     return m && m.status === "done" && m.changed && m.tokens ? { text: m.text, tokens: m.tokens, matched: true } : { ...original(), matched: false };
   };
   const lemmasOf = (p: { tokens: Token[] }) => p.tokens.filter((t) => t.k === "word").map((t) => look(t.t).lemma);
@@ -156,14 +165,35 @@ export function Reader({ bookId }: { bookId: string }) {
    * reader's key. When none finds one, the tap is free (lib/meaning.ts).
    */
   function tap(i: number) {
-    if (!r.session?.current) return;
+    if (!r.session?.current && !r.look) return;
     const tok = para().tokens[i];
     r.sel = i;
     if (tok.k === "word") {
       const d = look(tok.t);
-      if (d.meaning) countTap(i, d.lemma, tok.t);
+      // Looking back: the meaning is shown, nothing counts.
+      if (r.look) {
+        if (d.meaning) void explain(i);
+        else void findMeaning(i, d.lemma, tok.t, { free: true });
+      } else if (d.meaning) countTap(i, d.lemma, tok.t);
       else void findMeaning(i, d.lemma, tok.t);
     }
+    bump();
+  }
+
+  /** "Previous": look at the paragraph before (or one more back), without penalty. */
+  function lookBack(kind: "previous" | "reread", ord: number) {
+    if (!r.text || ord < 0) return;
+    r.look = { ord, kind, selBefore: r.look ? r.look.selBefore : r.sel };
+    r.sel = null;
+    if (r.book?.position.mode === "match") void ensureMatched(ord).then(bump);
+    bump();
+  }
+
+  /** Back to where the reader was: the current paragraph, or the session summary. */
+  function endLook() {
+    if (!r.look) return;
+    r.sel = r.look.selBefore;
+    r.look = null;
     bump();
   }
 
@@ -175,7 +205,7 @@ export function Reader({ bookId }: { bookId: string }) {
     void explain(i);
   }
 
-  async function findMeaning(i: number, lemma: string, surface: string) {
+  async function findMeaning(i: number, lemma: string, surface: string, opts: { free?: boolean } = {}) {
     const state = r.lookups.get(lemma);
     if (state === "pending" || state === "none") return; // "offline" tries again
     r.lookups.set(lemma, "pending");
@@ -185,7 +215,7 @@ export function Reader({ bookId }: { bookId: string }) {
     let meaning: Meaning | null = null;
     // Saved meanings (this reader's, from any device) were already checked by look(); Google is next.
     const t = await translateWord(surface).catch((): TranslateResult => ({ ok: false, reason: "offline" }));
-    if (t.ok) meaning = { en: t.text, nl: null, from: "translation", word };
+    if (t.ok) meaning = { en: t.text, nl: null, from: "translation", word, ...(t.shared ? { shared: true } : {}) };
     meaning ??= compoundMeaning(surface);
     if (!meaning && getState().hasKey) {
       const x = await explain(i);
@@ -195,10 +225,20 @@ export function Reader({ bookId }: { bookId: string }) {
       r.lookups.delete(lemma);
       // Saved for this reader (device and account), so the word is never looked up again.
       await saveMeaning(lemma, meaning);
-      // Count it only if the reader is still on the paragraph they tapped in.
-      if (r.session?.current?.paragraphId === where) countTap(i, lemma, surface);
+      // Count it only if the reader is still on the paragraph they tapped in (never when looking back).
+      if (!opts.free && !r.look && r.session?.current?.paragraphId === where) countTap(i, lemma, surface);
     } else if (!t.ok && (t.reason === "limit" || t.reason === "signin")) r.lookups.set(lemma, t.reason);
     else r.lookups.set(lemma, !t.ok && t.reason === "offline" && !navigator.onLine ? "offline" : "none");
+    bump();
+  }
+
+  /** A Google translation reported as wrong: the reader's own meaning replaces it for them at once. */
+  async function reported(lemma: string, surface: string, text: string) {
+    const meaning = text.trim().slice(0, 300);
+    if (!meaning) return;
+    await saveMeaning(lemma, { en: meaning, nl: null, from: "manual", word: surface.toLowerCase() });
+    const sent = await reportTranslation(surface, meaning);
+    toast(sent ? "Thanks: reported. Your meaning is used from now on." : "Your meaning is used from now on. Sign in to send reports.", 4000);
     bump();
   }
 
@@ -207,7 +247,7 @@ export function Reader({ bookId }: { bookId: string }) {
     const meaning = text.trim().slice(0, 300);
     if (!meaning) return;
     r.lookups.delete(lemma);
-    countTap(i, lemma, surface);
+    if (!r.look) countTap(i, lemma, surface);
     bump();
     await saveMeaning(lemma, { en: meaning, nl: null, from: "manual", word: surface.toLowerCase() });
   }
@@ -232,6 +272,7 @@ export function Reader({ bookId }: { bookId: string }) {
     if (!r.session?.current || r.modal) return;
     const out = E.turnPage(r.session);
     r.session = out.session;
+    r.lastRead = r.pos;
     r.pos++;
     const atEnd = r.pos >= r.text!.paragraphs.length;
     void savePosition(atEnd ? r.text!.paragraphs.length : r.pos);
@@ -316,7 +357,7 @@ export function Reader({ bookId }: { bookId: string }) {
 
   function explain(i: number): Promise<AI.Explanation | null> {
     const tok = para().tokens[i];
-    const k = `${r.pos}|${i}|${para().matched ? "m" : "o"}`;
+    const k = `${at()}|${i}|${para().matched ? "m" : "o"}`;
     if (!getState().hasKey || tok.k !== "word") return Promise.resolve(null);
     const have = r.explaining.get(k);
     if (have) return have;
@@ -361,7 +402,17 @@ export function Reader({ bookId }: { bookId: string }) {
   // ---------------------------------------------------------------- keys and swipes
   useEffect(() => {
     const key = (ev: KeyboardEvent) => {
-      if (r.summary || r.modal || /INPUT|SELECT|TEXTAREA/.test((ev.target as HTMLElement).tagName)) return;
+      if (r.modal || /INPUT|SELECT|TEXTAREA/.test((ev.target as HTMLElement).tagName)) return;
+      if (r.look) {
+        if (ev.key === "Escape" || ev.key === "ArrowRight") (ev.preventDefault(), endLook());
+        else if (ev.key === "ArrowLeft" && r.look.kind === "previous" && r.look.ord > 0) (ev.preventDefault(), lookBack("previous", r.look.ord - 1));
+        return;
+      }
+      if (r.summary) return;
+      if (ev.key === "ArrowLeft" && r.session?.current && r.pos > 0) {
+        ev.preventDefault();
+        return lookBack("previous", r.pos - 1);
+      }
       if (ev.key === "ArrowRight" || (ev.key === " " && !(ev.target as HTMLElement).closest("button"))) {
         ev.preventDefault();
         void turn();
@@ -405,7 +456,9 @@ export function Reader({ bookId }: { bookId: string }) {
           </>
         }
       />
-      {r.summary ? (
+      {r.look ? (
+        renderLook()
+      ) : r.summary ? (
         renderSummary()
       ) : r.waiting || !r.session?.current ? (
         <article className="sheet">
@@ -444,6 +497,7 @@ export function Reader({ bookId }: { bookId: string }) {
    */
   async function jumpTo(ord: number) {
     r.modal = null;
+    r.look = null;
     if (!r.text || ord === r.pos) return bump();
     await leave();
     r.pos = Math.max(0, Math.min(ord, r.text.paragraphs.length - 1));
@@ -512,17 +566,62 @@ export function Reader({ bookId }: { bookId: string }) {
             <div className="original"><span className="label">Original</span><p lang="nl">{original().text}</p></div>
           )}
           <div className="def" aria-live="polite">{renderDefinition(onStreak)}</div>
-          <div className="actions">
+          <div className="actions turnrow">
+            <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>← Previous</button>
             <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>Next page →</button>
           </div>
         </article>
-        <p className="note" style={{ margin: 0 }}>Tap a word to see its meaning. Swipe left or press → to turn the page.</p>
+        <p className="note" style={{ margin: 0 }}>Tap a word to see its meaning. Swipe left or press → to turn the page; Previous looks back without penalty.</p>
+      </>
+    );
+  }
+
+  /**
+   * Looking back or re-reading: where the strikes are, a banner says plainly that nothing here costs anything. Taps
+   * show meanings only; the session (or its summary) waits until the reader goes back.
+   */
+  function renderLook() {
+    const l = r.look!;
+    const p = para();
+    const back = l.kind === "reread" ? "Back to the summary" : "Back to where I was →";
+    return (
+      <>
+        <section className="strip nopenalty" role="status" aria-label="No penalty">
+          <span className="mode">{l.kind === "reread" ? "Practice" : "Looking back"}</span>
+          <b>No strikes here.</b>
+          <span>Tap any word for its meaning: nothing counts against you.</span>
+        </section>
+        <article className="sheet calm">
+          <div className="folio">
+            <span>{book!.title}</span>
+            <span className="num">{pageAt(l.ord) != null ? `p. ${pageAt(l.ord)} · ` : ""}{l.ord + 1} / {r.text!.paragraphs.length}</span>
+          </div>
+          {mode === "match" && renderMatchedLine(p.matched)}
+          <p className="para" lang="nl">
+            {p.tokens.map((t, i) =>
+              t.k === "punct" || t.k === "number" ? (
+                <span key={i}>{t.t}</span>
+              ) : (
+                <button key={i} type="button" className={`w ${t.k === "name" ? "name" : ""} ${r.sel === i ? "sel" : ""}`} onClick={() => tap(i)}>
+                  {t.t}
+                </button>
+              ),
+            )}
+          </p>
+          <div className="def" aria-live="polite">{renderDefinition(false)}</div>
+          <div className="actions turnrow">
+            {l.kind === "previous" && (
+              <button className="btn ghost prevbtn" type="button" disabled={l.ord === 0} onClick={() => lookBack("previous", l.ord - 1)}>← Previous</button>
+            )}
+            <button className="btn primary nextbtn" type="button" onClick={endLook}>{back}</button>
+          </div>
+        </article>
       </>
     );
   }
 
   function renderMatchedLine(matched: boolean) {
-    const m = r.matched.get(r.pos);
+    const m = r.matched.get(at());
     if (matched)
       return (
         <div className="matched">
@@ -550,12 +649,12 @@ export function Reader({ bookId }: { bookId: string }) {
       );
     const d = look(tok.t);
     const lang = E.definitionLanguage({ level: progress.level, preference: settings.defPref, onStreak });
-    const rev = r.session!.current!.reveals.find((x) => x.lemma === d.lemma);
+    const rev = r.look ? undefined : r.session?.current?.reveals.find((x) => x.lemma === d.lemma);
     const canUndo = rev && Date.now() - rev.at <= r.session!.undoWindowMs;
     const m = d.meaning;
     const lifetime = wordbook[d.lemma]?.reveals ?? 0;
     const why = lang === "nl" ? (onStreak ? "Dutch explanation: you're on a streak." : "Dutch explanation from B1.") : "";
-    const k = `${r.pos}|${r.sel}|${para().matched ? "m" : "o"}`;
+    const k = `${at()}|${r.sel}|${para().matched ? "m" : "o"}`;
     const x = r.explained.get(k);
     const lookup = r.lookups.get(d.lemma);
     return (
@@ -570,7 +669,12 @@ export function Reader({ bookId }: { bookId: string }) {
           lang === "nl" && m.nl ? <div className="meaning nl" lang="nl">{m.nl}</div> : m.en ? (
             <>
               <div className="meaning">{m.en}</div>
-              {m.from === "translation" && <span className="note">Not in the dictionary: translated by Google Translate.</span>}
+              {m.from === "translation" && (
+                <>
+                  <span className="note">Not in the dictionary: translated by Google Translate{m.shared ? ", shared by Boekenwurm readers" : ""}.</span>
+                  <ReportTranslation key={d.lemma} word={m.word ?? tok.t} onReported={(text) => void reported(d.lemma, tok.t, text)} />
+                </>
+              )}
               {m.from === "compound" && <span className="note">Not in the dictionary as one word: its two parts.</span>}
               {m.from === "manual" && <span className="note">Your own meaning.</span>}
               {lang === "nl" && <span className="note">No Dutch explanation for this word yet, so here is the English.</span>}
@@ -657,6 +761,9 @@ export function Reader({ bookId }: { bookId: string }) {
             )
           ) : (
             <button className="btn" type="button" onClick={() => (startNewSession(), bump())}>Keep reading</button>
+          )}
+          {r.lastRead != null && (
+            <button className="btn ghost" type="button" onClick={() => lookBack("reread", r.lastRead!)}>Re-read the last paragraph</button>
           )}
         </div>
         {atBookEnd && nextUnphotographed() != null && (
@@ -799,6 +906,30 @@ function LimitPrompt({ why, word, hasKey, onSave, onAddKey, onSignIn }: {
       </div>
       <TypeMeaning word={word} onSave={onSave} open />
     </div>
+  );
+}
+
+/**
+ * "Wrong translation?": the reader types what the word means here. Their meaning is used from then on, and the
+ * shared translation is reported for the owner to review (three readers hide it from everyone).
+ */
+function ReportTranslation({ word, onReported }: { word: string; onReported: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  if (!open)
+    return (
+      <button className="btn small ghost" type="button" style={{ justifySelf: "start" }} onClick={() => setOpen(true)}>
+        Wrong translation? Report it
+      </button>
+    );
+  return (
+    <form className="stack" style={{ gap: 6 }} onSubmit={(e) => (e.preventDefault(), onReported(text))}>
+      <span className="note">What does “{word}” mean here? Your meaning is used for you from now on, and the translation is sent for review.</span>
+      <div className="row">
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder="The right meaning" aria-label={`Right meaning of ${word}`} style={{ flex: 1, minWidth: 0 }} />
+        <button className="btn small primary" type="submit" disabled={!text.trim()}>Report</button>
+      </div>
+    </form>
   );
 }
 
