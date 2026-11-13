@@ -323,6 +323,15 @@ anywhere except `private/`.
 
 ## Decided
 
+- Levels and XP (testing; tuned before the iOS and Android launch). Every reader starts at rank A0 and rises by XP
+  alone; ranks are a status, not a gate (the reading level for meanings and Match my level is chosen separately).
+  A paragraph is 20 XP, 40 on a streak, 5 when it ends a run or in unlimited lookup mode; reading XP is × 1 to × 1.4
+  by rank and × 1.5 in a book a level or more above the rank. A book is 1,000 XP (500 again); a flashcard session 40
+  (10 cards or every card due, up to 3 a day; 80 after a lookup-mode session); every due card reviewed for the day
+  300; each achievement tier 80. A0 → A1 is 600 XP, then level n costs 30,000 × n^2.2 rounded to 5,000. The
+  level-up offer and streak tokens are retired. Rules and numbers: packages/engine/src/xp.ts, achievements.ts,
+  play.ts; the plan with the reasoning is the owner's "levels, XP and achievements" document. 2026-11-13.
+
 - Colour-coded text (Me → Reading, off by default): a word revealed before is coloured by its reveals in the last
   14 days, this session included: 1–3 green, 4–6 yellow (amber, for readability), 7 or more red; never revealed,
   and names, stay plain. Yellow is also underlined dashed and red solid, so colour isn't the only cue. The rule is

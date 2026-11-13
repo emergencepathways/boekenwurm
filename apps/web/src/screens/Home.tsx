@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { currentTitle, nextLevel } from "@boekenwurm/engine";
 import { bookProgress } from "@boekenwurm/books";
 import { deleteBook, dueCards, saveBook, useStore } from "../lib/store.ts";
 import { open } from "../nav.ts";
 import type { Book } from "../lib/types.ts";
-import { bookShare, Cover, LevelPicker, plural, Sheet, TokenPips, toast } from "../ui.tsx";
+import { bookShare, Cover, LevelPicker, plural, Sheet, toast } from "../ui.tsx";
+import * as E from "@boekenwurm/engine";
+import { RankBar, RankShield } from "../badges.tsx";
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -25,23 +26,18 @@ export function Home() {
   const books = useStore((s) => s.books);
   const cards = useStore((s) => s.cards);
   const [details, setDetails] = useState<Book | null>(null);
-  const title = currentTitle(profile.progress.badges);
   const due = dueCards().length;
   const totalCards = Object.keys(cards).length;
   const shelf = books.filter((b) => b.status !== "archived");
   const last = [...shelf].filter((b) => b.position.at).sort((a, b) => (b.position.at ?? 0) - (a.position.at ?? 0))[0] ?? shelf[0];
-  const next = nextLevel(profile.progress.level);
 
   return (
     <main className="screen">
       <header className="hello">
-        <div className="medal" aria-hidden="true">{profile.progress.level}</div>
+        <RankShield rank={E.rankOf(profile.progress.play).rank} size={52} />
         <div className="who">
           <h1>{greeting()}{profile.displayName ? `, ${profile.displayName}` : ""}</h1>
-          <div className="title">
-            {title && <><b lang="nl">{title.title}</b> · </>}
-            <span>{next ? <>toward {next} <TokenPips progress={profile.progress} /></> : "top level"}</span>
-          </div>
+          <RankBar />
         </div>
       </header>
 

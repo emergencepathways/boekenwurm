@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
 import { dueCards, getState, reviewCard, useStore } from "../lib/store.ts";
 import { meaningOf } from "../lib/words.ts";
+import { studyFinished } from "../lib/play.ts";
 import { preview, span, type Rating } from "../lib/srs.ts";
 import { close, open } from "../nav.ts";
 import { Icon, plural } from "../ui.tsx";
@@ -114,6 +115,20 @@ export function StudySession({ lemmas }: { lemmas?: string[] }) {
   const [queue, setQueue] = useState(initial);
   const [done, setDone] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  // XP when the session ends (every card done, or the reader leaves): see lib/play.ts.
+  const dueAtStart = useMemo(() => (lemmas ? initial.length : dueCards().length), [lemmas, initial]);
+  const doneRef = useRef(0);
+  doneRef.current = done;
+  const awarded = useRef(false);
+  const award = useCallback(() => {
+    if (awarded.current || !doneRef.current) return;
+    awarded.current = true;
+    void studyFinished({ cards: doneRef.current, dueAtStart, dueNow: dueCards().length });
+  }, [dueAtStart]);
+  useEffect(() => () => award(), [award]);
+  useEffect(() => {
+    if (!queue.length) award();
+  }, [queue.length, award]);
 
   const lemma = queue[0];
   const card = lemma ? cards[lemma] : null;

@@ -4,3 +4,6 @@ export * from "./words.ts";
 export * from "./definitions.ts";
 export * from "./progress.ts";
 export * from "./badges.ts";
+export * from "./xp.ts";
+export * from "./achievements.ts";
+export * from "./play.ts";

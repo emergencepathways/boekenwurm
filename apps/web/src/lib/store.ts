@@ -222,8 +222,9 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
   for (const item of list) if (!cards[item.lemma]) cards[item.lemma] = newCard(item.lemma, t);
 
   const before = state.profile.progress;
-  const progress = E.recordSession(before, s, t).progress;
-  const offer = Boolean(progress.offer && !before.offer);
+  // Ranks rise with XP now (lib/play.ts), so the old level-up offer is never made.
+  const progress = { ...E.recordSession(before, s, t).progress, offer: null };
+  const offer = false;
 
   const row: SessionRow = {
     id: s.id,
@@ -257,8 +258,8 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
 export async function recordToken(s: Session): Promise<boolean> {
   const before = state.profile.progress;
   const r = E.recordSession(before, s, now());
-  if (r.earned) await updateProfile((p) => ({ ...p, progress: r.progress }));
-  return Boolean(r.progress.offer && !before.offer);
+  if (r.earned) await updateProfile((p) => ({ ...p, progress: { ...r.progress, offer: null } }));
+  return false;
 }
 
 // ---------------------------------------------------------------- words and cards

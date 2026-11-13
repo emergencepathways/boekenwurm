@@ -4,6 +4,8 @@
  * added (word_stats is merged by add_word_stats on the server). Pure functions, tested in test/merge.test.ts.
  */
 import type { Badge, Progress, Token, WordBook } from "@boekenwurm/engine";
+// A relative path (not the alias) so the tests can load this module in Node without Vite.
+import { mergePlay } from "../../../../packages/engine/src/play.ts";
 import type { Book, WordDelta } from "./types.ts";
 
 /** Last write wins for the level and the current token count; badges and token history are united. */
@@ -23,6 +25,8 @@ export function mergeProgress(local: Progress, localAt: number, server: Progress
     ...winner,
     badges: [...badges.values()].sort((a, b) => a.at - b.at),
     history: [...history.values()].sort((a, b) => a.at - b.at),
+    // XP and achievements: per-device totals and unions, so neither copy's progress is lost.
+    play: mergePlay(local.play, server.play),
   };
 }
 

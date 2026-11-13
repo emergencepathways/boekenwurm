@@ -194,7 +194,8 @@ await page.getByRole("button", { name: "Start reading" }).click();
 
 step("home: an empty shelf invites the first book (nothing is preloaded)");
 await page.getByRole("heading", { name: "Add your first book" }).waitFor();
-check(await page.getByText("Bladzijdeknabbelaar").first().isVisible(), "A2 title shown under the greeting");
+check(await page.getByText("Nieuwkomer").first().isVisible(), "every reader starts at rank A0, whatever reading level they chose");
+check(await page.getByText("0 / 600 XP to A1").isVisible(), "with an XP bar towards A1");
 check((await page.locator(".bookbtn").count()) === 0, "no books on the shelf");
 check((await page.locator(".continue").count()) === 0, "no continue-reading card");
 await shot("02-home-empty");
@@ -365,6 +366,26 @@ await shot("06b-colour-text");
 await page.getByRole("button", { name: /Back to where I was/ }).click().catch(() => {});
 await page.getByRole("button", { name: "Home" }).first().click().catch(() => {});
 await page.locator(".tabbar").waitFor();
+
+step("XP and badges: finishing a book earns 1,000 XP, a badge (+80) and rank A1");
+await page.locator(".continue").click();
+await page.locator(".para .w").first().waitFor();
+check(/\+\d+ XP/.test(await page.locator(".strip").textContent()), "the reader shows the XP earned");
+for (let i = 0; i < 12 && !(await page.getByRole("heading", { name: /read to the end/ }).isVisible()); i++)
+  await page.getByRole("button", { name: "Next page →" }).click({ timeout: 3000 }).catch(() => {});
+await page.getByRole("heading", { name: /read to the end/ }).waitFor();
+await page.getByText(/Book finished: \+1000 XP|Badge: Books finished|New rank: A1/).first().waitFor({ timeout: 5000 }).catch(() => {});
+await page.getByRole("button", { name: "Home" }).first().click();
+await page.locator(".hello").waitFor();
+check(await page.getByRole("img", { name: /^Rank A1/ }).first().isVisible(), "the rank rose to A1 on its own");
+check(await page.getByText("Letterproever").first().isVisible(), "with its title");
+await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
+check((await page.locator(".patchcell").count()) === 10, "Me shows the 10 badges");
+check(await page.locator(".patchcell.got", { hasText: "Books finished" }).isVisible(), "Books finished is earned (Bronze)");
+check(await page.getByRole("img", { name: "Books finished: Bronze" }).isVisible(), "its patch wears the Bronze ribbon");
+check((await page.locator(".patchcell:not(.got)").count()) >= 5, "others are still locked");
+await shot("07-badges");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("Me: add a Claude key (mocked) and check the connection");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();

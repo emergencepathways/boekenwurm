@@ -12,43 +12,57 @@ import { db, wipeDevice } from "../lib/db.ts";
 import { InstallRow } from "./InstallHelp.tsx";
 import { updateNow } from "../lib/update.ts";
 import { GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "../lib/features.ts";
-import { plural, Sheet, TokenPips, toast } from "../ui.tsx";
+import { Sheet, toast } from "../ui.tsx";
+import { Patch, RankBar, RankShield } from "../badges.tsx";
+import { statsNow } from "../lib/play.ts";
 import type { Settings } from "../lib/types.ts";
 
 export function Me() {
   const profile = useStore((s) => s.profile);
   const p = profile.progress;
-  const got = new Map(p.badges.map((b) => [b.level, b]));
-  const next = E.nextLevel(p.level);
-  const left = E.tokensToOffer(p);
+  const rank = E.rankOf(p.play);
+  const play = { ...E.emptyPlay(), ...p.play };
+  const stats = statsNow();
   const setSettings = (patch: Partial<Settings>) => void updateProfile((x) => ({ ...x, settings: { ...x.settings, ...patch } }));
 
   return (
     <main className="screen">
       <div className="topbar"><h1>Me</h1></div>
 
-      <section className="panel">
-        <h2>Your badges</h2>
-        <div className="badges">
+      <section className="panel" id="rank">
+        <h2>Your rank</h2>
+        <RankBar />
+        <div className="shields">
           {E.LEVELS.map((l) => {
-            const b = got.get(l);
-            const info = E.BADGES[l];
+            const reached = E.RANKS.indexOf(rank.rank) >= E.RANKS.indexOf(l);
             return (
-              <div key={l} className={`badge ${b ? "got" : ""} ${b?.source === "placement" ? "placement" : ""}`}>
-                <div className="medal">{l}</div>
-                <div className="t" lang="nl">{info.title}</div>
-                <div className="m">{info.meaning}{b?.source === "placement" ? " · placed" : ""}</div>
+              <div key={l} className={`shieldcell${reached ? " got" : ""}`}>
+                <RankShield rank={l} size={44} locked={!reached} />
+                <div className="t" lang="nl">{E.BADGES[l].title}</div>
+                <div className="m">{E.BADGES[l].meaning}</div>
               </div>
             );
           })}
         </div>
-        <div className="row">
-          <span className="label">Toward {next ?? "—"}</span> <TokenPips progress={p} />
-          <span className="small muted">
-            {next ? (p.offer ? "An offer is waiting: open a book." : `${plural(left, "more token")}, each from a separate session with a 10-paragraph streak.`) : "Top level reached."}
-          </span>
+        <p className="small muted">Your rank rises by itself as you earn XP: 20 a paragraph (40 on a streak, × 1.5 in a book above your rank), 1,000 a book, and more for study and badges.</p>
+      </section>
+
+      <section className="panel" id="badges">
+        <h2>Badges</h2>
+        <div className="patches">
+          {E.ACHIEVEMENTS.map((a) => {
+            const tier = Math.max(play.tiers[a.key] ?? 0, 0);
+            const goal = E.nextGoal(a, stats);
+            return (
+              <div key={a.key} className={`patchcell${tier ? " got" : ""}`}>
+                <Patch a={a} tier={tier} size={76} />
+                <div className="t">{a.name}</div>
+                <div className="m num">{goal ? `${goal.value.toLocaleString("en-US")} / ${a.goal(goal.target)}` : "Every tier earned"}</div>
+              </div>
+            );
+          })}
         </div>
-        <p className="small">A dashed ring means the level was set, not earned in play. Tokens earned in total: <span className="num">{p.history.length}</span></p>
+        <p className="small muted">Each badge tier you reach adds {E.XP.achievement} XP. Badge names are placeholders for now.</p>
       </section>
 
       <Account />
@@ -56,7 +70,7 @@ export function Me() {
       <section className="panel">
         <h2>Reading</h2>
         <label className="field">
-          <span>Your level</span>
+          <span>Reading level</span>
           <select
             value={p.level}
             onChange={(e) => {
@@ -67,7 +81,7 @@ export function Me() {
           >
             {E.LEVELS.map((l) => <option key={l}>{l}</option>)}
           </select>
-          <span className="note">Changing it by hand gives placement badges and restarts the token count.</span>
+          <span className="note">The level meanings are explained at and Match my level aims for. Your rank (above) rises with XP on its own.</span>
         </label>
         <label className="field">
           <span>Strikes per paragraph</span>

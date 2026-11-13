@@ -7,13 +7,14 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
 import * as AI from "@boekenwurm/ai";
 import { pagesFinished } from "@boekenwurm/books";
-import { bookById, getState, loadText, recordFinished, recordToken, saveBook, saveMeaning, updateProfile, useStore } from "../lib/store.ts";
+import { bookById, getState, loadText, recordFinished, saveBook, saveMeaning, updateProfile, useStore } from "../lib/store.ts";
 import { fetchRemoteText } from "../lib/sync.ts";
 import { claude, AiError } from "../lib/claude.ts";
 import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
+import { bookFinished, checkAchievements, paragraphRead, rankNow } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
@@ -21,7 +22,7 @@ import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
 import { close, open, setTab } from "../nav.ts";
 import { SECTION_SIZE } from "../lib/pages.ts";
 import type { Book, BookText, Meaning, Paragraph } from "../lib/types.ts";
-import { Icon, plural, Sheet, TokenPips, toast } from "../ui.tsx";
+import { Icon, plural, Sheet, toast } from "../ui.tsx";
 
 type Matched =
   | { status: "pending" }
@@ -55,6 +56,8 @@ interface RS {
   look: { ord: number; kind: "previous" | "reread"; selBefore: number | null } | null;
   /** The paragraph read last (before the latest page turn): the one "Re-read" opens. */
   lastRead: number | null;
+  /** XP earned since the reader opened this book. */
+  xp: number;
 }
 
 export function Reader({ bookId }: { bookId: string }) {
@@ -66,7 +69,7 @@ export function Reader({ bookId }: { bookId: string }) {
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
-    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null,
+    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null, xp: 0,
   }).current;
   const inflight = useRef(new Map<number, Promise<void>>()).current;
 
@@ -275,7 +278,7 @@ export function Reader({ bookId }: { bookId: string }) {
     const b = bookById(bookId);
     if (!b || !r.text) return;
     const pagesRead =
-      b.source === "photo"
+      hasPages()
         ? [...new Set([...b.pagesRead, ...pagesFinished(r.text.paragraphs.map((p) => ({ text: p.text, pageNumber: p.pageNumber, seqs: [] })), ord - 1)])].sort((x, y) => x - y)
         : b.pagesRead;
     r.book = await saveBook({ ...b, position: { ...b.position, ord, at: Date.now() }, pagesRead });
@@ -283,18 +286,22 @@ export function Reader({ bookId }: { bookId: string }) {
 
   async function turn() {
     if (!r.session?.current || r.modal) return;
+    const streak = E.inStreak(r.session.passesInARow, r.session.rules);
+    const read = para();
     const out = E.turnPage(r.session);
     r.session = out.session;
     r.lastRead = r.pos;
     r.pos++;
     const atEnd = r.pos >= r.text!.paragraphs.length;
     void savePosition(atEnd ? r.text!.paragraphs.length : r.pos);
+    // XP for the paragraph read: double on a streak, a quarter when it ends the run, × 1.5 above the reader's rank.
+    const textLevel = (read.matched ? getState().profile.progress.level : r.book?.level ?? null) as E.CefrLevel | null;
+    r.xp += await paragraphRead({
+      book: r.book!, textLevel, failed: out.kind === "ended", streak, words: read.tokens.filter((t) => t.k === "word").length,
+      bookHasPages: hasPages(), bestStreak: out.session.bestStreak,
+    });
+    if (atEnd && (r.book?.source !== "photo" || nextUnphotographed() == null)) r.xp += await bookFinished(r.book!);
     if (out.kind === "continue") {
-      if (out.tokenEarnedNow) {
-        const offer = await recordToken(r.session);
-        toast("Streak token earned: 10 paragraphs in a row!");
-        if (offer) r.modal = { kind: "offer" };
-      }
       if (atEnd) return finish("complete", out.session.passesInARow);
       beginCurrent();
       bump();
@@ -308,6 +315,7 @@ export function Reader({ bookId }: { bookId: string }) {
     r.session = null;
     const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : "strike", sentences: r.sentences });
     r.summary = { kind, streakLength, list, paragraphs: s.results.length };
+    void checkAchievements(); // words looked up count once the session is recorded
     if (r.pos >= r.text!.paragraphs.length && r.book?.source !== "photo") r.pos = 0;
     if (offer) r.modal = { kind: "offer" };
     bump();
@@ -321,6 +329,7 @@ export function Reader({ bookId }: { bookId: string }) {
     if (!s.results.length && !s.reveals.length && !s.current?.reveals.length) return;
     const withCurrent = s.current ? { ...s, reveals: [...s.reveals, ...s.current.reveals], current: null } : s;
     await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences });
+    void checkAchievements();
   }
 
   // ---------------------------------------------------------------- Claude: Match my level and words in context
@@ -541,7 +550,7 @@ export function Reader({ bookId }: { bookId: string }) {
           <span className="num">{st.percent}% · {plural(st.allowed, "strike")}</span>
           {onStreak && <span className="streak">Streak {st.streak}</span>}
           <span className="grow" />
-          <span><span className="label">Level</span> <TokenPips progress={progress} /></span>
+          <span className="num"><span className="label">{rankNow().rank}</span> +{r.xp} XP</span>
         </section>
         {st.strikesLeft === 0 && lastStrike && <div className="warnline">No strikes left: one more reveal ends the run at the page turn.</div>}
         <article

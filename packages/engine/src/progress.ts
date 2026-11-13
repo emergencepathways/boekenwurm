@@ -19,6 +19,7 @@
  * The level drives content selection and, from B1, Dutch-only definitions.
  */
 import type { CefrLevel } from "./definitions.ts";
+import type { PlayState } from "./play.ts";
 import type { Badge, BadgeSource } from "./badges.ts";
 import type { Session } from "./session.ts";
 
@@ -41,6 +42,8 @@ export interface Progress {
   offer: { from: CefrLevel; to: CefrLevel } | null;
   /** One per level reached, in the order they were reached. */
   badges: Badge[];
+  /** XP, achievement counts and tiers (play.ts). Absent in records from before XP. */
+  play?: PlayState;
 }
 
 export interface ProgressRules {
