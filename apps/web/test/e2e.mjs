@@ -290,7 +290,7 @@ check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "thre
 step("Previous: look back without penalty, then back to where the reader was");
 const pipsBefore = await page.locator(".pip.used").count();
 await page.getByRole("button", { name: "← Previous" }).click();
-await page.getByText("No strikes here.").waitFor();
+await page.getByText("No fouten here.").waitFor();
 check((await page.locator(".strikes").count()) === 0 && (await page.getByText("Looking back", { exact: true }).isVisible()), "the strikes give way to a clear no-penalty banner");
 check((await page.locator(".folio .num").textContent()).startsWith("3 /"), "the paragraph before is shown");
 await page.locator(".para .w:not(.name)").first().click();
@@ -311,13 +311,13 @@ for (let i = 0; i < n; i++) {
   await page.waitForFunction((k) => document.querySelectorAll(".pip.used").length >= k, i + 1, { timeout: 10000 });
 }
 await page.getByRole("button", { name: "Next page →" }).click();
-await page.getByRole("heading", { name: /streak lasted|last strike|passed 1 paragraph|passed 3|lasted/ }).waitFor();
+await page.getByRole("heading", { name: /streak lasted|last fout|passed 1 paragraph|passed 3|lasted/ }).waitFor();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "summary offers to study the words");
 await shot("05-summary");
 
 step("Re-read the paragraph just finished: practice, no strikes");
 await page.getByRole("button", { name: "Re-read the last paragraph" }).click();
-await page.getByText("No strikes here.").waitFor();
+await page.getByText("No fouten here.").waitFor();
 check(await page.getByText("Practice", { exact: true }).isVisible(), "the banner says it's practice");
 await page.locator(".para .w:not(.name)").first().click();
 check((await page.locator(".def .head .word").count()) === 1, "taps show meanings");

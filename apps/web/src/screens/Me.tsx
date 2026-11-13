@@ -84,7 +84,7 @@ export function Me() {
           <span className="note">The level meanings are explained at and Match my level aims for. Your rank (above) rises with XP on its own.</span>
         </label>
         <label className="field">
-          <span>Strikes per paragraph</span>
+          <span>Fouten per paragraph</span>
           <select value={profile.settings.preset} onChange={(e) => setSettings({ preset: e.target.value as E.Preset })}>
             {(["strict", "standard", "relaxed"] as const).map((k) => (
               <option key={k} value={k}>{k[0].toUpperCase() + k.slice(1)} · {E.PRESET_PERCENT[k]}%</option>

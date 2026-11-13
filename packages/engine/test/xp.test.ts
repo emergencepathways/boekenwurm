@@ -52,6 +52,7 @@ test("books and study", () => {
   assert.equal(studySessionXp({ cards: 10, due: 10, sessionsToday: 1, afterLookupMode: true }), 80);
   assert.equal(XP.dailyReview, 300);
   assert.equal(XP.achievement, 80);
+  assert.equal(XP.streakBonus, 200, "a 10-paragraph run, a little less than the daily review");
 });
 
 const none: AchievementStats = {

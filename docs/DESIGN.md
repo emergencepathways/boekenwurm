@@ -323,6 +323,12 @@ anywhere except `private/`.
 
 ## Decided
 
+- A strike is called a *fout* in the app ("Fouten" over the pips, "no fout"): "strike" is a baseball word that means
+  nothing to Dutch speakers. The code and this document keep "strike" as the internal name. 2026-11-13.
+- The streak token survives as an XP bonus: a run of 10 paragraphs or more in a session earns 200 XP, once per
+  session, never in unlimited lookup mode. No prompt and no token count. The A0 title is *Nieuwkomer* until the reader
+  unlocks another title. 2026-11-13.
+
 - Levels and XP (testing; tuned before the iOS and Android launch). Every reader starts at rank A0 and rises by XP
   alone; ranks are a status, not a gate (the reading level for meanings and Match my level is chosen separately).
   A paragraph is 20 XP, 40 on a streak, 5 when it ends a run or in unlimited lookup mode; reading XP is × 1 to × 1.4

@@ -108,6 +108,14 @@ export async function paragraphRead(p: ParagraphRead): Promise<number> {
   return xp;
 }
 
+/** A run of 10 paragraphs or more in a session: once per session, never in unlimited lookup mode. */
+export async function streakBonus(o: { lookupMode?: boolean } = {}): Promise<number> {
+  if (o.lookupMode) return 0;
+  toast(`10 paragraphs in a row: +${E.XP.streakBonus} XP!`, 4000);
+  await commit(playOf(), E.XP.streakBonus);
+  return E.XP.streakBonus;
+}
+
 /** Every page of a book read. Returns the XP it earned. */
 export async function bookFinished(book: Book): Promise<number> {
   const play = playOf();

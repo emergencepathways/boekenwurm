@@ -14,7 +14,7 @@ import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
-import { bookFinished, checkAchievements, paragraphRead, rankNow } from "../lib/play.ts";
+import { bookFinished, checkAchievements, paragraphRead, rankNow, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
@@ -51,7 +51,7 @@ interface RS {
   modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
   /**
    * Looking at a paragraph without penalty: one before the current one ("Previous"), or the one just finished, from
-   * the session summary ("Re-read"). Taps show meanings but cost no strike and don't count; the session is untouched.
+   * the session summary ("Re-read"). Taps show meanings but cost no fout (strike) and don't count; the session is untouched.
    */
   look: { ord: number; kind: "previous" | "reread"; selBefore: number | null } | null;
   /** The paragraph read last (before the latest page turn): the one "Re-read" opens. */
@@ -302,6 +302,8 @@ export function Reader({ bookId }: { bookId: string }) {
     });
     if (atEnd && (r.book?.source !== "photo" || nextUnphotographed() == null)) r.xp += await bookFinished(r.book!);
     if (out.kind === "continue") {
+      // A run of 10 paragraphs or more (the old streak token): a 200 XP bonus, once per session.
+      if (out.tokenEarnedNow) r.xp += await streakBonus();
       if (atEnd) return finish("complete", out.session.passesInARow);
       beginCurrent();
       bump();
@@ -540,19 +542,19 @@ export function Reader({ bookId }: { bookId: string }) {
       <>
         <section className="strip" aria-label="Checkpoint">
           <span>
-            <span className="label">Strikes</span>{" "}
+            <span className="label" title="A fout is a word you had to look up">Fouten</span>{" "}
             <span className="strikes" aria-label={`${st.used} of ${st.allowed} used`}>
               {Array.from({ length: Math.min(st.allowed, 30) }, (_, i) => (
                 <i key={i} className={`pip ${i < st.used ? "used" : ""} ${lastStrike && i === st.allowed - 1 && i >= st.used ? "last" : ""}`} />
               ))}
             </span>
           </span>
-          <span className="num">{st.percent}% · {plural(st.allowed, "strike")}</span>
+          <span className="num">{st.percent}% · {st.allowed} {st.allowed === 1 ? "fout" : "fouten"}</span>
           {onStreak && <span className="streak">Streak {st.streak}</span>}
           <span className="grow" />
           <span className="num"><span className="label">{rankNow().rank}</span> +{r.xp} XP</span>
         </section>
-        {st.strikesLeft === 0 && lastStrike && <div className="warnline">No strikes left: one more reveal ends the run at the page turn.</div>}
+        {st.strikesLeft === 0 && lastStrike && <div className="warnline">No fouten left: one more reveal ends the run at the page turn.</div>}
         <article
           className="sheet"
           onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
@@ -610,7 +612,7 @@ export function Reader({ bookId }: { bookId: string }) {
       <>
         <section className="strip nopenalty" role="status" aria-label="No penalty">
           <span className="mode">{l.kind === "reread" ? "Practice" : "Looking back"}</span>
-          <b>No strikes here.</b>
+          <b>No fouten here.</b>
           <span>Tap any word for its meaning: nothing counts against you.</span>
         </section>
         <article className="sheet calm">
@@ -666,7 +668,7 @@ export function Reader({ bookId }: { bookId: string }) {
       return (
         <>
           <div className="head"><span className="word">{tok.t}</span><span className="lemma">name</span></div>
-          <span className="note">A name stays as it is. It doesn't use a strike.</span>
+          <span className="note">A name stays as it is. It doesn't count as a fout.</span>
         </>
       );
     const d = look(tok.t);
@@ -717,7 +719,7 @@ export function Reader({ bookId }: { bookId: string }) {
           />
         ) : lookup === "none" && x?.status !== "done" ? (
           <>
-            <span className="note">No meaning found for this word, so this tap doesn't count: no strike, and nothing to study.</span>
+            <span className="note">No meaning found for this word, so this tap doesn't count: no fout, and nothing to study.</span>
             <TypeMeaning word={tok.t} onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)} />
           </>
         ) : null}
@@ -746,7 +748,7 @@ export function Reader({ bookId }: { bookId: string }) {
         <h2 className="big">
           {s.kind === "complete"
             ? atBookEnd ? (nextUnphotographed() == null ? "You've read the whole book. Gefeliciteerd!" : "You've read every page photographed so far.") : `You read to the end. ${plural(s.streakLength, "paragraph")} passed in a row.`
-            : s.streakLength >= 2 ? `Your streak lasted ${s.streakLength} paragraphs.` : s.streakLength === 1 ? "You passed 1 paragraph this time." : "That paragraph used your last strike."}
+            : s.streakLength >= 2 ? `Your streak lasted ${s.streakLength} paragraphs.` : s.streakLength === 1 ? "You passed 1 paragraph this time." : "That paragraph used your last fout."}
         </h2>
         <p>{s.list.length ? `You revealed ${plural(s.list.length, "word")}. The ones you've needed most often come first.` : "You didn't reveal a single word."}</p>
         {s.list.length > 0 && (
