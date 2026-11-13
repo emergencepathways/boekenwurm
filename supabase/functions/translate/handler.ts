@@ -12,7 +12,7 @@
  * Kept free of Deno and npm imports so the same code runs under Node for the tests (handler.test.ts); index.ts is
  * the Deno entry point.
  */
-import { bearer, claim, cors, replier, timeZone, type ClaimConfig } from "../_shared/common.ts";
+import { bearer, claim, cors, googleError, refund, replier, timeZone, type ClaimConfig } from "../_shared/common.ts";
 
 export interface Config extends ClaimConfig {
   googleKey: string;
@@ -20,7 +20,7 @@ export interface Config extends ClaimConfig {
 
 export type Answer =
   | { ok: true; text: string; used: number; limit: number }
-  | { ok: false; reason: "signin" | "limit" | "unavailable" | "bad-word" | "method"; used?: number; limit?: number };
+  | { ok: false; reason: "signin" | "limit" | "unavailable" | "bad-word" | "method"; used?: number; limit?: number; detail?: string };
 
 /** One word: letters, with an inner apostrophe or hyphen ("zo'n", "e-mail"); at most 40 characters. */
 export const WORD = /^\p{L}+(?:['’-]\p{L}+)*$/u;
@@ -46,19 +46,24 @@ export async function handle(req: Request, config: Config): Promise<Response> {
   const counts = { used: c.used, limit: c.limit };
   if (!c.allowed) return reply(429, { ok: false, reason: "limit", ...counts } satisfies Answer);
 
-  // 3. Only the word goes to Google.
+  // 3. Only the word goes to Google. If Google fails, the lookup is given back.
   const http = config.fetch ?? fetch;
+  const failed = async (detail: string) => {
+    console.error(`translate: Google Translate failed: ${detail}`);
+    const back = await refund(auth, "refund_translation", c.day, config);
+    return reply(502, { ok: false, reason: "unavailable", detail, used: back ? Math.max(0, c.used - 1) : c.used, limit: c.limit } satisfies Answer);
+  };
   try {
     const g = await http(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(config.googleKey)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ q: word, source: "nl", target: "en", format: "text" }),
     });
-    if (!g.ok) return reply(502, { ok: false, reason: "unavailable", ...counts } satisfies Answer);
+    if (!g.ok) return await failed(await googleError(g));
     const out = (await g.json().catch(() => null)) as { data?: { translations?: Array<{ translatedText?: string }> } } | null;
     return reply(200, { ok: true, text: decodeEntities(out?.data?.translations?.[0]?.translatedText ?? "").trim(), ...counts } satisfies Answer);
-  } catch {
-    return reply(502, { ok: false, reason: "unavailable", ...counts } satisfies Answer);
+  } catch (e) {
+    return await failed(`Couldn't reach Google (${(e as Error).message || "network"}).`);
   }
 }
 

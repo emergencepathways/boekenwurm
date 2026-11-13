@@ -7,6 +7,8 @@ Deno.serve((req) =>
   handle(req, {
     supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
     supabaseKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    // Provided to every Edge Function by Supabase; used only to give back a lookup Google couldn't do.
+    serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     googleKey: Deno.env.get("GOOGLE_TRANSLATE_KEY") ?? "",
   }),
 );

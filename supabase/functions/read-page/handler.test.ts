@@ -122,3 +122,33 @@ test("Vision's breaks: spaces and line breaks become spaces, a line-end hyphen j
   assert.deepEqual(out.paragraphs[0].box, { x0: 80, y0: 1, x1: 620, y1: 41 });
   assert.deepEqual(fromAnnotation(undefined), { width: 0, height: 0, paragraphs: [] });
 });
+
+test("Google refuses: the reader is told Google's reason, and the page is given back by the server", async () => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const reader = "11111111-2222-4333-8444-555555555555";
+  const token = `x.${Buffer.from(JSON.stringify({ sub: reader })).toString("base64url")}.y`;
+  const fake = (async (url: string, init: RequestInit) => {
+    calls.push({ url, init });
+    if (url.endsWith("/rpc/claim_page_read")) return Response.json([{ allowed: true, used: 3, daily_limit: 20, day: "2026-11-13" }]);
+    if (url.endsWith("/rpc/refund_page_read")) return new Response(null, { status: 204 });
+    return Response.json({ error: { code: 403, status: "PERMISSION_DENIED", message: "Cloud Vision API has not been used in project 123 before or it is disabled." } }, { status: 403 });
+  }) as typeof fetch;
+  const config: Config = { supabaseUrl: "https://example.supabase.co", supabaseKey: "pk", serviceKey: "service-secret", visionKey: "vision-secret", fetch: fake };
+  const r = await handle(ask(JPEG, { authorization: `Bearer ${token}` }), config);
+  assert.equal(r.status, 502);
+  const body = (await r.json()) as { reason: string; detail: string; used: number };
+  assert.equal(body.reason, "unavailable");
+  assert.match(body.detail, /Cloud Vision API has not been used in project 123/);
+  assert.equal(body.used, 2, "the page was given back: 3 -> 2");
+  const refund = calls.find((c) => c.url.endsWith("/rpc/refund_page_read"))!;
+  assert.deepEqual(JSON.parse(String(refund.init.body)), { p_user: reader, p_day: "2026-11-13" });
+  assert.equal((refund.init.headers as Record<string, string>).authorization, "Bearer service-secret", "as the server, not the reader");
+  assert.ok(!JSON.stringify(body).includes("vision-secret"), "the key is never in the answer");
+});
+
+test("without a service key nothing is given back, and the count says so", async () => {
+  const w = world({ vision: 500 });
+  const body = (await (await handle(ask(), w.config)).json()) as { used: number };
+  assert.equal(body.used, 1);
+  assert.equal(w.calls.filter((c) => c.url.includes("refund")).length, 0);
+});

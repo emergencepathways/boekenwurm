@@ -44,9 +44,24 @@ export async function pageReadsToday(): Promise<number> {
   return used;
 }
 
-export type GoogleRead = { ok: true; page: ReturnType<typeof pageFromVision> } | { ok: false; reason: "limit" | "unavailable" | "no-access" | "signin" | "offline" };
+export type GoogleRead =
+  | { ok: true; page: ReturnType<typeof pageFromVision> }
+  | { ok: false; reason: "limit" | "unavailable" | "no-access" | "signin" | "offline"; detail?: string };
 
 /** One page photo read by Google (Cloud Vision), through Boekenwurm's read-page function. */
+/** Google's reason for refusing, in words the reader (the owner, while testing) can act on, with Google's own words. */
+export function explainGoogleError(detail: string | undefined): string {
+  if (!detail) return "";
+  const hint = /has not been used|is disabled|SERVICE_DISABLED/i.test(detail)
+    ? "The Cloud Vision API isn't turned on in the Google Cloud project. "
+    : /are blocked|API_KEY_SERVICE_BLOCKED|not authorized to use this API/i.test(detail)
+      ? "The Google key isn't allowed to use the Cloud Vision API (its API restrictions). "
+      : /billing/i.test(detail)
+        ? "The Google Cloud project needs billing turned on. "
+        : "";
+  return `${hint}Google said: “${detail}”`;
+}
+
 export async function readPageWithGoogle(photo: Blob, seq: number, range: { lastPage?: number | null } = {}): Promise<GoogleRead> {
   if (!supabase) return { ok: false, reason: "unavailable" };
   const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -62,11 +77,11 @@ export async function readPageWithGoogle(photo: Blob, seq: number, range: { last
   } catch {
     return { ok: false, reason: "offline" };
   }
-  const body = (await res.json().catch(() => null)) as ({ ok?: boolean; used?: number; limit?: number } & Partial<VisionPage>) | null;
+  const body = (await res.json().catch(() => null)) as ({ ok?: boolean; used?: number; limit?: number; detail?: string } & Partial<VisionPage>) | null;
   if (typeof body?.used === "number") setState({ pageReads: { day: localDay(new Date(), timeZone()), used: body.used, limit: body.limit ?? PAGE_READS_PER_DAY } });
   if (res.status === 429) return { ok: false, reason: "limit" };
   if (res.status === 403) return { ok: false, reason: "no-access" };
   if (res.status === 401) return { ok: false, reason: "signin" };
-  if (!res.ok || !body?.ok || !Array.isArray(body.paragraphs)) return { ok: false, reason: "unavailable" };
+  if (!res.ok || !body?.ok || !Array.isArray(body.paragraphs)) return { ok: false, reason: "unavailable", detail: body?.detail };
   return { ok: true, page: pageFromVision({ width: body.width ?? 0, height: body.height ?? 0, paragraphs: body.paragraphs }, seq, range) };
 }

@@ -37,11 +37,13 @@ export interface ClaimConfig {
   supabaseUrl: string;
   /** The project's publishable (anon) key, used when the request doesn't carry one. */
   supabaseKey: string;
+  /** The service role key, only to give back a use Google couldn't serve (refund_* in migration 0005). */
+  serviceKey?: string;
   fetch?: typeof fetch;
 }
 
 export type Claim =
-  | { ok: true; allowed: boolean; used: number; limit: number }
+  | { ok: true; allowed: boolean; used: number; limit: number; day: string }
   | { ok: false; reason: "signin" | "no-access" | "unavailable" };
 
 /**
@@ -62,11 +64,51 @@ export async function claim(req: Request, auth: string, rpc: string, tz: string,
       const code = (rows as { code?: string } | null)?.code;
       return { ok: false, reason: code === "28000" ? "signin" : code === "42501" ? "no-access" : "unavailable" };
     }
-    const row = Array.isArray(rows) ? (rows[0] as { allowed: boolean; used: number; daily_limit: number } | undefined) : undefined;
-    return row ? { ok: true, allowed: row.allowed, used: row.used, limit: row.daily_limit } : { ok: false, reason: "unavailable" };
+    const row = Array.isArray(rows) ? (rows[0] as { allowed: boolean; used: number; daily_limit: number; day: string } | undefined) : undefined;
+    return row ? { ok: true, allowed: row.allowed, used: row.used, limit: row.daily_limit, day: row.day } : { ok: false, reason: "unavailable" };
   } catch {
     return { ok: false, reason: "unavailable" };
   }
+}
+
+/** The reader's id from their token (already accepted by the database when the use was claimed). */
+export function readerId(auth: string): string | null {
+  try {
+    const payload = auth.replace(/^Bearer /, "").split(".")[1] ?? "";
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "=")));
+    return typeof json.sub === "string" && /^[0-9a-f-]{36}$/i.test(json.sub) ? json.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Give back a use Google couldn't serve, with `rpc` (refund_translation or refund_page_read, migration 0005), as the
+ * server. Returns whether it was given back; without a service key nothing happens.
+ */
+export async function refund(auth: string, rpc: string, day: string, config: ClaimConfig): Promise<boolean> {
+  const user = readerId(auth);
+  if (!config.serviceKey || !user) return false;
+  try {
+    const r = await (config.fetch ?? fetch)(`${config.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/${rpc}`, {
+      method: "POST",
+      headers: { apikey: config.serviceKey, authorization: `Bearer ${config.serviceKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ p_user: user, p_day: day }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Why Google refused, in Google's words ("Cloud Vision API has not been used in project … or it is disabled"), for the
+ * reader and the function's logs. Never contains the key: Google's messages name the project and API, not the key.
+ */
+export async function googleError(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { error?: { message?: string; status?: string } } | null;
+  const msg = body?.error?.message || body?.error?.status || `HTTP ${res.status}`;
+  return msg.replace(/key=[\w-]+/g, "key=…").slice(0, 300);
 }
 
 export const timeZone = (tz: unknown): string => (typeof tz === "string" && tz.length > 0 && tz.length <= 64 ? tz : "UTC");

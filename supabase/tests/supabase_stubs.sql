@@ -2,6 +2,7 @@
 -- Not used in production: Supabase provides the real auth and storage schemas.
 create role authenticated nologin;
 create role anon nologin;
+create role service_role nologin bypassrls; -- as in Supabase: the server, past row-level security
 create schema auth;
 create table auth.users (id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$
@@ -18,3 +19,5 @@ grant usage on schema auth, storage, public to authenticated;
 grant execute on function auth.uid() to authenticated;
 grant select, insert, update, delete on storage.objects to authenticated;
 alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+grant usage on schema public to service_role;
+alter default privileges in schema public grant all on tables to service_role;

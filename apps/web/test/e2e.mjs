@@ -126,7 +126,7 @@ await ctx.route("**/functions/v1/translate", async (r) => {
 
 // Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works;
 // Google reads one page, then today's allowance is used up.
-const vision = { calls: 0, limitAfter: 1, redeemed: false };
+const vision = { calls: 0, limitAfter: 1, redeemed: false, refuse: null };
 await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
   const { p_code } = JSON.parse(r.request().postData() || "{}");
   const ok = p_code.replace(/[\s-]/g, "").toUpperCase() === "BWE2ETESTCODE";
@@ -142,6 +142,7 @@ await ctx.route("**/functions/v1/read-page", async (r) => {
   const { image } = JSON.parse(r.request().postData() || "{}");
   vision.calls++;
   vision.sentJpeg = typeof image === "string" && image.startsWith("/9j/");
+  if (vision.refuse) return r.fulfill({ status: 502, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "unavailable", detail: vision.refuse, used: 0, limit: 20 }) });
   if (vision.calls > vision.limitAfter) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 20, limit: 20 }) });
   const box = (y0, y1) => ({ x0: 80, y0, x1: 620, y1 });
   await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({
@@ -533,6 +534,14 @@ await page.locator(".thumb").nth(1).click();
 check(await page.getByText(/Today's 20 Google page readings are used, so this page was read on this device/).isVisible(), "the flag explains why");
 check(await page.getByText(/Read on this device/).isVisible(), "and says where it was read");
 await shot("19-google-fallback");
+await page.getByRole("button", { name: "Close" }).click();
+vision.refuse = "Cloud Vision API has not been used in project 123 before or it is disabled.";
+await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(11));
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
+await page.locator(".thumb").nth(2).click();
+check(await page.getByText(/The Cloud Vision API isn't turned on in the Google Cloud project\. Google said: “Cloud Vision API has not been used/).isVisible(),
+  "when Google refuses, the page says why, in plain words and in Google's");
+await shot("20-google-refused");
 await page.getByRole("button", { name: "Close" }).click();
 await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para").first().waitFor();

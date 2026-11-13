@@ -90,7 +90,9 @@ device: the `read-page` Edge Function holds the owner's key, claims one of the r
 `claim_page_read()` (which also refuses readers without access), and returns Vision's paragraphs with their position
 on the page. `packages/books/vision.ts` tells the printed page number (a number alone in the top or bottom tenth of
 the page, the foot first) from a chapter number (alone further in, kept as text). Past the 20, or when Google can't be
-reached, the page is read on the device and flagged so the reader checks it. Codes are stored only as hashes, each
+reached, the page is read on the device and flagged so the reader checks it. When Google refuses or fails, the
+function gives the page back (`refund_page_read`, migration 0005, callable by the server only; Translate lookups the
+same with `refund_translation`) and the flag carries Google's reason, e.g. that the Cloud Vision API isn't enabled. Codes are stored only as hashes, each
 works for one reader by default, and the owner adds them in the SQL Editor:
 `insert into access_codes (code_hash, feature, note) values (access_code_hash('BW-…'), 'google_page_reading', 'for whom');`
 Cost: the first 1,000 pages a month are free, then about $1.50 per 1,000 (Google's price list, November 2026).

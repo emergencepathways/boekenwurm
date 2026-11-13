@@ -12,7 +12,7 @@ import { countable, hash, isOldForm, langOf, nameTest, tokenize } from "./text.t
 import { lookup, listLemmas } from "./words.ts";
 import { getState, knownLemmas } from "./store.ts";
 import { readPageOnDevice } from "./ocr.ts";
-import { GOOGLE_PAGES, hasFeature, PAGE_READS_PER_DAY, readPageWithGoogle } from "./features.ts";
+import { explainGoogleError, GOOGLE_PAGES, hasFeature, PAGE_READS_PER_DAY, readPageWithGoogle } from "./features.ts";
 import { downscale, toBase64, CLAUDE_SIDE, OCR_SIDE } from "./images.ts";
 import type { Book, BookText, Paragraph } from "./types.ts";
 
@@ -135,7 +135,7 @@ export async function readPhotoPage(
     if (g.ok) return { ...g.page, problems: readingProblems(g.page.page, g.page.quality), by: "google", model: "cloud-vision" };
     fallback =
       g.reason === "limit" ? `Today's ${PAGE_READS_PER_DAY} Google page readings are used, so this page was read on this device and may be rough. Check its text.`
-      : `Google couldn't read this page just now${g.reason === "offline" ? " (offline)" : ""}, so it was read on this device and may be rough. Check its text.`;
+      : `Google couldn't read this page${g.reason === "offline" ? " (offline)" : ""}, so it was read on this device and may be rough. Check its text.${g.ok === false && g.detail ? ` ${explainGoogleError(g.detail)}` : ""}`;
   }
   const r = await readPageOnDevice(img, seq, onProgress, range);
   return { page: r.page, uncertain: r.uncertain, quality: r.quality, problems: readingProblems(r.page, r.quality), by: "device", model: null, fallback };

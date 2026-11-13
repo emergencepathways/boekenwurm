@@ -11,7 +11,7 @@
  *
  * The photo goes only to Google, is not stored by this function, and the key never reaches the app.
  */
-import { bearer, claim, cors, replier, timeZone, type ClaimConfig } from "../_shared/common.ts";
+import { bearer, claim, cors, googleError, refund, replier, timeZone, type ClaimConfig } from "../_shared/common.ts";
 
 export interface Config extends ClaimConfig {
   visionKey: string;
@@ -35,7 +35,7 @@ export interface VisionPage {
 
 export type Answer =
   | ({ ok: true; used: number; limit: number } & VisionPage)
-  | { ok: false; reason: "signin" | "no-access" | "limit" | "unavailable" | "bad-image" | "method"; used?: number; limit?: number };
+  | { ok: false; reason: "signin" | "no-access" | "limit" | "unavailable" | "bad-image" | "method"; used?: number; limit?: number; detail?: string };
 
 /** A JPEG or PNG as base64, at most about 7 MB of image (the app sends about 0.5 MB). */
 const MAX_BASE64 = 10_000_000;
@@ -63,8 +63,13 @@ export async function handle(req: Request, config: Config): Promise<Response> {
   const counts = { used: c.used, limit: c.limit };
   if (!c.allowed) return no(429, { ok: false, reason: "limit", ...counts });
 
-  // 3. The photo to Vision.
+  // 3. The photo to Vision. If Google can't read it, the page is given back and the reader is told why.
   const http = config.fetch ?? fetch;
+  const failed = async (detail: string) => {
+    console.error(`read-page: Google Vision failed: ${detail}`);
+    const back = await refund(auth, "refund_page_read", c.day, config);
+    return no(502, { ok: false, reason: "unavailable", detail, used: back ? Math.max(0, c.used - 1) : c.used, limit: c.limit });
+  };
   try {
     const g = await http(`https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(config.visionKey)}`, {
       method: "POST",
@@ -73,12 +78,13 @@ export async function handle(req: Request, config: Config): Promise<Response> {
         requests: [{ image: { content: image }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }], imageContext: { languageHints: ["nl"] } }],
       }),
     });
-    const out = (await g.json().catch(() => null)) as { responses?: Array<{ fullTextAnnotation?: Annotation; error?: unknown }> } | null;
+    if (!g.ok) return await failed(await googleError(g));
+    const out = (await g.json().catch(() => null)) as { responses?: Array<{ fullTextAnnotation?: Annotation; error?: { message?: string } }> } | null;
     const res = out?.responses?.[0];
-    if (!g.ok || !res || res.error) return no(502, { ok: false, reason: "unavailable", ...counts });
+    if (!res || res.error) return await failed(res?.error?.message?.slice(0, 300) ?? "No answer from Google.");
     return reply(200, { ok: true, ...counts, ...fromAnnotation(res.fullTextAnnotation) } satisfies Answer);
-  } catch {
-    return no(502, { ok: false, reason: "unavailable", ...counts });
+  } catch (e) {
+    return await failed(`Couldn't reach Google (${(e as Error).message || "network"}).`);
   }
 }
 

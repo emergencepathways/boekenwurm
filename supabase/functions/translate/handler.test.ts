@@ -126,3 +126,19 @@ test("browsers: the app's own sites may call it; others get no CORS permission; 
   assert.equal((await handle(ask(null, {}, "OPTIONS"), w.config)).status, 204);
   assert.equal((await handle(ask(null, {}, "GET"), w.config)).status, 405);
 });
+
+test("Google refuses a word: the lookup is given back, with Google's reason", async () => {
+  const reader = "11111111-2222-4333-8444-555555555555";
+  const token = `x.${Buffer.from(JSON.stringify({ sub: reader })).toString("base64url")}.y`;
+  const refunds: string[] = [];
+  const fake = (async (url: string, init: RequestInit) => {
+    if (url.endsWith("/rpc/claim_translation")) return Response.json([{ allowed: true, used: 7, daily_limit: 200, day: "2026-11-13" }]);
+    if (url.endsWith("/rpc/refund_translation")) return (refunds.push(String(init.body)), new Response(null, { status: 204 }));
+    return Response.json({ error: { message: "Daily Limit Exceeded" } }, { status: 403 });
+  }) as typeof fetch;
+  const r = await handle(ask("huis", { authorization: `Bearer ${token}` }), { supabaseUrl: "https://example.supabase.co", supabaseKey: "pk", serviceKey: "sk", googleKey: "g", fetch: fake });
+  const body = (await r.json()) as { detail: string; used: number };
+  assert.equal(body.detail, "Daily Limit Exceeded");
+  assert.equal(body.used, 6);
+  assert.deepEqual(refunds.map((b) => JSON.parse(b)), [{ p_user: reader, p_day: "2026-11-13" }]);
+});

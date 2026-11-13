@@ -172,6 +172,33 @@ exception when insufficient_privilege then raise notice 'ok: other readers keep 
 end $$;
 reset role;
 
+-- refunds (0005): a use Google couldn't serve is given back, by the server only
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  perform refund_page_read('00000000-0000-0000-0000-00000000000a', current_date);
+  raise exception 'FAIL: a reader gave themselves a page back';
+exception when insufficient_privilege then raise notice 'ok: readers cannot give themselves uses back';
+end $$;
+reset role;
+set role service_role;
+do $$ declare before integer; after integer; begin
+  select pages into before from page_read_usage where user_id = '00000000-0000-0000-0000-00000000000a';
+  perform refund_page_read('00000000-0000-0000-0000-00000000000a', (select day from page_read_usage where user_id = '00000000-0000-0000-0000-00000000000a'));
+  select pages into after from page_read_usage where user_id = '00000000-0000-0000-0000-00000000000a';
+  if after <> before - 1 then raise exception 'FAIL: refund went % -> %', before, after; end if;
+  raise notice 'ok: the server gives back one page Google couldn''t read (% -> %)', before, after;
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ declare r record; begin
+  select * into r from claim_page_read('Europe/Amsterdam');
+  if not r.allowed or r.used <> 20 then raise exception 'FAIL: the refunded page could not be used again'; end if;
+  raise notice 'ok: the page given back can be used again';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')
