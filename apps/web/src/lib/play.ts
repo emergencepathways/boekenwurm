@@ -128,18 +128,18 @@ export async function bookFinished(book: Book): Promise<number> {
 }
 
 /**
- * A flashcard session ended: 40 XP for 10 cards or more (or every card due, if fewer), up to 3 sessions a day; and 300
- * XP once a day when every due card has been reviewed. Returns the XP it earned.
+ * A flashcard session ended: 40 XP for 10 cards or more (or the whole set, if smaller), up to 3 sessions a day; and,
+ * once a day, the review reward (300 XP) for finishing a whole review set. Returns the XP it earned.
  */
-export async function studyFinished(o: { cards: number; dueAtStart: number; dueNow: number; afterLookupMode?: boolean }): Promise<number> {
+export async function studyFinished(o: { cards: number; dueAtStart: number; completedSet: boolean; afterLookupMode?: boolean }): Promise<number> {
   if (o.cards <= 0) return 0;
   const play = playOf();
   const session = E.studySessionXp({ cards: o.cards, due: o.dueAtStart, sessionsToday: dayCount(STUDY_SESSIONS), afterLookupMode: o.afterLookupMode });
   if (session) dayCount(STUDY_SESSIONS, 1);
   const t = today();
-  const daily = o.dueNow === 0 && !play.studyDays.includes(t) ? E.XP.dailyReview : 0;
+  const daily = o.completedSet && !play.studyDays.includes(t) ? E.XP.dailyReview : 0;
   if (!session && !daily) return 0;
-  toast(`Study: +${session + daily} XP${daily ? " (every card reviewed today)" : ""}`, 4000);
+  toast(`Study: +${session + daily} XP${daily ? " (review set finished)" : ""}`, 4000);
   await commit({ ...play, studyDays: daily ? [...play.studyDays, t] : play.studyDays }, session + daily);
   return session + daily;
 }

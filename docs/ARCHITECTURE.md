@@ -113,7 +113,7 @@ Bottom tab bar, like a native app: **Home · Study · Me**. The reader opens ful
   - **PDF file** — text PDFs are read directly; scanned PDFs are offered the photo route, page by page.
   - **Photograph a book** — see below.
 - **Reader** — the playtest reader: tap-to-reveal, strikes, streaks, Match my level, Show original, words in context.
-- **Study** — flashcards of revealed words, due words first (FSRS scheduling), "not sticking" list, export to Anki/CSV.
+- **Study** — flashcards of revealed words in a review pool (Hard first, sets repeated until every word is Easy), "not sticking" list, export to Anki/CSV.
 - **Me** — level, badges, word list (default dictionary or imported textbook), Claude key and models, account, export
   and delete my data.
 
@@ -170,7 +170,7 @@ their own rows; storage buckets are private with the same rule (`{user_id}/…` 
 - `paragraphs` — book, order, page, text, tokens with base forms; matched versions per level live in
   `paragraph_versions` (reader-only, regenerated on level change).
 - `reading_sessions` and `paragraph_results` — every run: strikes, passes, streak length, token earned.
-- `word_stats` — reveals and encounters per base form; `cards` — flashcard state (FSRS).
+- `word_stats` — reveals and encounters per base form; `cards` — flashcard state: pool (hard, medium, easy, skipped), Easy check-back step (migration 0008).
 - `word_stats.recent_reveals` — reveal times of the last 14 days (migration 0007), added by every device with
   `add_recent_reveals()`, for the colour-coded text; until 0007 runs, each device keeps its own.
 - `word_meanings` — meanings the reader found for words the dictionary doesn't know (Google, Claude, typed);
@@ -245,7 +245,7 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 4. ✅ Supabase: email sign-in (link, or the 6-digit code from the same email for the Home Screen app on iOS, which
    keeps its own sign-in apart from Safari), sync of profile, books, paragraphs, sessions, word counts and cards,
    covers in storage, and an in-app connection check (Me → Connection check).
-5. ✅ Study tab with FSRS (`ts-fsrs`) and CSV export; private textbook word-list import; the open Wiktionary +
+5. ✅ Study tab with flashcards (a review pool since 2026-11-14; FSRS before) and CSV export; private textbook word-list import; the open Wiktionary +
    wordfreq dictionary, built at deploy time. Still to do: `.apkg` export.
 6. ✅ Install: iOS Add to Home Screen sheet, Android install prompt after a finished session. Hosted on Cloudflare
    Pages, deployed from GitHub Actions with the repository's secrets. Still to do: preview deploys per pull request; then the Kobo plugin.

@@ -15,7 +15,7 @@ export interface AchievementStats {
   bestStreak: number;
   /** Taps that found a meaning (the word book's reveals). */
   wordsLookedUp: number;
-  /** Days in a row, up to today or yesterday, with all due cards reviewed. */
+  /** Days in a row, up to today or yesterday, with a review set finished. */
   studyDayRun: number;
   /** Days in a row, up to today or yesterday, with 5 paragraphs or more read. */
   readingDayRun: number;

@@ -11,7 +11,7 @@ import {
   adoptBook, adoptMeanings, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook, SAVED_SOURCES,
 } from "./store.ts";
 import { bookToRow, mergeProgress, rowToBook, serverWins, wordbookFrom, type BookRow, type WordStatRow } from "./merge.ts";
-import { fromRow } from "./srs.ts";
+import { fromRow, toRow, type CardRow } from "./cards.ts";
 import type { BookText, CardState, Meaning, Paragraph, SessionRow, WordDelta } from "./types.ts";
 
 let running: Promise<void> | null = null;
@@ -209,11 +209,17 @@ async function pushWordDeltas(sb: SB) {
 async function pushCards(sb: SB, userId: string) {
   const dirty = Object.values(getState().cards).filter((c) => c.dirty);
   if (!dirty.length) return;
-  const rows = dirty.map((c) => ({
-    user_id: userId, lemma: c.lemma, due: new Date(c.due).toISOString(), stability: c.stability, difficulty: c.difficulty,
-    reps: c.reps, lapses: c.lapses, state: c.state, last_review: c.lastReview ? new Date(c.lastReview).toISOString() : null,
-  }));
-  for (let i = 0; i < rows.length; i += 500) check(await sb.from("cards").upsert(rows.slice(i, i + 500), { onConflict: "user_id,lemma" }));
+  // The review pool's columns exist once migration 0008 has run; until then the card is sent without them.
+  let withPool = true;
+  for (let i = 0; i < dirty.length; i += 500) {
+    const batch = dirty.slice(i, i + 500);
+    let res = await sb.from("cards").upsert(batch.map((c) => toRow(c, userId, withPool)), { onConflict: "user_id,lemma" });
+    if (res.error && withPool && /pool|easy_step/.test(res.error.message)) {
+      withPool = false;
+      res = await sb.from("cards").upsert(batch.map((c) => toRow(c, userId, false)), { onConflict: "user_id,lemma" });
+    }
+    check(res);
+  }
   const cards = { ...getState().cards };
   for (const c of dirty) if (cards[c.lemma]?.updatedAt === c.updatedAt) cards[c.lemma] = { ...cards[c.lemma], dirty: false };
   await setCards(cards);
@@ -287,7 +293,7 @@ async function pullWords(sb: SB) {
 }
 
 async function pullCards(sb: SB, since: number) {
-  const rows = check(await sb.from("cards").select("*").gt("updated_at", new Date(since).toISOString())) as Array<Parameters<typeof fromRow>[0]>;
+  const rows = check(await sb.from("cards").select("*").gt("updated_at", new Date(since).toISOString())) as CardRow[];
   if (!rows.length) return;
   const cards: Record<string, CardState> = { ...getState().cards };
   for (const r of rows) {

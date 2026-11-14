@@ -5,8 +5,8 @@
  * The owner's rules (docs/DESIGN.md, "Levels and XP"):
  * - a paragraph read is 20 XP, 40 on a streak, 5 when it ends a run or in unlimited lookup mode;
  * - reading XP grows with rank (× 1 to × 1.4) and is × 1.5 in a book a level or more above the reader's rank;
- * - a book finished is 1,000 XP (500 when read again); a flashcard session 40 (80 after a lookup-mode session); all
- *   due cards reviewed for the day 300; an achievement tier 80; a run of 10 paragraphs or more in a session 200;
+ * - a book finished is 1,000 XP (500 when read again); a flashcard session 40 (80 after a lookup-mode session); a
+ *   review set finished, once a day, 300; an achievement tier 80; a run of 10 paragraphs or more in a session 200;
  * - A0 → A1 takes 600 XP (one sitting); after that, level n costs 30,000 × n^2.2, rounded to 5,000.
  */
 import type { CefrLevel } from "./definitions.ts";

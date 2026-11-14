@@ -100,6 +100,13 @@ export function Me() {
           </select>
           <span className="note">From B1, and during a streak, meanings are always in Dutch.</span>
         </label>
+        <label className="field">
+          <span>Flashcards per review set</span>
+          <select value={E.clampSetSize(profile.settings.reviewSetSize)} onChange={(e) => setSettings({ reviewSetSize: Number(e.target.value) })}>
+            {[20, 25, 30, 35, 40, 45, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <span className="note">A set repeats each word until you rate it Easy. Finishing one earns the day's review reward.</span>
+        </label>
         <div className="field">
           <label className="row">
             <input type="checkbox" checked={profile.settings.colorText === true} onChange={(e) => setSettings({ colorText: e.target.checked })} />
@@ -142,7 +149,7 @@ export function Me() {
         <h3>About</h3>
         <p className="small">Boekenwurm is a reading game for learners of Dutch. Your books stay private: on this device, and in your own account when you sign in.</p>
         <DictionaryCredit />
-        <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). Flashcard scheduling by ts-fsrs (MIT).</p>
+        <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). </p>
         <VersionRow />
       </section>
     </main>

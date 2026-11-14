@@ -275,6 +275,21 @@ do $$ begin
 end $$;
 reset role;
 
+-- review pool (0008): every card has a pool; a reader writes only their own
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  insert into cards (lemma, pool, easy_step, due) values ('draak', 'skipped', 0, now()), ('huis', 'easy', 2, now() + interval '21 days');
+  if (select pool from cards where lemma = 'draak') <> 'skipped' then raise exception 'FAIL: pool not kept'; end if;
+  begin
+    insert into cards (lemma, pool) values ('fout', 'forgotten');
+    raise exception 'FAIL: an unknown pool was accepted';
+  exception when check_violation then null;
+  end;
+  raise notice 'ok: cards keep their pool (hard, medium, easy, skipped) and nothing else';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

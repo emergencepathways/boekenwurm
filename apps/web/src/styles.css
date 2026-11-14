@@ -334,3 +334,12 @@ ol.how { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
 .shieldcell .t, .patchcell .t { font: 600 0.8rem/1.2 var(--ui); }
 .shieldcell .m, .patchcell .m { font-size: 0.7rem; color: var(--muted); }
 .shieldcell:not(.got) .t, .patchcell:not(.got) .t { color: var(--muted); }
+
+/* Flashcard answers: Hard red, Medium amber, Easy green (packages/engine/src/review.ts) */
+.grades.three { grid-template-columns: repeat(3, 1fr); }
+.btn.g-hard { background: var(--strike); border-color: var(--strike); color: #fff; }
+.btn.g-medium { background: var(--c-yellow); border-color: var(--c-yellow); color: #fff; }
+.btn.g-easy { background: var(--leaf); border-color: var(--leaf); color: var(--leaf-ink); }
+:root[data-theme="dark"] .btn.g-hard, :root[data-theme="dark"] .btn.g-medium { color: #1b2622; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.g-hard, :root:not([data-theme="light"]) .btn.g-medium { color: #1b2622; } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }

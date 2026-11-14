@@ -7,3 +7,4 @@ export * from "./badges.ts";
 export * from "./xp.ts";
 export * from "./achievements.ts";
 export * from "./play.ts";
+export * from "./review.ts";

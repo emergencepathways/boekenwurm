@@ -254,8 +254,17 @@ quiet evidence they are known; that evidence also drives paragraph selection and
 ### Study list → flashcards
 
 The end-of-session screen lists every word revealed in the session, the ones revealed most often over time first, each
-with its forms as they appeared and the sentence they came from. One button starts a flashcard review of exactly those
-words, inside the app, scheduled with FSRS (the algorithm modern Anki uses, via `ts-fsrs`).
+with its forms as they appeared and the sentence they came from. One button starts the recap: each of those words once,
+rated **Hard**, **Medium** or **Easy** (red, amber, green), or **Skip** for a word not worth learning (a fantasy
+name, a rare word). Skipped words never come up again unless the reader brings them back from Study.
+
+Hard and Medium words wait in a review pool, Hard first. A review takes a set from the pool (20 to 50 cards, the
+reader's choice, 30 by default) and repeats each card in the set, Hard after 3 cards and Medium after 6, until every
+card has been rated Easy. Finishing a set earns the day's review reward. Easy takes a word out of the pool; it comes
+back for a quick check after 3 days, then 1 week, 3 weeks and every 2 months, after the hard and medium cards, and
+forgetting it then puts it back in the pool. This replaced FSRS scheduling (2026-11-14): Anki's minutes-and-days
+intervals didn't suit a reading game, and a set that ends when you know every word does
+(`packages/engine/src/review.ts`).
 
 Export, for readers who keep their cards elsewhere:
 
@@ -333,7 +342,7 @@ anywhere except `private/`.
   alone; ranks are a status, not a gate (the reading level for meanings and Match my level is chosen separately).
   A paragraph is 20 XP, 40 on a streak, 5 when it ends a run or in unlimited lookup mode; reading XP is × 1 to × 1.4
   by rank and × 1.5 in a book a level or more above the rank. A book is 1,000 XP (500 again); a flashcard session 40
-  (10 cards or every card due, up to 3 a day; 80 after a lookup-mode session); every due card reviewed for the day
+  (10 cards or every card due, up to 3 a day; 80 after a lookup-mode session); a review set finished, once a day,
   300; each achievement tier 80. A0 → A1 is 600 XP, then level n costs 30,000 × n^2.2 rounded to 5,000. The
   level-up offer and streak tokens are retired. Rules and numbers: packages/engine/src/xp.ts, achievements.ts,
   play.ts; the plan with the reasoning is the owner's "levels, XP and achievements" document. 2026-11-13.

@@ -241,7 +241,7 @@ await page.getByText(/No meaning found for this word, so this tap doesn't count/
 check((await page.locator(".pip.used").count()) === pips0, "no meaning found: no strike");
 await page.locator(".para .w", { hasText: /^verse$/ }).click();
 await page.getByText("Not in the dictionary: translated by Google Translate, shared by Boekenwurm readers.").waitFor();
-check((await page.locator(".pip.used").count()) === pips0 + 1, "a meaning from Google Translate: the tap counts");
+check(await page.waitForFunction((k) => document.querySelectorAll(".pip.used").length === k, pips0 + 1, { timeout: 5000 }).then(() => true, () => false), "a meaning from Google Translate: the tap counts");
 check(true, "a translation another reader already had is marked as shared");
 check(await page.locator(".def .meaning", { hasText: "verse (in English)" }).isVisible(), "the translation is shown");
 check(translated.join(",") === "Elke,verse", "only the tapped word is sent");
@@ -325,12 +325,25 @@ await shot("05b-reread");
 await page.getByRole("button", { name: "Back to the summary" }).click();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "and the summary is back, unchanged");
 
-step("study: flashcards from the revealed words");
+step("recap after reading: each revealed word once, rated Hard, Medium, Easy or Skip");
+const recapCount = Number((await page.getByRole("button", { name: /Study these/ }).textContent()).match(/\d+/)[0]);
 await page.getByRole("button", { name: /Study these/ }).click();
 await page.getByRole("button", { name: "Show meaning" }).click();
 check(await page.locator(".flash .answer").isVisible(), "card shows its meaning");
+check(["Hard", "Medium", "Easy"].every((n) => page.getByRole("button", { name: n, exact: true })), "three answers and a skip");
 await shot("06-flashcard");
-await page.getByRole("button", { name: /^Good/ }).click();
+const recapWords = [];
+const order = ["hard", "skip", "medium", "easy"];
+for (let i = 0; i < recapCount; i++) {
+  recapWords.push(await page.locator(".flash .front").textContent());
+  if (i > 0) await page.getByRole("button", { name: "Show meaning" }).click();
+  const a = order[i % order.length];
+  if (a === "skip") await page.getByRole("button", { name: /^Skip/ }).click();
+  else await page.getByRole("button", { name: a[0].toUpperCase() + a.slice(1), exact: true }).click();
+}
+await page.getByText(`Done: ${recapCount} word${recapCount === 1 ? "" : "s"} rated.`).waitFor();
+check(new Set(recapWords).size === recapCount, "each word came up once, with no repeats");
+const skippedWord = recapCount > 1 ? recapWords[1] : null;
 await page.getByRole("button", { name: "Back", exact: true }).first().click();
 await page.locator(".continue").waitFor();
 check(true, "closing the review returns to Home");
@@ -341,6 +354,40 @@ await page.locator(".continue").waitFor();
 check(await page.getByText("Continue reading").isVisible(), "continue-reading card after a reload");
 check((await page.locator(".continue").textContent()).includes("Marktdag"), "it points at the book");
 check(Number(await page.locator(".studycard .big").textContent()) >= 1, "words due on the Study card");
+
+step("review: a set from the pool, Hard first, repeated until every word is Easy");
+await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+const reviewBtn = page.getByRole("button", { name: /^Review \d+ words?$/ });
+await reviewBtn.waitFor();
+const setCount = Number((await reviewBtn.textContent()).match(/\d+/)[0]);
+await reviewBtn.click();
+check((await page.locator(".flash .front").textContent()) === recapWords[0], "the word rated Hard comes first");
+check(await page.getByText(`0 of ${setCount} learned`).isVisible(), "progress counts words learned (Easy)");
+const firstWord = recapWords[0];
+await page.getByRole("button", { name: "Show meaning" }).click();
+await page.getByRole("button", { name: "Hard", exact: true }).click();
+let seenAgain = false, turns = 0;
+while (!(await page.getByText(/^Set done/).isVisible()) && turns < 40) {
+  const w = await page.locator(".flash .front").textContent();
+  if (w === firstWord) seenAgain = true;
+  await page.getByRole("button", { name: "Show meaning" }).click();
+  await page.getByRole("button", { name: "Easy", exact: true }).click();
+  turns++;
+}
+check(seenAgain, "a word rated Hard comes round again in the same set");
+check(await page.getByText(`Set done: all ${setCount} word${setCount === 1 ? "" : "s"} rated Easy.`).isVisible(), "the set ends when every word is Easy");
+check(turns === setCount, "each word needed one Easy (the Hard one twice in all)");
+await page.getByRole("button", { name: "Back", exact: true }).first().click();
+await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+check(await page.getByText("All caught up").isVisible(), "the pool is empty until the Easy words' check-back in 3 days");
+if (skippedWord) {
+  check(await page.getByRole("button", { name: `Bring back ${skippedWord}` }).isVisible(), "a skipped word is listed and can be brought back");
+  await page.getByRole("button", { name: `Bring back ${skippedWord}` }).click();
+  await page.getByRole("button", { name: /^Review 1 word$/ }).waitFor();
+  check(true, "brought back, it waits in the pool");
+}
+await shot("06c-study");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("colour-coded text: off by default; on, words revealed before are coloured");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();

@@ -9,7 +9,7 @@ import { db } from "./db.ts";
 import { setDictionary, setWordList } from "./words.ts";
 import { loadDictionary } from "./dictionary.ts";
 import { hasKey } from "./claude.ts";
-import { newCard, type Rating, review } from "./srs.ts";
+import { newCard, upgradeCard } from "./cards.ts";
 import {
   DEFAULT_SETTINGS,
   type Book,
@@ -118,7 +118,8 @@ export async function init(): Promise<void> {
     wordbook: wordbook ?? {},
     meanings: meanings ?? {},
     examples: examples ?? {},
-    cards: cards ?? {},
+    // Cards saved before the review pool (FSRS) are converted once, on load.
+    cards: Object.fromEntries(Object.entries(cards ?? {}).map(([k, c]) => [k, upgradeCard(c, Date.now())])),
     wordList: list ? { name: list.name, size: Object.keys(list.entries).length } : null,
     hasKey: hasKey(),
   });
@@ -291,10 +292,12 @@ export async function adoptMeanings(incoming: Record<string, Meaning>, keepLocal
   await db.put("kv", meanings, "meanings");
 }
 
-export async function reviewCard(lemma: string, rating: Rating): Promise<void> {
+/** A flashcard answered: Hard, Medium, Easy or Skip (packages/engine/src/review.ts). */
+export async function reviewCard(lemma: string, a: E.Answer): Promise<void> {
   const c = state.cards[lemma];
   if (!c) return;
-  const cards = { ...state.cards, [lemma]: review(c, rating, now()) };
+  const t = now();
+  const cards = { ...state.cards, [lemma]: { ...E.answer(c, a, t), updatedAt: t, dirty: true } };
   setState({ cards });
   await db.put("kv", cards, "cards");
   changed();
@@ -324,7 +327,14 @@ export function knownLemmas(listLemmas: string[]): Set<string> {
   return known;
 }
 
-export const dueCards = (at = now()) =>
-  Object.values(state.cards)
-    .filter((c) => c.due <= at)
-    .sort((a, b) => a.due - b.due);
+/** A skipped word brought back into the pool. */
+export async function unskipCard(lemma: string): Promise<void> {
+  const c = state.cards[lemma];
+  if (!c) return;
+  const t = now();
+  await setCards({ ...state.cards, [lemma]: { ...E.unskip(c, t), updatedAt: t, dirty: true } });
+  changed();
+}
+
+/** The review pool in order: Hard, Medium, then Easy check-backs that are due. */
+export const dueCards = (at = now()): CardState[] => E.reviewOrder(Object.values(state.cards), at) as CardState[];

@@ -1,4 +1,4 @@
-import type { CefrLevel, Preset, Progress, WordBook } from "@boekenwurm/engine";
+import type { CefrLevel, Preset, Progress, ReviewCard, WordBook } from "@boekenwurm/engine";
 import type { BookLevel } from "@boekenwurm/ai";
 import type { Token, VerdictKind } from "./text.ts";
 
@@ -63,6 +63,8 @@ export interface Settings {
   preferFreeReading: boolean;
   /** Colour-coded text: words coloured by how often they were revealed in the last 14 days. Off by default. */
   colorText?: boolean;
+  /** Cards in a review set, 20–50 (30 by default). */
+  reviewSetSize?: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -104,19 +106,8 @@ export interface Meaning {
   shared?: boolean;
 }
 
-export interface CardState {
-  lemma: string;
-  due: number;
-  stability: number;
-  difficulty: number;
-  elapsedDays: number;
-  scheduledDays: number;
-  learningSteps: number;
-  reps: number;
-  lapses: number;
-  /** 0 new, 1 learning, 2 review, 3 relearning (as in the `cards` table) */
-  state: number;
-  lastReview: number | null;
+/** A flashcard on the device: the engine's review card (pool, check-back) plus sync bookkeeping. */
+export interface CardState extends ReviewCard {
   updatedAt: number;
   dirty: boolean;
 }
