@@ -40,7 +40,7 @@ interface RS {
   startedAt: number;
   sel: number | null;
   sentences: Record<string, string>;
-  summary: { kind: "complete" | "ended"; streakLength: number; list: E.StudyItem[]; paragraphs: number } | null;
+  summary: { kind: "complete" | "ended" | "lookup"; streakLength: number; list: E.StudyItem[]; paragraphs: number } | null;
   matched: Map<number, Matched>;
   explained: Map<string, Explained>;
   waiting: boolean;
@@ -58,6 +58,8 @@ interface RS {
   lastRead: number | null;
   /** XP earned since the reader opened this book. */
   xp: number;
+  /** This session is in unlimited lookup mode. */
+  lookupMode: boolean;
 }
 
 export function Reader({ bookId }: { bookId: string }) {
@@ -69,7 +71,7 @@ export function Reader({ bookId }: { bookId: string }) {
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
-    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null, xp: 0,
+    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null, xp: 0, lookupMode: false,
   }).current;
   const inflight = useRef(new Map<number, Promise<void>>()).current;
 
@@ -127,9 +129,14 @@ export function Reader({ bookId }: { bookId: string }) {
   };
   const lemmasOf = (p: { tokens: Token[] }) => p.tokens.filter((t) => t.k === "word").map((t) => look(t.t).lemma);
   const rules = () => E.rulesFor(getState().profile.settings.preset);
+  /** Unlimited lookup mode: on in the settings, and unlocked by a Bronze badge. */
+  const lookupMode = () => getState().profile.settings.unlimitedMode === true && E.lookupModeUnlocked(getState().profile.progress.play?.tiers);
 
   function startNewSession() {
-    r.session = E.startSession(rules(), { id: crypto.randomUUID() });
+    r.session = lookupMode()
+      ? E.startSession(E.LOOKUP_MODE_RULES, { id: crypto.randomUUID(), tokenAtStreak: Number.MAX_SAFE_INTEGER })
+      : E.startSession(rules(), { id: crypto.randomUUID() });
+    r.lookupMode = lookupMode();
     r.startedAt = Date.now();
     r.sentences = {};
     r.summary = null;
@@ -297,13 +304,14 @@ export function Reader({ bookId }: { bookId: string }) {
     // XP for the paragraph read: double on a streak, a quarter when it ends the run, × 1.5 above the reader's rank.
     const textLevel = (read.matched ? getState().profile.progress.level : r.book?.level ?? null) as E.CefrLevel | null;
     r.xp += await paragraphRead({
-      book: r.book!, textLevel, failed: out.kind === "ended", streak, words: read.tokens.filter((t) => t.k === "word").length,
-      bookHasPages: hasPages(), bestStreak: out.session.bestStreak,
+      book: r.book!, textLevel, failed: out.kind === "ended", streak, lookupMode: r.lookupMode, words: read.tokens.filter((t) => t.k === "word").length,
+      // A run in lookup mode has no fouten, so it doesn't count towards the Streak badge.
+      bookHasPages: hasPages(), bestStreak: r.lookupMode ? 0 : out.session.bestStreak,
     });
     if (atEnd && (r.book?.source !== "photo" || nextUnphotographed() == null)) r.xp += await bookFinished(r.book!);
     if (out.kind === "continue") {
       // A run of 10 paragraphs or more (the old streak token): a 200 XP bonus, once per session.
-      if (out.tokenEarnedNow) r.xp += await streakBonus();
+      if (out.tokenEarnedNow) r.xp += await streakBonus({ lookupMode: r.lookupMode });
       if (atEnd) return finish("complete", out.session.passesInARow);
       beginCurrent();
       bump();
@@ -312,14 +320,32 @@ export function Reader({ bookId }: { bookId: string }) {
     }
   }
 
-  async function finish(kind: "complete" | "ended", streakLength: number) {
+  async function finish(kind: "complete" | "ended" | "lookup", streakLength: number) {
     const s = r.session!;
     r.session = null;
-    const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : "strike", sentences: r.sentences });
+    const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : kind === "lookup" ? "left" : "strike", sentences: r.sentences });
     r.summary = { kind, streakLength, list, paragraphs: s.results.length };
     void checkAchievements(); // words looked up count once the session is recorded
     if (r.pos >= r.text!.paragraphs.length && r.book?.source !== "photo") r.pos = 0;
     if (offer) r.modal = { kind: "offer" };
+    bump();
+  }
+
+  /** Lookup mode: end the session here and see its words (the paragraph on screen counts as read). */
+  async function endLookupSession() {
+    if (!r.session?.current) return;
+    const out = E.turnPage(r.session);
+    r.session = out.session;
+    r.lastRead = r.pos;
+    await finish("lookup", 0);
+  }
+
+  /** Switch unlimited lookup mode on or off: the session so far is kept, and a new one starts on this paragraph. */
+  async function setLookupMode(on: boolean) {
+    await leave();
+    await updateProfile((p) => ({ ...p, settings: { ...p.settings, unlimitedMode: on } }));
+    startNewSession();
+    toast(on ? "Unlimited lookup mode: look up as much as you like." : "Back to fouten.");
     bump();
   }
 
@@ -538,6 +564,24 @@ export function Reader({ bookId }: { bookId: string }) {
     const p = para();
     const revealed = new Set(s.current!.reveals.map((x) => x.lemma));
     const onStreak = E.inStreak(s.passesInARow, s.rules);
+    const unlocked = E.lookupModeUnlocked(getState().profile.progress.play?.tiers);
+    if (r.lookupMode)
+      return (
+        <>
+          <section className="strip nopenalty unlimited" role="status" aria-label="Unlimited lookup mode">
+            <span className="mode">Unlimited</span>
+            <b>No fouten.</b>
+            <span>Look up as much as you like. Paragraphs earn a quarter of the XP.</span>
+            <span className="grow" />
+            <span className="num"><span className="label">{rankNow().rank}</span> +{r.xp} XP</span>
+          </section>
+          {renderSheet(p, revealed, onStreak)}
+          <div className="actions">
+            <button className="btn small" type="button" onClick={() => void endLookupSession()}>End and study these words</button>
+            <button className="btn small ghost" type="button" onClick={() => void setLookupMode(false)}>Back to fouten</button>
+          </div>
+        </>
+      );
     return (
       <>
         <section className="strip" aria-label="Checkpoint">
@@ -553,50 +597,58 @@ export function Reader({ bookId }: { bookId: string }) {
           {onStreak && <span className="streak">Streak {st.streak}</span>}
           <span className="grow" />
           <span className="num"><span className="label">{rankNow().rank}</span> +{r.xp} XP</span>
+          {unlocked && <button className="btn small ghost" type="button" onClick={() => void setLookupMode(true)} title="Unlimited lookup mode: no fouten, a quarter of the XP">Unlimited ∞</button>}
         </section>
         {st.strikesLeft === 0 && lastStrike && <div className="warnline">No fouten left: one more reveal ends the run at the page turn.</div>}
-        <article
-          className="sheet"
-          onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
-          onTouchEnd={(e) => {
-            if (touchX.current == null) return;
-            const dx = e.changedTouches[0].clientX - touchX.current;
-            touchX.current = null;
-            if (dx < -70) void turn();
-          }}
-        >
-          <div className="folio">
-            <span>{book!.title}</span>
-            <span className="num">{pageAt(r.pos) != null ? `p. ${pageAt(r.pos)} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
-          </div>
-          {mode === "match" && renderMatchedLine(p.matched)}
-          <p className="para" lang="nl">
-            {p.tokens.map((t, i) =>
-              t.k === "punct" || t.k === "number" ? (
-                <span key={i}>{t.t}</span>
-              ) : (
-                <button
-                  key={i}
-                  type="button"
-                  className={`w ${t.k === "name" ? "name" : revealed.has(look(t.t).lemma) ? "rev" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`}
-                  onClick={() => tap(i)}
-                >
-                  {t.t}
-                </button>
-              ),
-            )}
-          </p>
-          {r.showOriginal && p.matched && (
-            <div className="original"><span className="label">Original</span><p lang="nl">{original().text}</p></div>
-          )}
-          <div className="def" aria-live="polite">{renderDefinition(onStreak)}</div>
-          <div className="actions turnrow">
-            <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>← Previous</button>
-            <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>Next page →</button>
-          </div>
-        </article>
+        {renderSheet(p, revealed, onStreak)}
         <p className="note" style={{ margin: 0 }}>Tap a word to see its meaning. Swipe left or press → to turn the page; Previous looks back without penalty.</p>
       </>
+    );
+  }
+
+  /** The page: folio, paragraph with its tappable words, the definition, and the page-turn buttons. */
+  function renderSheet(p: { text: string; tokens: Token[]; matched: boolean }, revealed: Set<string>, onStreak: boolean) {
+    return (
+      <article
+        className="sheet"
+        onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
+        onTouchEnd={(e) => {
+          if (touchX.current == null) return;
+          const dx = e.changedTouches[0].clientX - touchX.current;
+          touchX.current = null;
+          if (dx < -70) void turn();
+        }}
+      >
+        <div className="folio">
+          <span>{book!.title}</span>
+          <span className="num">{pageAt(r.pos) != null ? `p. ${pageAt(r.pos)} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
+        </div>
+        {mode === "match" && renderMatchedLine(p.matched)}
+        <p className="para" lang="nl">
+          {p.tokens.map((t, i) =>
+            t.k === "punct" || t.k === "number" ? (
+              <span key={i}>{t.t}</span>
+            ) : (
+              <button
+                key={i}
+                type="button"
+                className={`w ${t.k === "name" ? "name" : revealed.has(look(t.t).lemma) ? "rev" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`}
+                onClick={() => tap(i)}
+              >
+                {t.t}
+              </button>
+            ),
+          )}
+        </p>
+        {r.showOriginal && p.matched && (
+          <div className="original"><span className="label">Original</span><p lang="nl">{original().text}</p></div>
+        )}
+        <div className="def" aria-live="polite">{renderDefinition(onStreak)}</div>
+        <div className="actions turnrow">
+          <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>← Previous</button>
+          <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>Next page →</button>
+        </div>
+      </article>
     );
   }
 
@@ -746,7 +798,9 @@ export function Reader({ bookId }: { bookId: string }) {
     return (
       <section className="panel">
         <h2 className="big">
-          {s.kind === "complete"
+          {s.kind === "lookup"
+            ? `You read ${plural(s.paragraphs, "paragraph")} in unlimited lookup mode.`
+            : s.kind === "complete"
             ? atBookEnd ? (nextUnphotographed() == null ? "You've read the whole book. Gefeliciteerd!" : "You've read every page photographed so far.") : `You read to the end. ${plural(s.streakLength, "paragraph")} passed in a row.`
             : s.streakLength >= 2 ? `Your streak lasted ${s.streakLength} paragraphs.` : s.streakLength === 1 ? "You passed 1 paragraph this time." : "That paragraph used your last fout."}
         </h2>
@@ -773,7 +827,7 @@ export function Reader({ bookId }: { bookId: string }) {
         )}
         <div className="actions">
           {s.list.length > 0 && (
-            <button className="btn primary" type="button" onClick={() => open({ name: "study-session", lemmas: s.list.map((w) => w.lemma) })}>
+            <button className="btn primary" type="button" onClick={() => open({ name: "study-session", lemmas: s.list.map((w) => w.lemma), afterLookupMode: s.kind === "lookup" })}>
               Study these {plural(s.list.length, "word")}
             </button>
           )}

@@ -39,7 +39,7 @@ export function App() {
       ) : screen?.name === "photo" ? (
         <PhotoBook bookId={screen.bookId} />
       ) : screen?.name === "study-session" ? (
-        <StudySession lemmas={screen.lemmas} />
+        <StudySession lemmas={screen.lemmas} afterLookupMode={screen.afterLookupMode} />
       ) : (
         <>
           {tab === "home" && <Home />}

@@ -434,6 +434,45 @@ check((await page.locator(".patchcell:not(.got)").count()) >= 5, "others are sti
 await shot("07-badges");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
+step("unlimited lookup mode: unlocked by a Bronze badge; no fouten, a quarter of the XP, double flashcard XP after");
+await page.locator(".continue").click();
+await page.locator(".para .w").first().waitFor();
+await page.getByRole("button", { name: "Go to a page" }).click();
+await page.getByLabel("Paragraph number").fill("1");
+await page.getByRole("button", { name: "Go", exact: true }).click();
+await page.getByRole("button", { name: "Unlimited ∞" }).click();
+await page.getByText("No fouten.", { exact: true }).waitFor();
+check((await page.locator(".strikes").count()) === 0, "the fouten give way to the Unlimited banner");
+const xpBefore = Number((await page.locator(".strip .num").textContent()).match(/\+(\d+) XP/)[1]);
+const words = page.locator(".para .w:not(.name)");
+const tapCount = Math.min(6, await words.count());
+for (let i = 0; i < tapCount; i++) await words.nth(i).click();
+check((await page.locator(".para .w.rev").count()) >= 1, "words are looked up freely");
+await page.getByRole("button", { name: "Next page →" }).click();
+await page.locator(".para .w").first().waitFor();
+check((await page.getByRole("heading", { name: /streak lasted|last fout/ }).count()) === 0, "looking up every word never ends the run");
+const xpAfter = Number((await page.locator(".strip .num").textContent()).match(/\+(\d+) XP/)[1]);
+check(xpAfter - xpBefore <= 8 && xpAfter > xpBefore, `a paragraph earned a quarter of the XP (+${xpAfter - xpBefore})`);
+await shot("08-unlimited");
+await page.locator(".para .w:not(.name)").first().click();
+await page.getByRole("button", { name: "End and study these words" }).click();
+await page.getByRole("heading", { name: /in unlimited lookup mode/ }).waitFor();
+check(true, "ending the session shows its words");
+const n2 = Number((await page.getByRole("button", { name: /Study these/ }).textContent()).match(/\d+/)[0]);
+await page.getByRole("button", { name: /Study these/ }).click();
+for (let i = 0; i < n2; i++) {
+  await page.getByRole("button", { name: "Show meaning" }).click();
+  await page.getByRole("button", { name: "Easy", exact: true }).click();
+}
+check(await page.getByText(/Study: \+80 XP/).waitFor({ timeout: 5000 }).then(() => true, () => false), "studying a lookup-mode session's words earns double (+80 XP)");
+await page.getByRole("button", { name: "Back", exact: true }).first().click();
+await page.locator(".continue").click();
+await page.getByRole("button", { name: "Back to fouten" }).click();
+await page.locator(".strikes").waitFor();
+check(true, "and back to fouten");
+await page.getByRole("button", { name: "Home" }).first().click();
+await page.locator(".hello").waitFor();
+
 step("Me: add a Claude key (mocked) and check the connection");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
 await page.getByLabel("Claude API key").fill("sk-ant-test-key");

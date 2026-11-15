@@ -116,3 +116,6 @@ export function dayRun(days: readonly string[], today: string): number {
   }
   return run;
 }
+
+/** Unlimited lookup mode opens with the first badge at Bronze or above (a one-off counts). */
+export const lookupModeUnlocked = (held: Readonly<Record<string, number>> | undefined): boolean => Object.values(held ?? {}).some((t) => t >= 1);

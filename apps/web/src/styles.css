@@ -343,3 +343,6 @@ ol.how { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
 :root[data-theme="dark"] .btn.g-hard, :root[data-theme="dark"] .btn.g-medium { color: #1b2622; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.g-hard, :root:not([data-theme="light"]) .btn.g-medium { color: #1b2622; } }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.strip.unlimited { background: color-mix(in srgb, var(--c-yellow) 14%, var(--sheet)); border-color: var(--c-yellow); }
+.strip.unlimited b { color: var(--c-yellow); }
+.strip.unlimited .mode { background: var(--c-yellow); color: var(--sheet); }

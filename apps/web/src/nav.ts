@@ -9,7 +9,7 @@ export type Screen =
   | { name: "reader"; bookId: string }
   | { name: "add" }
   | { name: "photo"; bookId?: string }
-  | { name: "study-session"; lemmas?: string[] };
+  | { name: "study-session"; lemmas?: string[]; afterLookupMode?: boolean };
 
 interface Nav {
   tab: Tab;

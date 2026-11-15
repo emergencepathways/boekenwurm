@@ -332,6 +332,12 @@ anywhere except `private/`.
 
 ## Decided
 
+- Unlimited lookup mode: unlocked by any badge at Bronze (a one-off counts), switched on and off in the reader
+  ("Unlimited ∞"; the choice is remembered). No fouten: every paragraph passes and no streak builds, so there is no
+  streak bonus and the run doesn't count towards the Streak badge. Paragraphs earn a quarter of the XP (× 1.5 above
+  the reader's rank). "End and study these words" closes the session, and studying its words earns 80 XP instead of
+  40. Rules: `LOOKUP_MODE_RULES` (checkpoint.ts), `lookupModeUnlocked` (achievements.ts). 2026-11-15.
+
 - A strike is called a *fout* in the app ("Fouten" over the pips, "no fout"): "strike" is a baseball word that means
   nothing to Dutch speakers. The code and this document keep "strike" as the internal name. 2026-11-13.
 - The streak token survives as an XP bonus: a run of 10 paragraphs or more in a session earns 200 XP, once per

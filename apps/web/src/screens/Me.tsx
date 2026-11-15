@@ -62,7 +62,12 @@ export function Me() {
             );
           })}
         </div>
-        <p className="small muted">Each badge tier you reach adds {E.XP.achievement} XP. Badge names are placeholders for now.</p>
+        <p className="small muted">
+          Each badge tier you reach adds {E.XP.achievement} XP. Badge names are placeholders for now.{" "}
+          {E.lookupModeUnlocked(play.tiers)
+            ? "Unlimited lookup mode is unlocked: switch it on in the reader (Unlimited ∞)."
+            : "Earn any badge at Bronze to unlock unlimited lookup mode: no fouten, look up as much as you like."}
+        </p>
       </section>
 
       <Account />

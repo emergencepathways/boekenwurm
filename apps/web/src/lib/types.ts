@@ -65,6 +65,8 @@ export interface Settings {
   colorText?: boolean;
   /** Cards in a review set, 20–50 (30 by default). */
   reviewSetSize?: number;
+  /** Unlimited lookup mode is on (once unlocked by a Bronze badge): no fouten, a quarter of the XP. */
+  unlimitedMode?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {

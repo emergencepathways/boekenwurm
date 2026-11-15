@@ -135,7 +135,7 @@ const ANSWERS: Array<{ a: E.Answer; label: string; cls: string }> = [
  * - recap (a session summary's words, or "not sticking"): each word rated once, no repeats.
  * Skip drops a word that isn't worth learning; it can be brought back from Study.
  */
-export function StudySession({ lemmas }: { lemmas?: string[] }) {
+export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: string[]; afterLookupMode?: boolean }) {
   const cards = useStore((s) => s.cards);
   const meanings = useStore((s) => s.meanings);
   const examples = useStore((s) => s.examples);
@@ -160,8 +160,8 @@ export function StudySession({ lemmas }: { lemmas?: string[] }) {
   const award = useCallback(() => {
     if (awarded.current || !settledRef.current) return;
     awarded.current = true;
-    void studyFinished({ cards: settledRef.current, dueAtStart: initial.length, completedSet: !recap && doneRef.current });
-  }, [initial.length, recap]);
+    void studyFinished({ cards: settledRef.current, dueAtStart: initial.length, completedSet: !recap && doneRef.current, afterLookupMode });
+  }, [initial.length, recap, afterLookupMode]);
   useEffect(() => () => award(), [award]);
   useEffect(() => {
     if (!queue.length) award();

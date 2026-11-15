@@ -113,3 +113,17 @@ export function allowanceFor(countableWords: number, passesInARow: number, rules
 export function passes(reveals: number, allowance: Allowance, rules: CheckpointRules): boolean {
   return rules.failWhen === "reaches" ? reveals < allowance.allowed : reveals <= allowance.allowed;
 }
+
+/**
+ * Unlimited lookup mode (unlocked by any Bronze badge, achievements.ts): look up as many words as you like. Every
+ * paragraph passes, there is no streak, and no tightening; XP is a quarter (xp.ts).
+ */
+export const LOOKUP_MODE_RULES: Readonly<CheckpointRules> = {
+  basePercent: 100,
+  streakStartsAfter: Number.MAX_SAFE_INTEGER,
+  stepPercent: 0,
+  floorPercent: 100,
+  minStrikes: Number.MAX_SAFE_INTEGER,
+  minStrikesFloor: Number.MAX_SAFE_INTEGER,
+  failWhen: "exceeds",
+};
