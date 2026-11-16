@@ -1,23 +1,25 @@
 /* Boekenwurm. One reading column, like a page held in the hand; tools around it stay quiet.
    Colours and type carry over from the playtest. */
+/* Dark lavender: one dark theme for everyone, low glare for long reading. Deep plum-grey surfaces (never pure black),
+   soft lavender-white text, a lavender accent. Green, amber and red keep their meaning (Easy, Medium, Hard) and are
+   tuned for this background. Text pairs meet WCAG AA contrast (4.5:1 or more). */
 :root {
-  --paper: #f2f5ef;
-  --sheet: #fbfcf9;
-  --ink: #1b2622;
-  --muted: #5d6b65;
-  --line: #d5ddd6;
-  --leaf: #2d7a4c;
-  --leaf-ink: #fbfcf9;
-  --leaf-soft: #dcefe2;
-  --mark: #f3d25c;
-  --mark-ink: #1b2622;
-  --strike: #b83a26;
-  --strike-soft: #f6dcd6;
-  --gold: #b5851c;
-  --gold-soft: #f6ead0;
-  /* Colour-coded text: readable on the page (contrast 4.5:1 or more). */
-  --c-green: #2a7543; --c-yellow: #855c00; --c-red: #b3261e;
-  --shadow: 0 1px 2px rgb(27 38 34 / 0.06), 0 6px 20px rgb(27 38 34 / 0.07);
+  --paper: #17141f;
+  --sheet: #201b2b;
+  --ink: #ebe6f4;
+  --muted: #aaa1bd;
+  --line: #372f47;
+  --leaf: #b9a3ea;
+  --leaf-ink: #1a1426;
+  --leaf-soft: #2f2747;
+  --mark: #4d3f74;
+  --mark-ink: #f6f1ff;
+  --strike: #f08d7d;
+  --strike-soft: #3d2229;
+  --gold: #e3b955;
+  --gold-soft: #382f1d;
+  --c-green: #8ed8a9; --c-yellow: #ecc65a; --c-red: #ff958a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 20px rgb(0 0 0 / 0.3);
   --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --read: "Literata", "Iowan Old Style", Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -25,23 +27,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tabbar: calc(62px + var(--safe-bottom));
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #121815; --sheet: #19211d; --ink: #e4ece7; --muted: #9aaba3; --line: #2c3833;
-    --leaf: #6cc48f; --leaf-ink: #0f1a14; --leaf-soft: #20382a; --mark: #7d6a1f; --mark-ink: #fff7d6;
-    --strike: #ef7b65; --strike-soft: #3e211b; --gold: #e2b54b; --gold-soft: #3a3019;
-    --c-green: #7fd19f; --c-yellow: #ecc65a; --c-red: #ff8f7d;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25); color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #121815; --sheet: #19211d; --ink: #e4ece7; --muted: #9aaba3; --line: #2c3833;
-  --leaf: #6cc48f; --leaf-ink: #0f1a14; --leaf-soft: #20382a; --mark: #7d6a1f; --mark-ink: #fff7d6;
-  --strike: #ef7b65; --strike-soft: #3e211b; --gold: #e2b54b; --gold-soft: #3a3019;
-    --c-green: #7fd19f; --c-yellow: #ecc65a; --c-red: #ff8f7d;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25); color-scheme: dark;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -81,7 +67,7 @@ button { font: inherit; color: inherit; }
 .tabbar button svg { width: 26px; height: 26px; }
 .tabbar button[aria-current="page"] { color: var(--leaf); }
 .tabbar .dot { position: absolute; top: 8px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--strike); color: #fff; font: 700 0.68rem/18px var(--ui); }
+  background: var(--strike); color: var(--leaf-ink); font: 700 0.68rem/18px var(--ui); }
 
 /* ---------------------------------------------------------------- shared pieces */
 .label { font: 500 0.68rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
@@ -329,7 +315,7 @@ td .forms { color: var(--muted); font-size: 0.82rem; }
   padding: 22px max(18px, env(safe-area-inset-left)) calc(22px + var(--safe-bottom)); display: grid; gap: 14px; box-shadow: 0 -10px 40px rgb(0 0 0 / 0.2); }
 .sheetmodal .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: -8px auto 2px; }
 @media (min-width: 720px) { .scrim { align-items: center; } .sheetmodal { border-radius: 20px; } }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabbar) + 14px); z-index: 60; background: var(--ink); color: var(--paper);
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabbar) + 14px); z-index: 60; background: #3a3058; color: var(--ink); border: 1px solid #54477c;
   padding: 11px 16px; border-radius: 12px; font-size: 0.92rem; max-width: min(92vw, 30rem); box-shadow: var(--shadow); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
 .stat { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--paper); }
@@ -354,11 +340,9 @@ ol.how { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
 
 /* Flashcard answers: Hard red, Medium amber, Easy green (packages/engine/src/review.ts) */
 .grades.three { grid-template-columns: repeat(3, 1fr); }
-.btn.g-hard { background: var(--strike); border-color: var(--strike); color: #fff; }
-.btn.g-medium { background: var(--c-yellow); border-color: var(--c-yellow); color: #fff; }
-.btn.g-easy { background: var(--leaf); border-color: var(--leaf); color: var(--leaf-ink); }
-:root[data-theme="dark"] .btn.g-hard, :root[data-theme="dark"] .btn.g-medium { color: #1b2622; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.g-hard, :root:not([data-theme="light"]) .btn.g-medium { color: #1b2622; } }
+.btn.g-hard { background: var(--strike); border-color: var(--strike); color: var(--leaf-ink); }
+.btn.g-medium { background: var(--c-yellow); border-color: var(--c-yellow); color: var(--leaf-ink); }
+.btn.g-easy { background: var(--c-green); border-color: var(--c-green); color: var(--leaf-ink); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .strip.unlimited { background: color-mix(in srgb, var(--c-yellow) 14%, var(--sheet)); border-color: var(--c-yellow); }
 .strip.unlimited b { color: var(--c-yellow); }

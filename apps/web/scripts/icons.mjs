@@ -13,16 +13,16 @@ const out = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "icons
 const svg = ({ inset = 0, rounded = true } = {}) => {
   const s = 1 - inset * 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="${rounded ? 112 : 0}" fill="#2d7a4c"/>
+  <rect width="512" height="512" rx="${rounded ? 112 : 0}" fill="#5b4a8b"/>
   <g transform="translate(${256 * (1 - s)} ${256 * (1 - s)}) scale(${s})">
     <path d="M86 168c58-20 118-16 170 14v222c-52-30-112-34-170-14z" fill="#fbfcf9"/>
-    <path d="M426 168c-58-20-118-16-170 14v222c52-30 112-34 170-14z" fill="#e7eee8"/>
-    <path d="M256 182v222" stroke="#2d7a4c" stroke-width="8"/>
-    <g fill="none" stroke="#c9d6cc" stroke-width="10" stroke-linecap="round">
+    <path d="M426 168c-58-20-118-16-170 14v222c52-30 112-34 170-14z" fill="#ece6f6"/>
+    <path d="M256 182v222" stroke="#5b4a8b" stroke-width="8"/>
+    <g fill="none" stroke="#cfc4e3" stroke-width="10" stroke-linecap="round">
       <path d="M120 222c34-8 70-6 104 6M120 262c34-8 70-6 104 6M120 302c34-8 70-6 104 6"/>
       <path d="M288 228c34-12 70-14 104-6M288 268c34-12 70-14 104-6"/>
     </g>
-    <path d="M288 308c34-12 70-14 104-6" fill="none" stroke="#c9d6cc" stroke-width="10" stroke-linecap="round"/>
+    <path d="M288 308c34-12 70-14 104-6" fill="none" stroke="#cfc4e3" stroke-width="10" stroke-linecap="round"/>
     <path d="M318 214c-6-30 6-58 30-70" fill="none" stroke="#1b2622" stroke-width="52" stroke-linecap="round"/>
     <path d="M318 214c-6-30 6-58 30-70" fill="none" stroke="#f3d25c" stroke-width="38" stroke-linecap="round"/>
     <circle cx="362" cy="134" r="38" fill="#f3d25c" stroke="#1b2622" stroke-width="7"/>

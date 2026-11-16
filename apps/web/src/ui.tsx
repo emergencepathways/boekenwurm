@@ -25,7 +25,7 @@ export const Icon = {
 
 // ---------------------------------------------------------------- covers
 
-const PALETTE = ["#2d7a4c", "#7a4c2d", "#2d5a7a", "#6b2d7a", "#7a2d45", "#4c6b2d", "#2d6e7a", "#7a642d"];
+const PALETTE = ["#5b4a8b", "#7a4c2d", "#2d5a7a", "#6b2d7a", "#7a2d45", "#4c6b2d", "#2d6e7a", "#7a642d"];
 const colourFor = (s: string) => PALETTE[[...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % PALETTE.length];
 
 /** Share of the book read: paragraphs for files, printed pages for photographed books. */
