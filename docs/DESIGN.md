@@ -371,6 +371,10 @@ anywhere except `private/`.
 
 ## Decided
 
+- A tapped word's meaning opens just under the word, over the text below it (above the word when there's no room
+  on screen), with an arrow to the word; × or Escape closes it, a tap elsewhere closes it, a tap on another word
+  moves it. It never covers the buttons under the paragraph: the paragraph makes room. 2026-11-16.
+
 - The day's reviews: at most 90 cards due a day, the rest wait in the pool; a set of 30 holds 5 new common words
   (15 a day at most), the reader's flagged list words up to 40% (80% when read and tapped in the last 2 days), and the
   pool fills the rest. Fixed by the owner, not reader settings. Reviewing all 90 earns double review XP (600, once a

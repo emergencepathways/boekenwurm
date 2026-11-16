@@ -3,7 +3,7 @@
  * the level-up offer and badges, the end-of-session study list, and, with the reader's own Claude key,
  * Match my level (with Show original) and words in their sentence.
  */
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode, type RefObject } from "react";
 import * as E from "@boekenwurm/engine";
 import * as AI from "@boekenwurm/ai";
 import { pagesFinished } from "@boekenwurm/books";
@@ -472,6 +472,11 @@ export function Reader({ bookId }: { bookId: string }) {
     return () => window.removeEventListener("keydown", key);
   });
   const touchX = useRef<number | null>(null);
+  const paraRef = useRef<HTMLDivElement>(null);
+  const closeWord = () => {
+    r.sel = null;
+    bump();
+  };
 
   // ---------------------------------------------------------------- render
   if (r.loadError)
@@ -624,6 +629,7 @@ export function Reader({ bookId }: { bookId: string }) {
           <span className="num">{pageAt(r.pos) != null ? `p. ${pageAt(r.pos)} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
         </div>
         {mode === "match" && renderMatchedLine(p.matched)}
+        <div className="parawrap" ref={paraRef}>
         <p className="para" lang="nl">
           {p.tokens.map((t, i) =>
             t.k === "punct" || t.k === "number" ? (
@@ -631,6 +637,8 @@ export function Reader({ bookId }: { bookId: string }) {
             ) : (
               <button
                 key={i}
+                data-i={i}
+                aria-expanded={r.sel === i}
                 type="button"
                 className={`w ${t.k === "name" ? "name" : revealed.has(look(t.t).lemma) ? "rev" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`}
                 onClick={() => tap(i)}
@@ -640,10 +648,12 @@ export function Reader({ bookId }: { bookId: string }) {
             ),
           )}
         </p>
+        {r.sel != null && <WordPopover wrap={paraRef} index={r.sel} onClose={closeWord}>{renderDefinition(onStreak)}</WordPopover>}
+        </div>
         {r.showOriginal && p.matched && (
           <div className="original"><span className="label">Original</span><p lang="nl">{original().text}</p></div>
         )}
-        <div className="def" aria-live="polite">{renderDefinition(onStreak)}</div>
+        <div className="defhint" aria-hidden={r.sel != null} style={{ visibility: r.sel == null ? "visible" : "hidden" }}>{renderDefinition(onStreak, true)}</div>
         <div className="actions turnrow">
           <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>← Previous</button>
           <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>Next page →</button>
@@ -673,18 +683,21 @@ export function Reader({ bookId }: { bookId: string }) {
             <span className="num">{pageAt(l.ord) != null ? `p. ${pageAt(l.ord)} · ` : ""}{l.ord + 1} / {r.text!.paragraphs.length}</span>
           </div>
           {mode === "match" && renderMatchedLine(p.matched)}
+          <div className="parawrap" ref={paraRef}>
           <p className="para" lang="nl">
             {p.tokens.map((t, i) =>
               t.k === "punct" || t.k === "number" ? (
                 <span key={i}>{t.t}</span>
               ) : (
-                <button key={i} type="button" className={`w ${t.k === "name" ? "name" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`} onClick={() => tap(i)}>
+                <button key={i} data-i={i} aria-expanded={r.sel === i} type="button" className={`w ${t.k === "name" ? "name" : ""} ${r.sel === i ? "sel" : ""}${tint(t)}`} onClick={() => tap(i)}>
                   {t.t}
                 </button>
               ),
             )}
           </p>
-          <div className="def" aria-live="polite">{renderDefinition(false)}</div>
+          {r.sel != null && <WordPopover wrap={paraRef} index={r.sel} onClose={closeWord}>{renderDefinition(false)}</WordPopover>}
+          </div>
+          <div className="defhint" aria-hidden={r.sel != null} style={{ visibility: r.sel == null ? "visible" : "hidden" }}>{renderDefinition(false, true)}</div>
           <div className="actions turnrow">
             {l.kind === "previous" && (
               <button className="btn ghost prevbtn" type="button" disabled={l.ord === 0} onClick={() => lookBack("previous", l.ord - 1)}>← Previous</button>
@@ -713,8 +726,8 @@ export function Reader({ bookId }: { bookId: string }) {
     return null;
   }
 
-  function renderDefinition(onStreak: boolean) {
-    if (r.sel == null) return <span className="note">Tap any word you don't know. Names and numbers never count.</span>;
+  function renderDefinition(onStreak: boolean, hint = false) {
+    if (hint || r.sel == null) return <span className="note">Tap any word you don't know. Names and numbers never count.</span>;
     const tok = para().tokens[r.sel];
     if (tok.k === "name")
       return (
@@ -1091,6 +1104,73 @@ function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
       <span className="grow" />
       <span className="sr-only">{title}</span>
       {right}
+    </div>
+  );
+}
+
+/**
+ * A tapped word's meaning, laid over the text just below the word (above it when there's no room below on screen),
+ * so the reader never scrolls away from the sentence. Escape or × closes it; tapping another word moves it.
+ */
+function WordPopover({ wrap, index, onClose, children }: { wrap: RefObject<HTMLDivElement | null>; index: number; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; arrow: number; above: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const box = wrap.current, el = ref.current;
+      const word = box?.querySelector<HTMLElement>(`[data-i="${index}"]`);
+      if (!box || !el || !word) return;
+      const b = box.getBoundingClientRect(), w = word.getBoundingClientRect();
+      const width = el.offsetWidth, height = el.offsetHeight, gap = 10;
+      const centre = w.left + w.width / 2 - b.left;
+      const left = Math.max(0, Math.min(b.width - width, centre - width / 2));
+      const above = w.bottom + gap + height > window.innerHeight - 8 && w.top - gap - height >= 8;
+      const next = { left, top: above ? w.top - b.top - gap - height : w.bottom - b.top + gap, arrow: Math.max(14, Math.min(width - 14, centre - left)), above };
+      // It may cover the text below the word, never the buttons under the paragraph: the paragraph makes room.
+      const text = box.querySelector<HTMLElement>(".para")?.offsetHeight ?? 0;
+      const room = `${Math.max(0, Math.ceil(next.top + height - text))}px`;
+      if (box.style.paddingBottom !== room) box.style.paddingBottom = room;
+      setPos((p) => (p && p.left === next.left && p.top === next.top && p.above === next.above && p.arrow === next.arrow ? p : next));
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    if (ref.current) ro.observe(ref.current);
+    if (wrap.current) ro.observe(wrap.current);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, { passive: true });
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    // A tap anywhere else closes it (a tap on another word moves it instead).
+    // On click, not pointerdown: closing first would move the buttons under the finger before the click lands.
+    const outside = (e: MouseEvent) => {
+      // The path is taken at dispatch, so a button inside that re-rendered away still counts as inside.
+      const path = e.composedPath();
+      if (ref.current && path.includes(ref.current)) return;
+      if (path.some((n) => n instanceof Element && n.matches(".para .w"))) return;
+      onClose();
+    };
+    document.addEventListener("click", outside);
+    const box = wrap.current;
+    return () => {
+      if (box) box.style.paddingBottom = "";
+      ro.disconnect();
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place);
+      window.removeEventListener("keydown", key);
+      document.removeEventListener("click", outside);
+    };
+  }, [wrap, index, onClose]);
+  return (
+    <div
+      ref={ref}
+      className={`wordpop def${pos?.above ? " above" : ""}`}
+      role="dialog"
+      aria-label="Meaning"
+      aria-live="polite"
+      style={pos ? { left: pos.left, top: pos.top, ["--arrow" as string]: `${pos.arrow}px` } : { visibility: "hidden", left: 0, top: 0 }}
+    >
+      <button className="popclose" type="button" aria-label="Close" onClick={onClose}>×</button>
+      {children}
     </div>
   );
 }

@@ -213,7 +213,24 @@ textarea { font-family: var(--read); line-height: 1.5; min-height: 120px; }
 .w.c-yellow { color: var(--c-yellow); text-decoration: underline dashed var(--c-yellow); text-underline-offset: 4px; }
 .w.c-red { color: var(--c-red); text-decoration: underline solid var(--c-red); text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .w.rev.c-green, .w.rev.c-yellow, .w.rev.c-red { color: var(--mark-ink); }
-.def { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 6px; min-height: 5em; }
+.def { display: grid; gap: 6px; }
+.defhint { border-top: 1px solid var(--line); padding-top: 14px; }
+/* The meaning of a tapped word, laid over the text just under the word. */
+.parawrap { position: relative; }
+.wordpop {
+  position: absolute; z-index: 6; width: min(24rem, 100%); padding: 12px 40px 12px 14px; border-radius: 12px;
+  background: var(--sheet); border: 1px solid var(--line); box-shadow: 0 10px 30px rgb(0 0 0 / 0.18), var(--shadow);
+}
+.wordpop::before {
+  content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 7px); width: 12px; height: 12px;
+  background: var(--sheet); border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg);
+}
+.wordpop.above::before { top: auto; bottom: -7px; transform: rotate(225deg); }
+.popclose {
+  position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border: 0; background: none; border-radius: 8px;
+  font: 400 1.4rem/1 var(--ui); color: var(--muted); cursor: pointer;
+}
+.popclose:hover { background: var(--paper); color: var(--ink); }
 .def .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
 .def .word { font: 600 1.15rem var(--read); }
 .def .lemma { font: 500 0.78rem var(--mono); color: var(--muted); }
