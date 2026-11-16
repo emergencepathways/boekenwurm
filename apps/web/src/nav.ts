@@ -9,7 +9,8 @@ export type Screen =
   | { name: "reader"; bookId: string }
   | { name: "add" }
   | { name: "photo"; bookId?: string }
-  | { name: "study-session"; lemmas?: string[]; afterLookupMode?: boolean }
+  /** `bookId`: opened from a reading session's summary; the reader goes back to that book, at its next page. */
+  | { name: "study-session"; lemmas?: string[]; afterLookupMode?: boolean; bookId?: string }
   | { name: "import-list" };
 
 interface Nav {

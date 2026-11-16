@@ -871,7 +871,7 @@ export function Reader({ bookId }: { bookId: string }) {
         )}
         <div className="actions">
           {s.list.length > 0 && (
-            <button className="btn primary" type="button" onClick={() => open({ name: "study-session", lemmas: s.list.map((w) => w.lemma), afterLookupMode: s.kind === "lookup" })}>
+            <button className="btn primary" type="button" onClick={() => open({ name: "study-session", lemmas: s.list.map((w) => w.lemma), afterLookupMode: s.kind === "lookup", bookId })}>
               Study these {plural(s.list.length, "word")}
             </button>
           )}

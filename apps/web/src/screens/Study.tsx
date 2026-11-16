@@ -187,7 +187,10 @@ const ANSWERS: Array<{ a: E.Answer; label: string; cls: string }> = [
  * - recap (a session summary's words, or "not sticking"): each word rated once, no repeats.
  * Skip drops a word that isn't worth learning; it can be brought back from Study.
  */
-export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: string[]; afterLookupMode?: boolean }) {
+export function StudySession({ lemmas, afterLookupMode = false, bookId }: { lemmas?: string[]; afterLookupMode?: boolean; bookId?: string }) {
+  // Studying a reading session's words: leaving goes back to the book, which opens at the page after the session.
+  const book = useStore((s) => (bookId ? s.books.find((b) => b.id === bookId) : undefined));
+  const leave = () => (book ? open({ name: "reader", bookId: book.id }) : close());
   const cards = useStore((s) => s.cards);
   const meanings = useStore((s) => s.meanings);
   const examples = useStore((s) => s.examples);
@@ -237,7 +240,7 @@ export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: str
   return (
     <main className="screen full">
       <div className="topbar">
-        <button className="back" type="button" onClick={close}><span style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> Back</button>
+        <button className="back" type="button" onClick={leave}><span style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> {book ? "Back to the book" : "Back"}</button>
         <span className="grow" />
         {lemma && <span className="num muted">{recap ? `${settled + 1} of ${initial.length}` : `${settled} of ${initial.length} learned`}</span>}
       </div>
@@ -256,7 +259,14 @@ export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: str
               ? "Hard and Medium words wait in your review pool, Hard first. Easy ones come back for a quick check in 3 days."
               : "Easy words come back for a quick check after 3 days, then 1 week, 3 weeks and every 2 months."}
           </p>
-          <button className="btn primary" type="button" onClick={close}>Back</button>
+          {book ? (
+            <div className="actions">
+              <button className="btn primary" type="button" onClick={leave}>Keep reading</button>
+              <button className="btn ghost" type="button" onClick={close}>Home</button>
+            </div>
+          ) : (
+            <button className="btn primary" type="button" onClick={close}>Back</button>
+          )}
         </section>
       ) : (
         <>

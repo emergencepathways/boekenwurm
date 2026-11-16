@@ -49,7 +49,7 @@ export function App() {
       ) : screen?.name === "import-list" ? (
         <ImportList />
       ) : screen?.name === "study-session" ? (
-        <StudySession lemmas={screen.lemmas} afterLookupMode={screen.afterLookupMode} />
+        <StudySession lemmas={screen.lemmas} afterLookupMode={screen.afterLookupMode} bookId={screen.bookId} />
       ) : (
         <>
           {tab === "home" && <Home />}

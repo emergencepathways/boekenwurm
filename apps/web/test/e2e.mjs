@@ -337,6 +337,7 @@ for (let i = 0; i < n; i++) {
 if (await page.locator(".wordpop").isVisible()) await page.locator(".wordpop .popclose").click();
 check(await page.getByRole("button", { name: "Review fouten →" }).isVisible() && !(await page.getByRole("button", { name: "Next page →" }).isVisible()),
   "at the fouten limit, Next page becomes Review fouten");
+const endedAt = Number((await page.locator(".folio .num").textContent()).match(/(\d+) \//)[1]);
 await page.getByRole("button", { name: "Review fouten →" }).click();
 await page.getByRole("heading", { name: /streak lasted|last fout|passed 1 paragraph|passed 3|lasted/ }).waitFor();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "summary offers to study the words");
@@ -371,9 +372,13 @@ for (let i = 0; i < recapCount; i++) {
 await page.getByText(`Done: ${recapCount} word${recapCount === 1 ? "" : "s"} rated.`).waitFor();
 check(new Set(recapWords).size === recapCount, "each word came up once, with no repeats");
 const skippedWord = recapCount > 1 ? recapWords[1] : null;
-await page.getByRole("button", { name: "Back", exact: true }).first().click();
+check(await page.getByRole("button", { name: "Keep reading" }).isVisible(), "after studying a session's words: Keep reading");
+await page.getByRole("button", { name: "Keep reading" }).click();
+await page.locator(".para .w").first().waitFor();
+check((await page.locator(".folio .num").textContent()).includes(`${endedAt + 1} /`), `the book opens again at the next page (${endedAt + 1})`);
+await page.getByRole("button", { name: "Back to Home" }).click();
 await page.locator(".continue").waitFor();
-check(true, "closing the review returns to Home");
+check(true, "and Home is one tap away");
 
 step("progress is kept: reload and come back");
 await page.reload();
@@ -623,8 +628,7 @@ for (let i = 0; i < n2; i++) {
   await page.getByRole("button", { name: "Easy", exact: true }).click();
 }
 check(await page.getByText(/Study: \+80 XP/).waitFor({ timeout: 5000 }).then(() => true, () => false), "studying a lookup-mode session's words earns double (+80 XP)");
-await page.getByRole("button", { name: "Back", exact: true }).first().click();
-await page.locator(".continue").click();
+await page.getByRole("button", { name: "Keep reading" }).click(); // straight back into the book
 await page.getByRole("button", { name: "Back to fouten" }).click();
 await page.locator(".strikes").waitFor();
 check(true, "and back to fouten");
