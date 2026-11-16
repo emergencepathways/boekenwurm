@@ -115,6 +115,7 @@ function RevealedWords({ words, plan }: { words: E.WordStats[]; plan: string[] }
   const cards = useStore((s) => s.cards);
   const meanings = useStore((s) => s.meanings);
   const [q, setQ] = useState("");
+  const [all, setAll] = useState(false);
   const now = Date.now();
   const planKey = plan.join("|");
   const rank = useMemo(() => {
@@ -146,19 +147,26 @@ function RevealedWords({ words, plan }: { words: E.WordStats[]; plan: string[] }
       <p className="small muted">
         {query ? `${plural(found.length, "word")} found. ` : ""}Sorted by what you'll study next: your next review set first, then the rest of your pool.
       </p>
-      {found.length ? <WordTable words={found} next={next} /> : <p className="empty">No word matches “{q.trim()}”.</p>}
-      {found.length > 200 && <p className="note">Showing the first 200 of {found.length.toLocaleString()}. Search to find the others.</p>}
+      {found.length ? <WordTable words={found} next={next} limit={all ? found.length : FIRST_WORDS} /> : <p className="empty">No word matches “{q.trim()}”.</p>}
+      {found.length > FIRST_WORDS && (
+        <button className="btn small ghost" type="button" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? `Show the first ${FIRST_WORDS} only` : `Show all ${found.length.toLocaleString()} words`}
+        </button>
+      )}
     </>
   );
 }
 
-function WordTable({ words, next }: { words: E.WordStats[]; next?: (lemma: string) => string }) {
+/** The revealed-words list shows its first 40 (the words to study next) until the reader asks for all. */
+const FIRST_WORDS = 40;
+
+function WordTable({ words, next, limit = 200 }: { words: E.WordStats[]; next?: (lemma: string) => string; limit?: number }) {
   return (
     <div className="tablewrap">
       <table>
         <thead><tr><th>Word</th>{next && <th>Next</th>}<th>Revealed</th><th>Met</th><th>Reveal rate</th></tr></thead>
         <tbody>
-          {words.slice(0, 200).map((w) => {
+          {words.slice(0, limit).map((w) => {
             const rate = E.revealRate(w);
             return (
               <tr key={w.lemma}>
