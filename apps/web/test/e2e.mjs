@@ -317,7 +317,12 @@ check((await page.locator(".def .head .word").count()) === 1, "tapping a word th
 await shot("05a-previous");
 await page.getByRole("button", { name: "← Previous" }).click();
 check((await page.locator(".folio .num").textContent()).startsWith("2 /"), "Previous again goes one more back");
-await page.getByRole("button", { name: "Back to where I was →" }).click();
+check(await page.evaluate(() => { const [p, c] = [...document.querySelectorAll(".turnrow .btn")].map((b) => b.getBoundingClientRect()); return Math.abs(p.top - c.top) < 2; }), "Previous and Continue sit on one line");
+for (const width of [320, 390]) {
+  await page.setViewportSize({ width, height: 844 });
+  check(await page.evaluate(() => { const [p, c] = [...document.querySelectorAll(".turnrow .btn")].map((b) => b.getBoundingClientRect()); return Math.abs(p.top - c.top) < 2 && c.right <= document.documentElement.clientWidth; }), `and fit a ${width}px screen`);
+}
+await page.getByRole("button", { name: "Continue →" }).click();
 await page.locator(".strikes").waitFor();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "back on the paragraph the reader was at");
 check((await used()) === pipsBefore, "looking back cost no strike");
@@ -553,7 +558,7 @@ check(coloured.some(([, c]) => c === "c-green"), "a word revealed before is gree
 check(coloured.some(([, c]) => c === ""), "words never revealed stay plain");
 check(await page.locator(".para .w.name.c-green, .para .w.name.c-yellow, .para .w.name.c-red").count() === 0, "names are never coloured");
 await shot("06b-colour-text");
-await page.getByRole("button", { name: /Back to where I was/ }).click().catch(() => {});
+await page.getByRole("button", { name: "Continue →" }).click().catch(() => {});
 await page.getByRole("button", { name: "Home" }).first().click().catch(() => {});
 await page.locator(".tabbar").waitFor();
 

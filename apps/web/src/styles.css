@@ -180,7 +180,9 @@ textarea { font-family: var(--read); line-height: 1.5; min-height: 120px; }
 .strip.nopenalty b { color: var(--leaf); }
 .strip.nopenalty .mode { background: var(--leaf); color: var(--leaf-ink); font: 700 0.72rem var(--ui); letter-spacing: 0.03em; text-transform: uppercase; border-radius: 999px; padding: 3px 10px; }
 .sheet.calm { border-color: var(--leaf); }
-.turnrow { justify-content: space-between; }
+/* Previous and the forward button always share one line, at any width. */
+.turnrow { justify-content: space-between; flex-wrap: nowrap; }
+.turnrow .btn { white-space: nowrap; min-width: 0; }
 .turnrow .prevbtn:disabled { visibility: hidden; }
 .strikes { display: inline-flex; gap: 5px; align-items: center; vertical-align: middle; }
 .pip { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--leaf); }

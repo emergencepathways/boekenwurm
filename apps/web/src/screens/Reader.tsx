@@ -690,7 +690,7 @@ export function Reader({ bookId }: { bookId: string }) {
   function renderLook() {
     const l = r.look!;
     const p = para();
-    const back = l.kind === "reread" ? "Back to the summary" : "Back to where I was →";
+    const back = l.kind === "reread" ? "Back to the summary" : "Continue →";
     return (
       <>
         <section className="strip nopenalty" role="status" aria-label="No penalty">
