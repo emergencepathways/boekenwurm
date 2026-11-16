@@ -28,6 +28,13 @@ export function Words() {
   const wordbook = useStore((s) => s.wordbook);
   const cards = useStore((s) => s.cards);
   const [pick, setPick] = useState<Pick | null>(null);
+  // The word grid starts folded, so the tab fits on one screen; tapping a list (or "Show words") opens it.
+  const [expanded, setExpanded] = useState(false);
+  const choose = (p: Pick) => {
+    setPick(p);
+    setExpanded(true);
+    setTimeout(() => document.getElementById("wordgrid")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
   const [remove, setRemove] = useState<WordListInfo | null>(null);
 
   useEffect(() => void checkAchievements(), []); // a word may have turned learned since (Easy for 2 weeks)
@@ -78,10 +85,10 @@ export function Words() {
                 <button className="btn small ghost" type="button" onClick={() => void setCommon(false)}>Remove</button>
               </div>
               {commonList.length ? (
-                <div className="tiers">
+                <div className="tiers tiles">
                   {sizes.map((n) => (
-                    <ListRow key={n} title={`The ${fmt(n)} most common`} words={commonList.slice(0, n)} status={status}
-                      selected={current?.kind === "common" && current.size === n} onClick={() => setPick({ kind: "common", size: n })} />
+                    <ListRow key={n} tile title={`Top ${fmt(n)}`} words={commonList.slice(0, n)} status={status}
+                      selected={current?.kind === "common" && current.size === n} onClick={() => choose({ kind: "common", size: n })} />
                   ))}
                 </div>
               ) : (
@@ -96,7 +103,7 @@ export function Words() {
               <div className="tiers">
                 {lists.map((l) => (
                   <ListRow key={l.id} title={l.name} detail={`${SOURCE[l.source]} · ${fmt(l.size)} words`} words={words({ kind: "list", id: l.id })} status={status}
-                    selected={current?.kind === "list" && current.id === l.id} onClick={() => setPick({ kind: "list", id: l.id })} />
+                    selected={current?.kind === "list" && current.id === l.id} onClick={() => choose({ kind: "list", id: l.id })} />
                 ))}
               </div>
             </section>
@@ -109,7 +116,7 @@ export function Words() {
 
           {current && (
             <WordGrid key={JSON.stringify(current)} title={current.kind === "common" ? `The ${fmt(current.size)} most common words` : (lists.find((l) => l.id === current.id)?.name ?? "")}
-              words={words(current)} status={status} onRemove={current.kind === "list" ? () => setRemove(lists.find((l) => l.id === current.id) ?? null) : undefined} />
+              words={words(current)} status={status} expanded={expanded} onToggle={() => setExpanded(!expanded)} onRemove={current.kind === "list" ? () => setRemove(lists.find((l) => l.id === current.id) ?? null) : undefined} />
           )}
         </>
       )}
@@ -161,7 +168,8 @@ function counts(words: readonly string[], status: (w: string) => E.ListWordStatu
   return { ...p, met: p.seen + p.tapped - p.learned };
 }
 
-function ListRow(props: { title: string; detail?: string; words: readonly string[]; status: (w: string) => E.ListWordStatus; selected: boolean; onClick: () => void }) {
+/** A list's progress: a full-width row for an imported list, or a compact tile for each common-words size. */
+function ListRow(props: { title: string; detail?: string; tile?: boolean; words: readonly string[]; status: (w: string) => E.ListWordStatus; selected: boolean; onClick: () => void }) {
   const c = counts(props.words, props.status);
   const pct = (n: number) => `${c.total ? (n / c.total) * 100 : 0}%`;
   return (
@@ -175,13 +183,17 @@ function ListRow(props: { title: string; detail?: string; words: readonly string
           <i className="l" style={{ width: pct(c.learned) }} />
           <i className="m" style={{ width: pct(c.met) }} />
         </span>
-        <span className="small muted">{props.detail ? `${props.detail} · ` : ""}{fmt(c.learned + c.met)} seen in reading · {fmt(c.unseen)} not seen yet</span>
+        <span className="small muted">
+          {props.tile ? `${fmt(c.learned + c.met)} seen` : `${props.detail ? `${props.detail} · ` : ""}${fmt(c.learned + c.met)} seen · ${fmt(c.unseen)} not seen yet`}
+        </span>
       </button>
     </div>
   );
 }
 
-function WordGrid({ title, words, status, onRemove }: { title: string; words: readonly string[]; status: (w: string) => E.ListWordStatus; onRemove?: () => void }) {
+function WordGrid({ title, words, status, expanded, onToggle, onRemove }: {
+  title: string; words: readonly string[]; status: (w: string) => E.ListWordStatus; expanded: boolean; onToggle: () => void; onRemove?: () => void;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [shown, setShown] = useState(PAGE);
   const [word, setWord] = useState<string | null>(null);
@@ -192,13 +204,27 @@ function WordGrid({ title, words, status, onRemove }: { title: string; words: re
     if (filter === "learned") return s.learned;
     return s.state === filter && !s.learned;
   };
-  const list = words.filter(keep);
+  const list = expanded ? words.filter(keep) : [];
+  const c = counts(words, status);
+  const work = expanded ? 0 : words.filter((w) => { const s = status(w); return !s.learned && (s.colour === "red" || s.colour === "yellow"); }).length;
+  if (!expanded)
+    return (
+      <section className="panel" id="wordgrid">
+        <div className="listhead">
+          <h2>{title}</h2>
+          {onRemove && <button className="btn small ghost" type="button" onClick={onRemove}>Remove list</button>}
+        </div>
+        <p className="small">{fmt(c.learned)} learned · {fmt(work)} need work · {fmt(c.met - work)} seen · {fmt(c.unseen)} not seen yet</p>
+        <button className="btn block" type="button" aria-expanded="false" aria-controls="wordgrid" onClick={onToggle}>Show all {fmt(words.length)} words</button>
+      </section>
+    );
   return (
-    <section className="panel">
+    <section className="panel" id="wordgrid">
       <div className="listhead">
         <h2>{title}</h2>
         {onRemove && <button className="btn small ghost" type="button" onClick={onRemove}>Remove list</button>}
       </div>
+      <button className="btn small ghost" type="button" aria-expanded="true" aria-controls="wordgrid" onClick={onToggle}>Hide words</button>
       <div className="chips" role="group" aria-label="Show">
         {FILTERS.map(([f, label]) => (
           <button key={f} type="button" className="chip" aria-pressed={filter === f} onClick={() => (setFilter(f), setShown(PAGE))}>{label}</button>

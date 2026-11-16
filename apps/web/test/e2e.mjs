@@ -411,6 +411,7 @@ check((await page.getByRole("combobox", { name: "Dutch words" }).inputValue()) =
 await page.getByRole("button", { name: "Add 3 words" }).click();
 await page.getByText("markt lijst").first().waitFor();
 check((await page.locator(".listrow").count()) === 2, "two lists");
+check((await page.locator(".wgrid").count()) === 0 && await page.getByRole("button", { name: /^Show all \d+ words$/ }).isVisible(), "the word grid starts folded, with a button to show every word");
 await page.getByText("Hoofdstuk 1").first().click();
 const chips = await page.evaluate(() => [...document.querySelectorAll(".wgrid .wchip")].map((b) => [b.textContent, b.className]));
 check(chips.length === 2 && chips.some(([w, c]) => w === "markt" && /s-(seen|tapped)/.test(c)), "markt was seen in reading");
@@ -430,6 +431,7 @@ if (await addBrood.isVisible()) {
 } else await page.getByRole("button", { name: "Close" }).click();
 await page.getByRole("button", { name: "Add the 5,000 most common words" }).click();
 await page.getByRole("heading", { name: "Common Dutch words" }).waitFor();
+await page.getByRole("button", { name: /^Show all \d+ words$/ }).click();
 check(await page.locator(".wgrid .wchip.s-tapped").count() > 0, "tapped words are coloured");
 await page.getByText("markt lijst").first().click();
 check(/s-unseen/.test(await page.locator(".wgrid .wchip", { hasText: /^trein$/ }).getAttribute("class")), "a word not seen yet in reading is faded");

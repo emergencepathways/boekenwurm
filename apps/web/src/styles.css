@@ -358,7 +358,9 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .listhead .btn { flex-shrink: 0; }
 .listrow { border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
 .listrow[aria-current="true"] { border-color: var(--leaf); box-shadow: inset 3px 0 0 var(--leaf); }
-.listrow .pick { flex: 1; min-width: 0; display: grid; gap: 6px; text-align: left; background: none; border: 0; padding: 10px; cursor: pointer; color: inherit; font: inherit; }
+.listrow .pick { width: 100%; min-width: 0; display: grid; gap: 5px; text-align: left; background: none; border: 0; padding: 8px 10px; cursor: pointer; color: inherit; font: inherit; }
+/* The common-words sizes as a 2 × 2 set of tiles, so the tab's first view fits a phone screen. */
+.tiers.tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* Title and count share a line when there is room and wrap onto two when there isn't (narrow phones). */
 .listrow .name { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; }
 .listrow .name b { font: 700 0.98rem var(--display); min-width: 0; overflow-wrap: anywhere; }
