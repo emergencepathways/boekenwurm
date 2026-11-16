@@ -113,7 +113,7 @@ button { font: inherit; color: inherit; }
 .chip.warn { background: var(--strike-soft); }
 .field { display: grid; gap: 6px; }
 .field > span { font-size: 0.86rem; font-weight: 600; }
-input[type="text"], input[type="email"], input[type="password"], input[type="number"], input:not([type]), select, textarea {
+input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input:not([type]), select, textarea {
   font: 500 1rem var(--ui); padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--sheet);
   color: var(--ink); width: 100%; min-height: 46px;
 }

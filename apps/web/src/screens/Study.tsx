@@ -95,29 +95,75 @@ export function Study() {
 
       <section className="panel">
         <h2>Every word you've revealed</h2>
-        {revealed.length ? <WordTable words={revealed} /> : <p className="empty">Read a page and tap a word to start your list.</p>}
         {revealed.length > 0 && (
           <div className="actions">
             <button className="btn small" type="button" onClick={exportCsv}>Export CSV</button>
             <span className="note">Opens in Anki, Quizlet, Mochi, RemNote and spreadsheets.</span>
           </div>
         )}
+        {revealed.length ? <RevealedWords words={revealed} plan={plan.lemmas} /> : <p className="empty">Read a page and tap a word to start your list.</p>}
       </section>
     </main>
   );
 }
 
-function WordTable({ words }: { words: E.WordStats[] }) {
+/**
+ * Every revealed word, searchable, in study order: the next review set first, then the rest of the pool in review
+ * order, then Easy words by their check-back date, then words with no card and skipped words.
+ */
+function RevealedWords({ words, plan }: { words: E.WordStats[]; plan: string[] }) {
+  const cards = useStore((s) => s.cards);
+  const meanings = useStore((s) => s.meanings);
+  const [q, setQ] = useState("");
+  const now = Date.now();
+  const planKey = plan.join("|");
+  const rank = useMemo(() => {
+    const r = new Map<string, number>();
+    plan.forEach((l, i) => r.set(l, i));
+    dueCards(now).forEach((c, i) => !r.has(c.lemma) && r.set(c.lemma, 1000 + i));
+    Object.values(cards).filter((c) => c.pool === "easy" && !r.has(c.lemma)).sort((a, b) => a.due - b.due).forEach((c, i) => r.set(c.lemma, 100000 + i));
+    return r;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards, planKey]);
+  const order = (l: string) => rank.get(l) ?? (cards[l]?.pool === "skipped" ? 3e6 : 2e6);
+  const query = q.trim().toLowerCase();
+  const found = words
+    .filter((w) => !query || w.lemma.includes(query) || (meaningOf(w.lemma, meanings)?.en ?? "").toLowerCase().includes(query))
+    .sort((a, b) => order(a.lemma) - order(b.lemma) || b.reveals - a.reveals || a.lemma.localeCompare(b.lemma));
+  const inPlan = new Set(plan);
+  const next = (l: string): string => {
+    const c = cards[l];
+    if (inPlan.has(l)) return "Next set";
+    if (!c) return "No card";
+    if (c.pool === "skipped") return "Skipped";
+    if (c.pool === "hard") return "Hard";
+    if (c.pool === "medium") return "Medium";
+    return c.due <= now ? "Check due" : `Check ${inWords(c.due - now)}`;
+  };
+  return (
+    <>
+      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your words or their meanings" aria-label="Search your words" />
+      <p className="small muted">
+        {query ? `${plural(found.length, "word")} found. ` : ""}Sorted by what you'll study next: your next review set first, then the rest of your pool.
+      </p>
+      {found.length ? <WordTable words={found} next={next} /> : <p className="empty">No word matches “{q.trim()}”.</p>}
+      {found.length > 200 && <p className="note">Showing the first 200 of {found.length.toLocaleString()}. Search to find the others.</p>}
+    </>
+  );
+}
+
+function WordTable({ words, next }: { words: E.WordStats[]; next?: (lemma: string) => string }) {
   return (
     <div className="tablewrap">
       <table>
-        <thead><tr><th>Word</th><th>Revealed</th><th>Met</th><th>Reveal rate</th></tr></thead>
+        <thead><tr><th>Word</th>{next && <th>Next</th>}<th>Revealed</th><th>Met</th><th>Reveal rate</th></tr></thead>
         <tbody>
           {words.slice(0, 200).map((w) => {
             const rate = E.revealRate(w);
             return (
               <tr key={w.lemma}>
                 <td><b lang="nl">{w.lemma}</b></td>
+                {next && <td className="small">{next(w.lemma)}</td>}
                 <td className="n">{w.reveals}</td>
                 <td className="n">{w.encounters}</td>
                 <td><div className="rate" title={`${Math.round(rate * 100)}% of encounters revealed`}><i style={{ width: `${Math.round(rate * 100)}%` }} /></div></td>

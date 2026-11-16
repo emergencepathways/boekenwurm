@@ -389,6 +389,19 @@ if (skippedWord) {
   check(true, "brought back, it waits in the pool");
 }
 await shot("06c-study");
+const revealedPanel = page.locator(".panel", { has: page.getByRole("heading", { name: "Every word you've revealed" }) });
+check(await revealedPanel.evaluate((p) => {
+  const exp = [...p.querySelectorAll("button")].find((b) => b.textContent === "Export CSV");
+  return Boolean(exp && p.querySelector("table") && exp.compareDocumentPosition(p.querySelector("table")) & Node.DOCUMENT_POSITION_FOLLOWING);
+}), "Export CSV sits above the word list");
+if (skippedWord) check((await revealedPanel.locator("tbody tr").first().textContent()).includes("Next set"), "the list starts with the next review set's words");
+const rowsBefore = await revealedPanel.locator("tbody tr").count();
+await revealedPanel.getByRole("searchbox", { name: "Search your words" }).fill(recapWords[0]);
+check((await revealedPanel.locator("tbody tr").count()) >= 1 && (await revealedPanel.locator("tbody tr").first().textContent()).includes(recapWords[0]), "search finds a word");
+await revealedPanel.getByRole("searchbox", { name: "Search your words" }).fill("zzzz");
+check(await revealedPanel.getByText("No word matches “zzzz”.").isVisible(), "and says when nothing matches");
+await revealedPanel.getByRole("searchbox", { name: "Search your words" }).fill("");
+check((await revealedPanel.locator("tbody tr").count()) === rowsBefore, "clearing the search shows every word again");
 
 step("Words: no list yet, then a pasted list and a CSV file; list words come first in reviews");
 await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).click();
