@@ -14,6 +14,7 @@ import { gradeBook, hintFromWordMatch, newBook, readPhotoPage, toParagraphs, typ
 import { downscale, COVER_SIDE, OCR_SIDE, CLAUDE_SIDE } from "../lib/images.ts";
 import { saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
 import { stopReader } from "../lib/ocr.ts";
+import { ADMIN } from "../lib/features.ts";
 import { close, open } from "../nav.ts";
 import type { Book, Paragraph } from "../lib/types.ts";
 import { Icon, LevelPicker, plural } from "../ui.tsx";
@@ -209,6 +210,8 @@ function Scanned({ step, onRead, onBack }: {
 
 function Details({ draft, onBack, error }: { draft: Draft; onBack: () => void; error: string | null }) {
   const hasKey = useStore((s) => s.hasKey);
+  // Match my level is experimental: offered only to the owner's admin account.
+  const admin = useStore((s) => s.features.includes(ADMIN));
   const readerLevel = useStore((s) => s.profile.progress.level);
   const [title, setTitle] = useState(draft.title);
   const [author, setAuthor] = useState(draft.author);
@@ -292,7 +295,7 @@ function Details({ draft, onBack, error }: { draft: Draft; onBack: () => void; e
         <p className="small muted">{plural(draft.paragraphs.length, "paragraph")}{draft.pageCount ? ` · ${plural(draft.pageCount, "page")}` : ""}</p>
       </section>
 
-      {above && hasKey ? (
+      {above && hasKey && admin ? (
         <section className="panel">
           <h2>Above your level ({readerLevel})</h2>
           <p>Boekenwurm can match each paragraph above {readerLevel} to your level as you reach it, with your Claude key: about one request per paragraph. The original is always one tap away.</p>

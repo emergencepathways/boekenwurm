@@ -309,6 +309,25 @@ do $$ begin
 end $$;
 reset role;
 
+-- admin feature (0010): granted by the owner only; a reader can't grant it to themselves
+insert into feature_access (user_id, feature) values ('00000000-0000-0000-0000-00000000000b', 'admin');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  begin
+    insert into feature_access (user_id, feature) values (auth.uid(), 'admin');
+    raise exception 'FAIL: a reader granted themselves admin';
+  exception when insufficient_privilege then null;
+  end;
+  if exists (select 1 from feature_access where feature = 'admin') then raise exception 'FAIL: C sees B''s admin'; end if;
+  raise notice 'ok: admin is granted by the owner only, and seen only by its holder';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  if not exists (select 1 from feature_access where feature = 'admin') then raise exception 'FAIL: B can''t see their admin'; end if;
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

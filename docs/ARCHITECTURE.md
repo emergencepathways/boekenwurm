@@ -214,6 +214,9 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 
 ## Security and privacy
 
+- Fonts are bundled with the app (fontsource packages, SIL Open Font License 1.1) and served from Boekenwurm itself;
+  the content-security policy allows fonts from this site only, so no reader's IP address reaches a font service.
+
 - Google Cloud Translation for words the dictionary doesn't know runs in a Supabase Edge Function,
   `supabase/functions/translate`. The owner's key is the function's secret (`GOOGLE_TRANSLATE_KEY`, set from the Actions
   secret of that name by the deploy workflow) and never reaches the app. In Google Cloud it is restricted to the Cloud

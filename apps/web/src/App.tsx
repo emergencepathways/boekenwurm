@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useStore, dueToday } from "./lib/store.ts";
+import { applyFont } from "./lib/fonts.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
 import { Icon, Toaster } from "./ui.tsx";
 import { Home } from "./screens/Home.tsx";
@@ -31,6 +32,8 @@ export function App() {
   useEffect(() => {
     document.documentElement.lang = "en";
   }, []);
+  const font = useStore((s) => s.profile.settings.font);
+  useEffect(() => applyFont(font), [font]);
 
   if (!ready) return <div className="app" aria-busy="true" />;
   if (!onboarded) return <Welcome />;

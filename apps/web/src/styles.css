@@ -20,15 +20,19 @@
   --gold-soft: #382f1d;
   --c-green: #8ed8a9; --c-yellow: #ecc65a; --c-red: #ff958a;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 20px rgb(0 0 0 / 0.3);
-  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --read: "Literata", "Iowan Old Style", Georgia, serif;
-  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --ui: "Bricolage Grotesque", system-ui, sans-serif;
+  /* Fonts (lib/fonts.ts): bundled with the app, chosen by the reader. Default: Literata + Atkinson Hyperlegible Next. */
+  --read: "Literata Variable", "Iowan Old Style", Georgia, serif;
+  --ui: "Atkinson Hyperlegible Next Variable", system-ui, sans-serif;
+  --display: var(--ui);
+  --mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --tabbar: calc(62px + var(--safe-bottom));
   color-scheme: dark;
 }
+
+:root[data-font="source"] { --read: "Source Serif 4 Variable", Georgia, serif; --ui: "Source Sans 3 Variable", system-ui, sans-serif; }
+:root[data-font="newsreader"] { --read: "Newsreader Variable", Georgia, serif; --ui: "Lexend Variable", system-ui, sans-serif; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -400,3 +404,16 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .preview tr.off td:not(:first-child) { opacity: 0.45; }
 .preview .chip { margin-left: 6px; }
 .wordlist-nudge { display: flex; gap: 14px; align-items: center; }
+
+/* ---------------------------------------------------------------- font choice */
+.fontbtn { justify-self: center; }
+.fontbtn .aa { font: 600 1rem var(--read); margin-right: 2px; }
+.fontpick { display: grid; gap: 10px; }
+.fontopt { display: grid; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+.fontopt[aria-checked="true"] { border-color: var(--leaf); box-shadow: inset 3px 0 0 var(--leaf); }
+.fontopt .sample { font-size: 1.15rem; line-height: 1.4; }
+.fontopt .name { font-size: 0.9rem; }
+/* Each option previews its own pairing, whatever is chosen now. */
+.font-literata .sample { font-family: "Literata Variable", Georgia, serif; } .font-literata .name { font-family: "Atkinson Hyperlegible Next Variable", sans-serif; }
+.font-source .sample { font-family: "Source Serif 4 Variable", Georgia, serif; } .font-source .name { font-family: "Source Sans 3 Variable", sans-serif; }
+.font-newsreader .sample { font-family: "Newsreader Variable", Georgia, serif; } .font-newsreader .name { font-family: "Lexend Variable", sans-serif; }

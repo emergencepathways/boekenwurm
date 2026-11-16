@@ -10,6 +10,8 @@ import { toBase64 } from "./images.ts";
 import { localDay } from "./usage.ts";
 
 export const GOOGLE_PAGES = "google_page_reading";
+/** The owner's own account: experimental settings (Match my level) that aren't open to readers yet. */
+export const ADMIN = "admin";
 export const PAGE_READS_PER_DAY = 20;
 
 export const hasFeature = (f: string): boolean => getState().features.includes(f);

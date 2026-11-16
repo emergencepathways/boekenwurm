@@ -5,6 +5,17 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { init } from "./lib/store.ts";
 import { startAuth } from "./lib/sync.ts";
+// Fonts are bundled and served from this site (lib/fonts.ts); the browser fetches only the ones in use.
+import "@fontsource-variable/literata/opsz.css";
+import "@fontsource-variable/literata/opsz-italic.css";
+import "@fontsource-variable/atkinson-hyperlegible-next/index.css";
+import "@fontsource-variable/source-serif-4/opsz.css";
+import "@fontsource-variable/source-serif-4/opsz-italic.css";
+import "@fontsource-variable/source-sans-3/index.css";
+import "@fontsource-variable/newsreader/opsz.css";
+import "@fontsource-variable/newsreader/opsz-italic.css";
+import "@fontsource-variable/lexend/index.css";
+import "@fontsource-variable/jetbrains-mono/index.css";
 import "./styles.css";
 
 void init().then(() => startAuth());

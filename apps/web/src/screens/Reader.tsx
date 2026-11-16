@@ -14,8 +14,10 @@ import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
-import { bookFinished, checkAchievements, paragraphRead, rankNow, streakBonus } from "../lib/play.ts";
+import { bookFinished, checkAchievements, paragraphRead, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
+import { ADMIN } from "../lib/features.ts";
+import { FONTS, fontOf } from "../lib/fonts.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
@@ -48,7 +50,7 @@ interface RS {
   /** Words being looked up (no dictionary meaning yet), or found to have none: base form -> state. */
   lookups: Map<string, "pending" | "none" | "offline" | "limit" | "signin">;
   explaining: Map<string, Promise<AI.Explanation | null>>;
-  modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | null;
+  modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | { kind: "font" } | null;
   /**
    * Looking at a paragraph without penalty: one before the current one ("Previous"), or the one just finished, from
    * the session summary ("Re-read"). Taps show meanings but cost no fout (strike) and don't count; the session is untouched.
@@ -67,6 +69,9 @@ export function Reader({ bookId }: { bookId: string }) {
   const progress = useStore((s) => s.profile.progress);
   const settings = useStore((s) => s.profile.settings);
   const hasKey = useStore((s) => s.hasKey);
+  // Match my level is experimental: only the owner's admin account sees it (lib/features.ts).
+  const admin = useStore((s) => s.features.includes(ADMIN));
+  const font = useStore((s) => s.profile.settings.font);
   const meanings = useStore((s) => s.meanings);
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
@@ -118,7 +123,7 @@ export function Reader({ bookId }: { bookId: string }) {
 
   // ---------------------------------------------------------------- helpers
   const book = r.book;
-  const mode = book?.position.mode ?? "original";
+  const mode = admin ? (book?.position.mode ?? "original") : "original";
   const look = (surface: string) => lookup(surface, { meanings: getState().meanings });
   /** The paragraph on screen: the current one, or the one being looked back at. */
   const at = (): number => r.look?.ord ?? r.pos;
@@ -503,7 +508,7 @@ export function Reader({ bookId }: { bookId: string }) {
             <button className="btn small ghost" type="button" onClick={() => ((r.modal = { kind: "goto" }), bump())} aria-label="Go to a page">
               {hasPages() ? `p. ${pageAt(r.pos) ?? "?"}` : "Go to"}
             </button>
-            {(above || mode === "match") && (
+            {admin && (above || mode === "match") && (
               <button className="btn small" type="button" onClick={() => ((r.modal = { kind: "match" }), bump())}>
                 {mode === "match" ? `Matched to ${progress.level}` : "Match my level"}
               </button>
@@ -528,6 +533,22 @@ export function Reader({ bookId }: { bookId: string }) {
       {r.modal?.kind === "badge" && renderBadge(r.modal.badge)}
       {r.modal?.kind === "match" && renderMatch()}
       {r.modal?.kind === "goto" && renderGoto()}
+      {r.modal?.kind === "font" && (
+        <Sheet label="Font" onClose={() => ((r.modal = null), bump())}>
+          <h2>Font</h2>
+          <div className="fontpick" role="radiogroup" aria-label="Font">
+            {FONTS.map((f) => (
+              <button key={f.id} type="button" role="radio" aria-checked={fontOf(font).id === f.id} className={`fontopt font-${f.id}`}
+                onClick={() => void updateProfile((x) => ({ ...x, settings: { ...x.settings, font: f.id } }))}>
+                <span className="sample" lang="nl">Elke woensdag fietst Ahmed naar de markt.</span>
+                <span className="name"><b>{f.name}</b> · {f.read} + {f.ui}</span>
+                <span className="small muted">{f.about}</span>
+              </button>
+            ))}
+          </div>
+          <button className="btn primary" type="button" onClick={() => ((r.modal = null), bump())}>Done</button>
+        </Sheet>
+      )}
     </main>
   );
 
@@ -576,9 +597,7 @@ export function Reader({ bookId }: { bookId: string }) {
           <section className="strip nopenalty unlimited" role="status" aria-label="Unlimited lookup mode">
             <span className="mode">Unlimited</span>
             <b>No fouten.</b>
-            <span>Look up as much as you like. Paragraphs earn a quarter of the XP.</span>
-            <span className="grow" />
-            <span className="num"><span className="label">{rankNow().rank}</span> +{r.xp} XP</span>
+            <span>Look up as much as you like.</span>
           </section>
           {renderSheet(p, revealed, onStreak)}
           <div className="actions">
@@ -590,23 +609,17 @@ export function Reader({ bookId }: { bookId: string }) {
     return (
       <>
         <section className="strip" aria-label="Checkpoint">
-          <span>
-            <span className="label" title="A fout is a word you had to look up">Fouten</span>{" "}
-            <span className="strikes" aria-label={`${st.used} of ${st.allowed} used`}>
-              {Array.from({ length: Math.min(st.allowed, 30) }, (_, i) => (
-                <i key={i} className={`pip ${i < st.used ? "used" : ""} ${lastStrike && i === st.allowed - 1 && i >= st.used ? "last" : ""}`} />
-              ))}
-            </span>
+          {/* Just the count: words looked up on this page out of those allowed (a fout is a word you had to look up). */}
+          <span className="strikes num" data-used={st.used} data-allowed={st.allowed} role="status">
+            {st.used} of {st.allowed} {st.allowed === 1 ? "fout" : "fouten"}
           </span>
-          <span className="num">{st.percent}% · {st.allowed} {st.allowed === 1 ? "fout" : "fouten"}</span>
-          {onStreak && <span className="streak">Streak {st.streak}</span>}
           <span className="grow" />
-          <span className="num"><span className="label">{rankNow().rank}</span> +{r.xp} XP</span>
           {unlocked && <button className="btn small ghost" type="button" onClick={() => void setLookupMode(true)} title="Unlimited lookup mode: no fouten, a quarter of the XP">Unlimited ∞</button>}
         </section>
         {st.strikesLeft === 0 && lastStrike && <div className="warnline">No fouten left: one more reveal ends the run at the page turn.</div>}
         {renderSheet(p, revealed, onStreak)}
         <p className="note" style={{ margin: 0 }}>Tap a word to see its meaning. Swipe left or press → to turn the page; Previous looks back without penalty.</p>
+        {fontButton()}
       </>
     );
   }
@@ -706,6 +719,14 @@ export function Reader({ bookId }: { bookId: string }) {
           </div>
         </article>
       </>
+    );
+  }
+
+  function fontButton() {
+    return (
+      <button className="btn small ghost fontbtn" type="button" onClick={() => ((r.modal = { kind: "font" }), bump())}>
+        <span aria-hidden="true" className="aa">Aa</span> Font: {fontOf(font).name}
+      </button>
     );
   }
 

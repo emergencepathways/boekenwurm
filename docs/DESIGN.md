@@ -371,6 +371,11 @@ anywhere except `private/`.
 
 ## Decided
 
+- The reader shows only "x of y fouten" above the page: no pips, percentage, XP or rank while reading. Match my level
+  is experimental and shown only to the owner's admin account (feature "admin", migration 0010). A Font button under
+  the page picks one of three open-licence pairings (Literata + Atkinson Hyperlegible Next by default; Source Serif 4 +
+  Source Sans 3; Newsreader + Lexend), bundled with the app so no font service sees readers' addresses. 2026-11-16.
+
 - A tapped word's meaning opens just under the word, over the text below it (above the word when there's no room
   on screen), with an arrow to the word; × or Escape closes it, a tap elsewhere closes it, a tap on another word
   moves it. It never covers the buttons under the paragraph: the paragraph makes room. 2026-11-16.

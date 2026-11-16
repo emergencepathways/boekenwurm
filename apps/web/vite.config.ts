@@ -60,7 +60,8 @@ function tesseractAssets(): Plugin {
 
 /**
  * Content-security policy for the built app (the dev server needs inline scripts, so only in builds). Scripts
- * only from this site; network only to Supabase, Anthropic (with the reader's own key) and the fonts. Book text
+ * only from this site; network only to Supabase and Anthropic (with the reader's own key); fonts come from this site
+ * too, so no reader's address reaches a font service (GDPR). Book text
  * and photos can't be sent anywhere else.
  */
 function contentSecurityPolicy(): Plugin {
@@ -68,9 +69,9 @@ function contentSecurityPolicy(): Plugin {
     "default-src 'self'",
     "script-src 'self' 'wasm-unsafe-eval'",
     "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://fonts.googleapis.com https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com",
     "img-src 'self' data: blob: https://*.supabase.co",
     "media-src 'self' blob:",
     "object-src 'none'",
@@ -138,9 +139,10 @@ export default defineConfig({
             options: { cacheName: "boekenwurm-dictionary", expiration: { maxEntries: 2 } },
           },
           {
-            urlPattern: ({ url }) => url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com",
-            handler: "StaleWhileRevalidate",
-            options: { cacheName: "boekenwurm-fonts", expiration: { maxEntries: 20 } },
+            // The bundled fonts: kept once used, so reading works offline in the reader's chosen font.
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.endsWith(".woff2"),
+            handler: "CacheFirst",
+            options: { cacheName: "boekenwurm-fonts", expiration: { maxEntries: 40 } },
           },
         ],
       },
@@ -156,5 +158,6 @@ export default defineConfig({
     },
   },
   server: { fs: { allow: [repo] } },
-  build: { target: "es2022", sourcemap: true, chunkSizeWarningLimit: 1200 },
+  // Fonts stay files (never inlined as data: URLs), so the content-security policy can keep fonts to this site only.
+  build: { target: "es2022", sourcemap: true, chunkSizeWarningLimit: 1200, assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined) },
 });

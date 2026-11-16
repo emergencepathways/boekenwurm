@@ -134,7 +134,7 @@ await ctx.route("**/rest/v1/rpc/report_shared_word", async (r) => {
 
 // Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works;
 // Google reads one page, then today's allowance is used up.
-const vision = { calls: 0, limitAfter: 1, redeemed: false, refuse: null };
+const vision = { calls: 0, limitAfter: 1, redeemed: false, refuse: null, admin: false };
 await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
   const { p_code } = JSON.parse(r.request().postData() || "{}");
   const ok = p_code.replace(/[\s-]/g, "").toUpperCase() === "BWE2ETESTCODE";
@@ -143,7 +143,7 @@ await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
     body: JSON.stringify(ok ? "google_page_reading" : { code: "22023", message: "That code isn't valid" }) });
 });
 await ctx.route("**/rest/v1/feature_access*", (r) => r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
-  body: JSON.stringify(vision.redeemed ? [{ feature: "google_page_reading" }] : []) }));
+  body: JSON.stringify([...(vision.redeemed ? [{ feature: "google_page_reading" }] : []), ...(vision.admin ? [{ feature: "admin" }] : [])]) }));
 await ctx.route("**/functions/v1/read-page", async (r) => {
   const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
   if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors });
@@ -179,6 +179,18 @@ await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 
 const shot = async (name) => shots && (await page.screenshot({ path: join(shots, `${name}.png`) }));
 const step = (msg) => console.log(`• ${msg}`);
+/** Fouten used on this page (the reader shows "1 of 4 fouten"). */
+const used = () => page.evaluate(() => Number(document.querySelector(".strikes")?.dataset.used ?? 0));
+/** The reader's total XP, from the play record on the device (the reader no longer shows XP while reading). */
+const totalXp = () => page.evaluate(() => new Promise((ok) => {
+  const req = indexedDB.open("boekenwurm-app");
+  req.onsuccess = () => {
+    const get = req.result.transaction("kv").objectStore("kv").get("profile");
+    get.onsuccess = () => ok(Object.values(get.result?.progress?.play?.xp ?? {}).reduce((a, b) => a + b, 0));
+  };
+}));
+const fontRequests = [];
+page.on("request", (q) => /fonts\.(googleapis|gstatic)\.com/.test(q.url()) && fontRequests.push(q.url()));
 /** Tap a word in the text. The meaning of the last word tapped lies over the text below it, so close it first. */
 const tapWord = async (word) => {
   if (await page.locator(".wordpop").isVisible() && !(await word.getAttribute("aria-expanded").then((v) => v === "true"))) await page.locator(".wordpop .popclose").click();
@@ -219,21 +231,21 @@ await page.getByRole("button", { name: "Add to my books" }).click();
 step("reader: dictionary meanings and base forms, strikes, turn pages");
 await page.locator(".para .w").first().waitFor();
 await tapWord(page.locator(".para .w", { hasText: /^fietst$/ }));
-check((await page.locator(".pip.used").count()) === 1, "one strike used after one tap");
+check((await used()) === 1, "one strike used after one tap");
 check(await page.locator(".def .meaning", { hasText: "to cycle" }).isVisible(), "dictionary meaning shown for an inflected form");
 check(await page.locator(".def .lemma", { hasText: "fietsen" }).isVisible(), "base form from the dictionary's form table (fietst -> fietsen)");
 check(translated.length === 0, "a word the dictionary knows isn't looked up");
 await tapWord(page.locator(".para .w", { hasText: /^fietst$/ }));
-check((await page.locator(".pip.used").count()) === 1, "tapping the same word again is not a second strike");
+check((await used()) === 1, "tapping the same word again is not a second strike");
 await shot("04-reader");
 await page.getByRole("button", { name: "Undo tap" }).click();
-check((await page.locator(".pip.used").count()) === 0, "undo within 5 seconds takes the strike back");
+check((await used()) === 0, "undo within 5 seconds takes the strike back");
 await tapWord(page.locator(".para .w", { hasText: /^markt$/ }));
 step("signed out, a word the dictionary doesn't know: sign in to look it up, and the tap is free");
 await tapWord(page.locator(".para .w", { hasText: /^Elke$/ }));
 await page.getByText(/Sign in to look words up with Google Translate/).waitFor();
 check(translated.length === 0, "signed out, nothing is looked up");
-check((await page.locator(".pip.used").count()) === 1, "and the tap doesn't count (still 1, for markt)");
+check((await used()) === 1, "and the tap doesn't count (still 1, for markt)");
 check(await page.getByRole("button", { name: "Sign in", exact: true }).isVisible(), "the reader is offered to sign in");
 await shot("04a-signin");
 
@@ -242,13 +254,13 @@ await page.evaluate(([k, v]) => localStorage.setItem(k, v), [authKey, fakeSessio
 await page.reload();
 await page.locator(".continue").click();
 await page.locator(".para .w").first().waitFor();
-const pips0 = await page.locator(".pip.used").count();
+const pips0 = await used();
 await tapWord(page.locator(".para .w", { hasText: /^Elke$/ }));
 await page.getByText(/No meaning found for this word, so this tap doesn't count/).waitFor();
-check((await page.locator(".pip.used").count()) === pips0, "no meaning found: no strike");
+check((await used()) === pips0, "no meaning found: no strike");
 await tapWord(page.locator(".para .w", { hasText: /^verse$/ }));
 await page.getByText("Not in the dictionary: translated by Google Translate, shared by Boekenwurm readers.").waitFor();
-check(await page.waitForFunction((k) => document.querySelectorAll(".pip.used").length === k, pips0 + 1, { timeout: 5000 }).then(() => true, () => false), "a meaning from Google Translate: the tap counts");
+check(await page.waitForFunction((k) => Number(document.querySelector(".strikes")?.dataset.used ?? 0) === k, pips0 + 1, { timeout: 5000 }).then(() => true, () => false), "a meaning from Google Translate: the tap counts");
 check(true, "a translation another reader already had is marked as shared");
 check(await page.locator(".def .meaning", { hasText: "verse (in English)" }).isVisible(), "the translation is shown");
 check(translated.join(",") === "Elke,verse", "only the tapped word is sent");
@@ -263,14 +275,14 @@ lookups.used = 200;
 await tapWord(page.locator(".para .w", { hasText: /^hele$/ }));
 await page.getByText(/You've used today's 200 Google Translate lookups/).waitFor();
 check(translated.length === 2, "over the limit, nothing is sent to Google");
-check((await page.locator(".pip.used").count()) === pips0 + 1, "and the tap doesn't count yet");
+check((await used()) === pips0 + 1, "and the tap doesn't count yet");
 check(await page.getByRole("button", { name: "Connect Claude" }).isVisible(), "the reader can connect Claude");
 check((await page.getByRole("link", { name: /Look it up/ }).getAttribute("href")).includes("text=hele"), "or look the word up themselves");
 await shot("04c-limit");
 await page.getByLabel("Meaning of hele").fill("whole");
 await page.getByRole("button", { name: "Save", exact: true }).click();
 await page.locator(".def .meaning", { hasText: "whole" }).waitFor();
-check((await page.locator(".pip.used").count()) === pips0 + 2, "a typed meaning makes the tap count");
+check((await used()) === pips0 + 2, "a typed meaning makes the tap count");
 check(await page.getByText("Your own meaning.").isVisible(), "and is marked as the reader's own");
 check(await page.evaluate(() => new Promise((ok) => {
   const req = indexedDB.open("boekenwurm-app");
@@ -278,7 +290,7 @@ check(await page.evaluate(() => new Promise((ok) => {
 })), "typed and translated meanings are saved for the reader");
 
 step("a wrong translation: report it, and the reader's own meaning is used from then on");
-const pipsBeforeReport = await page.locator(".pip.used").count();
+const pipsBeforeReport = await used();
 await tapWord(page.locator(".para .w", { hasText: /^verse$/ }));
 await page.getByRole("button", { name: "Wrong translation? Report it" }).click();
 await page.getByLabel("Right meaning of verse").fill("fresh");
@@ -287,7 +299,7 @@ await page.locator(".def .meaning", { hasText: "fresh" }).waitFor();
 for (let i = 0; i < 30 && !reports.length; i++) await page.waitForTimeout(100); // the meaning shows first, then the report goes
 check(reports.length === 1 && reports[0].p_word === "verse" && reports[0].p_suggestion === "fresh", "the report names the word and the reader's meaning");
 check(await page.getByText("Your own meaning.").isVisible(), "the reader's meaning replaces the translation for them");
-check((await page.locator(".pip.used").count()) === pipsBeforeReport, "reporting costs no strike");
+check((await used()) === pipsBeforeReport, "reporting costs no strike");
 await shot("04d-reported");
 
 lookups.used = 3;
@@ -295,7 +307,7 @@ for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Next page �
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "three pages turned");
 
 step("Previous: look back without penalty, then back to where the reader was");
-const pipsBefore = await page.locator(".pip.used").count();
+const pipsBefore = await used();
 await page.getByRole("button", { name: "← Previous" }).click();
 await page.getByText("No fouten here.").waitFor();
 check((await page.locator(".strikes").count()) === 0 && (await page.getByText("Looking back", { exact: true }).isVisible()), "the strikes give way to a clear no-penalty banner");
@@ -308,14 +320,14 @@ check((await page.locator(".folio .num").textContent()).startsWith("2 /"), "Prev
 await page.getByRole("button", { name: "Back to where I was →" }).click();
 await page.locator(".strikes").waitFor();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "back on the paragraph the reader was at");
-check((await page.locator(".pip.used").count()) === pipsBefore, "looking back cost no strike");
+check((await used()) === pipsBefore, "looking back cost no strike");
 
 step("reader: run out of strikes ends the session with a study list");
-const n = await page.locator(".strikes .pip").count();
+const n = await page.locator(".strikes").evaluate((e) => Number(e.dataset.allowed));
 for (let i = 0; i < n; i++) {
   await tapWord(page.locator(".para .w:not(.name):not(.rev)").nth(0));
   // A word that has to be translated counts once its meaning arrives.
-  await page.waitForFunction((k) => document.querySelectorAll(".pip.used").length >= k, i + 1, { timeout: 10000 });
+  await page.waitForFunction((k) => Number(document.querySelector(".strikes")?.dataset.used ?? 0) >= k, i + 1, { timeout: 10000 });
 }
 await page.getByRole("button", { name: "Next page →" }).click();
 await page.getByRole("heading", { name: /streak lasted|last fout|passed 1 paragraph|passed 3|lasted/ }).waitFor();
@@ -545,7 +557,16 @@ await page.locator(".tabbar").waitFor();
 step("XP and badges: finishing a book earns 1,000 XP, a badge (+80) and rank A1");
 await page.locator(".continue").click();
 await page.locator(".para .w").first().waitFor();
-check(/\+\d+ XP/.test(await page.locator(".strip").textContent()), "the reader shows the XP earned");
+check(!/XP|%|A\d/.test(await page.locator(".strip").textContent()), "the reader shows no XP, percentage or rank: just the fouten");
+check(/^\d+ of \d+ fouten?$/.test((await page.locator(".strikes").textContent()).trim()), "as \"x of y fouten\"");
+
+step("font: a button under the page picks the font pairing, bundled with the app");
+await page.getByRole("button", { name: /^Font:/ }).click();
+await page.getByRole("radio", { name: /Classic book/ }).click();
+check(await page.evaluate(() => document.documentElement.dataset.font) === "source", "Classic book: Source Serif 4 + Source Sans 3");
+check(await page.evaluate(() => getComputedStyle(document.querySelector(".para")).fontFamily.includes("Source Serif 4")), "the book text uses it");
+await page.getByRole("button", { name: "Done" }).click();
+check(await page.evaluate(() => document.fonts.check('16px "Source Serif 4 Variable"')), "the font is loaded from Boekenwurm itself");
 for (let i = 0; i < 12 && !(await page.getByRole("heading", { name: /read to the end/ }).isVisible()); i++)
   await page.getByRole("button", { name: "Next page →" }).click({ timeout: 3000 }).catch(() => {});
 await page.getByRole("heading", { name: /read to the end/ }).waitFor();
@@ -571,7 +592,7 @@ await page.getByRole("button", { name: "Go", exact: true }).click();
 await page.getByRole("button", { name: "Unlimited ∞" }).click();
 await page.getByText("No fouten.", { exact: true }).waitFor();
 check((await page.locator(".strikes").count()) === 0, "the fouten give way to the Unlimited banner");
-const xpBefore = Number((await page.locator(".strip .num").textContent()).match(/\+(\d+) XP/)[1]);
+const xpBefore = await totalXp();
 const words = page.locator(".para .w:not(.name)");
 const tapCount = Math.min(6, await words.count());
 for (let i = 0; i < tapCount; i++) await tapWord(words.nth(i));
@@ -579,7 +600,7 @@ check((await page.locator(".para .w.rev").count()) >= 1, "words are looked up fr
 await page.getByRole("button", { name: "Next page →" }).click();
 await page.locator(".para .w").first().waitFor();
 check((await page.getByRole("heading", { name: /streak lasted|last fout/ }).count()) === 0, "looking up every word never ends the run");
-const xpAfter = Number((await page.locator(".strip .num").textContent()).match(/\+(\d+) XP/)[1]);
+const xpAfter = await totalXp();
 check(xpAfter - xpBefore <= 8 && xpAfter > xpBefore, `a paragraph earned a quarter of the XP (+${xpAfter - xpBefore})`);
 await shot("08-unlimited");
 await tapWord(page.locator(".para .w:not(.name)").first());
@@ -612,8 +633,15 @@ check(await page.getByText(/Not reachable|Sign-in service/).first().isVisible(),
 check(await page.getByText(/12 Dutch words and 3 word forms/).isVisible(), "the dictionary and its credits are shown under About");
 await shot("07-me");
 
-step("add an EPUB with a key: graded level, Match my level, words in context");
+step("add an EPUB with a key: graded level, Match my level (admin only), words in context");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+await page.getByRole("button", { name: "Add a book" }).click();
+await page.locator('input[type=file][accept*="epub"]').setInputFiles(epubPath);
+await page.getByText("About B1").waitFor({ timeout: 15000 });
+check(!(await page.getByRole("button", { name: "Match my level" }).isVisible()), "Match my level is hidden from readers");
+vision.admin = true; // the owner's account: experimental settings
+await page.reload();
+await page.locator(".continue").waitFor();
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.locator('input[type=file][accept*="epub"]').setInputFiles(epubPath);
 await page.getByText("Ready to read").waitFor();
@@ -856,6 +884,7 @@ await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para").first().waitFor();
 check((await page.locator(".para").first().textContent()).startsWith("1 De bus naar het strand"), "the chapter number is read together with its first paragraph");
 
+check(fontRequests.length === 0, `no request to a font service (GDPR)${fontRequests.length ? ": " + fontRequests[0] : ""}`);
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.join(" | ") : ""}`);
 await browser.close();
 server.close();

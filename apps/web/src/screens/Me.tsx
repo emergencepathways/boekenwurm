@@ -14,6 +14,7 @@ import { GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "..
 import { Sheet, toast } from "../ui.tsx";
 import { Patch, RankBar, RankShield } from "../badges.tsx";
 import { statsNow } from "../lib/play.ts";
+import { FONTS, fontOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
 export function Me() {
@@ -85,7 +86,13 @@ export function Me() {
           >
             {E.LEVELS.map((l) => <option key={l}>{l}</option>)}
           </select>
-          <span className="note">The level meanings are explained at and Match my level aims for. Your rank (above) rises with XP on its own.</span>
+          <span className="note">The level meanings are explained at. Your rank (above) rises with XP on its own.</span>
+        </label>
+        <label className="field">
+          <span>Font</span>
+          <select value={fontOf(profile.settings.font).id} onChange={(e) => setSettings({ font: e.target.value as Settings["font"] })}>
+            {FONTS.map((f) => <option key={f.id} value={f.id}>{f.name} · {f.read} + {f.ui}</option>)}
+          </select>
         </label>
         <label className="field">
           <span>Fouten per paragraph</span>
@@ -393,7 +400,7 @@ function ClaudeSection() {
     <section className="panel" id="claude">
       <h2>Claude</h2>
       <p>
-        Book levels, Match my level, word meanings in their sentence, and reading photographed pages use your own Claude API key. It stays on
+        Book levels, word meanings in their sentence, and reading photographed pages use your own Claude API key. It stays on
         this device (never synced) and is sent only to Anthropic. Without it, everything else works for free.
       </p>
       <p className="small">

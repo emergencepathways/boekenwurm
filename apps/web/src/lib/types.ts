@@ -69,6 +69,8 @@ export interface Settings {
   unlimitedMode?: boolean;
   /** The 5,000 most common Dutch words are on the reader's word lists (Words tab). */
   commonWords?: boolean;
+  /** Font pairing (lib/fonts.ts); Literata + Atkinson Hyperlegible Next by default. */
+  font?: "literata" | "source" | "newsreader";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
