@@ -329,7 +329,10 @@ for (let i = 0; i < n; i++) {
   // A word that has to be translated counts once its meaning arrives.
   await page.waitForFunction((k) => Number(document.querySelector(".strikes")?.dataset.used ?? 0) >= k, i + 1, { timeout: 10000 });
 }
-await page.getByRole("button", { name: "Next page →" }).click();
+if (await page.locator(".wordpop").isVisible()) await page.locator(".wordpop .popclose").click();
+check(await page.getByRole("button", { name: "Review fouten →" }).isVisible() && !(await page.getByRole("button", { name: "Next page →" }).isVisible()),
+  "at the fouten limit, Next page becomes Review fouten");
+await page.getByRole("button", { name: "Review fouten →" }).click();
 await page.getByRole("heading", { name: /streak lasted|last fout|passed 1 paragraph|passed 3|lasted/ }).waitFor();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "summary offers to study the words");
 await shot("05-summary");

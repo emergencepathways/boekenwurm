@@ -625,6 +625,13 @@ export function Reader({ bookId }: { bookId: string }) {
   }
 
   /** The page: folio, paragraph with its tappable words, the definition, and the page-turn buttons. */
+  /** The fouten limit is reached: turning the page ends the run and shows the words to review. */
+  function outOfFouten(): boolean {
+    const s = r.session;
+    if (!s?.current || r.lookupMode) return false;
+    return !E.passes(E.revealedCount(s), s.current.allowance, s.rules);
+  }
+
   function renderSheet(p: { text: string; tokens: Token[]; matched: boolean }, revealed: Set<string>, onStreak: boolean) {
     return (
       <article
@@ -669,7 +676,8 @@ export function Reader({ bookId }: { bookId: string }) {
         <div className="defhint" aria-hidden={r.sel != null} style={{ visibility: r.sel == null ? "visible" : "hidden" }}>{renderDefinition(onStreak, true)}</div>
         <div className="actions turnrow">
           <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>← Previous</button>
-          <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>Next page →</button>
+          {/* Out of fouten: this page ends the run, so the button says where it leads (the session's words to review). */}
+          <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>{outOfFouten() ? "Review fouten →" : "Next page →"}</button>
         </div>
       </article>
     );
