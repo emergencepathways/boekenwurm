@@ -17,6 +17,8 @@ export interface PlayState {
   readDays: string[];
   /** Days with every due card reviewed. */
   studyDays: string[];
+  /** Days with all of the day's 90 cards reviewed (the full-day review reward). */
+  fullReviewDays?: string[];
   bestStreak: number;
   levelsRead: string[];
   kindsRead: string[];
@@ -52,6 +54,7 @@ export function mergePlay(a: PlayState | undefined, b: PlayState | undefined): P
     words: maxBy(x.words, y.words),
     readDays: union(x.readDays, y.readDays).slice(-KEEP_DAYS),
     studyDays: union(x.studyDays, y.studyDays).slice(-KEEP_DAYS),
+    fullReviewDays: union(x.fullReviewDays ?? [], y.fullReviewDays ?? []).slice(-KEEP_DAYS),
     bestStreak: Math.max(x.bestStreak, y.bestStreak),
     levelsRead: union(x.levelsRead, y.levelsRead),
     kindsRead: union(x.kindsRead, y.kindsRead),

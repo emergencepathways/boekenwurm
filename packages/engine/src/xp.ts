@@ -6,7 +6,8 @@
  * - a paragraph read is 20 XP, 40 on a streak, 5 when it ends a run or in unlimited lookup mode;
  * - reading XP grows with rank (× 1 to × 1.4) and is × 1.5 in a book a level or more above the reader's rank;
  * - a book finished is 1,000 XP (500 when read again); a flashcard session 40 (80 after a lookup-mode session); a
- *   review set finished, once a day, 300; an achievement tier 80; a run of 10 paragraphs or more in a session 200;
+ *   review set finished, once a day, 300; all of the day's 90 cards reviewed, once a day, 600 more (double); an
+ *   achievement tier 80; a run of 10 paragraphs or more in a session 200;
  * - A0 → A1 takes 600 XP (one sitting); after that, level n costs 30,000 × n^2.2, rounded to 5,000.
  */
 import type { CefrLevel } from "./definitions.ts";
@@ -26,6 +27,8 @@ export const XP = {
   studySession: 40,
   studyAfterLookupMode: 80,
   dailyReview: 300,
+  /** All of the day's 90 cards reviewed (REVIEW_DAY.maxDue): double the daily review reward, on top of it, once a day. */
+  fullDayReview: 600,
   achievement: 80,
   /** A run of 10 paragraphs or more in a session (the old streak token), once per session; not in lookup mode. */
   streakBonus: 200,

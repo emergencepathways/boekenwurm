@@ -464,6 +464,38 @@ await page.getByRole("button", { name: "Show meaning" }).click();
 check(await page.locator(".flash .answer").isVisible(), "and shows its meaning from the dictionary");
 await page.getByRole("button", { name: "Easy", exact: true }).click();
 await page.getByRole("button", { name: "Back", exact: true }).first().click();
+
+step("all of the day's 90 reviewed: double review XP (+600)");
+const seedReviewed = (n) => page.evaluate((n) => {
+  const d = new Date(); const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  localStorage.setItem("boekenwurm-reviewed-today", JSON.stringify({ day, lemmas: Array.from({ length: n }, (_, i) => `earlier${i}`), fresh: [] }));
+}, n);
+await seedReviewed(80);
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+const lastSet = page.getByRole("button", { name: /^Review \d+ words?$/ });
+if (await lastSet.isVisible()) {
+  // Leave exactly as many of today's 90 as the next set holds (a smaller set can hold fewer new words).
+  for (let k = Number((await lastSet.textContent()).match(/\d+/)[0]), tries = 0; tries < 5; tries++) {
+    await seedReviewed(90 - k);
+    await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+    await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+    const m = Number((await lastSet.textContent()).match(/\d+/)[0]);
+    if (m === k) break;
+    k = m;
+  }
+  check(/double review XP \(\+600\)/.test(await page.locator(".panel").first().textContent()), "the last set of the day promises double review XP");
+  await page.getByRole("button", { name: /^Review \d+ words?$/ }).click();
+  for (let i = 0; i < 60 && !(await page.getByText(/^Set done/).isVisible()); i++) {
+    await page.getByRole("button", { name: "Show meaning" }).click();
+    await page.getByRole("button", { name: "Easy", exact: true }).click();
+  }
+  check(await page.getByText(/All 90 words reviewed today: double review XP! \+\d+ XP/).waitFor({ timeout: 5000 }).then(() => true, () => false), "finishing the 90th word earns double review XP");
+  await page.getByRole("button", { name: "Back", exact: true }).first().click();
+  await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+  check(await page.getByRole("heading", { name: "Done for today" }).isVisible(), "then reviews are done for today");
+} else check(false, "a set to finish the day with");
+await page.evaluate(() => ["boekenwurm-study-sessions", "boekenwurm-reviewed-today"].forEach((k) => localStorage.removeItem(k))); // later steps start a fresh day
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("colour-coded text: off by default; on, words revealed before are coloured");

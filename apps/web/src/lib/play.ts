@@ -4,7 +4,7 @@
  * rank or badge. Every tier reached adds XP.achievement.
  */
 import * as E from "@boekenwurm/engine";
-import { getState, updateProfile } from "./store.ts";
+import { getState, reviewedTodayCount, updateProfile } from "./store.ts";
 import { localDay } from "./usage.ts";
 import { commonWords } from "./words.ts";
 import { toast } from "../ui.tsx";
@@ -132,7 +132,8 @@ export async function bookFinished(book: Book): Promise<number> {
 
 /**
  * A flashcard session ended: 40 XP for 10 cards or more (or the whole set, if smaller), up to 3 sessions a day; and,
- * once a day, the review reward (300 XP) for finishing a whole review set. Returns the XP it earned.
+ * once a day, the review reward (300 XP) for finishing a whole review set; and, once a day, double that (600 XP) when
+ * all of the day's 90 cards have been reviewed. Returns the XP it earned.
  */
 export async function studyFinished(o: { cards: number; dueAtStart: number; completedSet: boolean; afterLookupMode?: boolean }): Promise<number> {
   if (o.cards <= 0) return 0;
@@ -141,8 +142,11 @@ export async function studyFinished(o: { cards: number; dueAtStart: number; comp
   if (session) dayCount(STUDY_SESSIONS, 1);
   const t = today();
   const daily = o.completedSet && !play.studyDays.includes(t) ? E.XP.dailyReview : 0;
-  if (!session && !daily) return 0;
-  toast(`Study: +${session + daily} XP${daily ? " (review set finished)" : ""}`, 4000);
-  await commit({ ...play, studyDays: daily ? [...play.studyDays, t] : play.studyDays }, session + daily);
-  return session + daily;
+  const fullDays = play.fullReviewDays ?? [];
+  const full = reviewedTodayCount() >= E.REVIEW_DAY.maxDue && !fullDays.includes(t) ? E.XP.fullDayReview : 0;
+  const gained = session + daily + full;
+  if (!gained) return 0;
+  toast(full ? `All ${E.REVIEW_DAY.maxDue} words reviewed today: double review XP! +${gained} XP` : `Study: +${gained} XP${daily ? " (review set finished)" : ""}`, 5000);
+  await commit({ ...play, studyDays: daily ? [...play.studyDays, t] : play.studyDays, fullReviewDays: full ? [...fullDays, t] : fullDays }, gained);
+  return gained;
 }

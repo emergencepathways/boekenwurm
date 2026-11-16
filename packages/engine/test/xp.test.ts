@@ -119,3 +119,11 @@ test("pages: numbered pages read plus 250 words a page in other books", () => {
   assert.equal(s.booksFinished, 2);
   assert.equal(s.finishedAgain, true);
 });
+
+test("all of the day's 90 cards reviewed: double the review reward (600 XP), once a day, kept across devices", () => {
+  assert.equal(XP.fullDayReview, 2 * XP.dailyReview);
+  const phone = { ...emptyPlay(), fullReviewDays: ["2026-11-16"] };
+  const laptop = { ...emptyPlay(), fullReviewDays: ["2026-11-15"] };
+  assert.deepEqual(mergePlay(phone, laptop).fullReviewDays, ["2026-11-15", "2026-11-16"]);
+  assert.deepEqual(mergePlay(phone, emptyPlay()).fullReviewDays, ["2026-11-16"], "an older record without the field");
+});

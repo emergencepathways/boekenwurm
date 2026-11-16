@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
-import { dueCards, dueToday, getState, planReviewSet, reviewCard, unskipCard, useStore, waitingAfterToday } from "../lib/store.ts";
+import { dueCards, dueToday, getState, planReviewSet, reviewCard, reviewedTodayCount, unskipCard, useStore, waitingAfterToday } from "../lib/store.ts";
 import { meaningOf } from "../lib/words.ts";
 import { studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
@@ -45,12 +45,12 @@ export function Study() {
     <main className="screen">
       <div className="topbar"><h1>Study</h1></div>
       <section className="panel">
-        <h2>{today ? `${plural(today, "word")} due today` : due.length ? "Done for today" : all.length ? "All caught up" : "No flashcards yet"}</h2>
+        <h2>{today ? `${plural(today, "word")} due today` : due.length || reviewedTodayCount() >= E.REVIEW_DAY.maxDue ? "Done for today" : all.length ? "All caught up" : "No flashcards yet"}</h2>
         <p>
           {today
-            ? `Up to 90 words a day. A review takes ${plan.lemmas.length}: your list words that need work first${fresh ? `, ${plural(fresh, "new common word")}` : ""}, then the rest of your pool, each repeated until you rate it Easy.`
-            : due.length
-              ? "You've reviewed today's 90 words. The rest come back tomorrow."
+            ? `Up to 90 words a day. A review takes ${plan.lemmas.length}: your list words that need work first${fresh ? `, ${plural(fresh, "new common word")}` : ""}, then the rest of your pool, each repeated until you rate it Easy.${reviewedTodayCount() + today >= E.REVIEW_DAY.maxDue ? ` Review all ${E.REVIEW_DAY.maxDue} today for double review XP (+${E.XP.fullDayReview}).` : ""}`
+            : due.length || reviewedTodayCount() >= E.REVIEW_DAY.maxDue
+              ? `You've reviewed today's ${E.REVIEW_DAY.maxDue} words and earned double review XP. The rest come back tomorrow.`
               : all.length
                 ? nextCheck ? `Your next check-back is ${inWords(nextCheck.due - Date.now())}.` : ""
                 : "Every word you tap while reading becomes a flashcard. Rate it Hard, Medium or Easy; Hard and Medium words wait here for review."}

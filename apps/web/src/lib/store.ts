@@ -428,6 +428,9 @@ function day(at = now()): E.DayInput {
   };
 }
 
+/** Different cards answered in review sets today (towards the 90). */
+export const reviewedTodayCount = (): number => reviewedToday().lemmas.length;
+
 /** Cards due today: at most 90 a day, new words included. */
 export const dueToday = (): number => E.dueToday(day());
 /** Cards in the pool beyond today's 90, for the days after. */

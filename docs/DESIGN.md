@@ -301,7 +301,8 @@ more in your pool"). Each review set (30 by default) is made of:
 3. the rest of the pool in review order (Hard, Medium, Easy check-backs) to fill the set. Flagged list words past their
    share wait for the next set unless nothing else is left.
 
-Only answers in review sets count towards the 90; a reading session's recap doesn't. These numbers are the owner's
+Only answers in review sets count towards the 90; a reading session's recap doesn't. Reviewing all 90 in a day
+earns **double the review reward** (600 XP, once a day, on top of the 300 for the first set finished). These numbers are the owner's
 and may change; they are not reader settings (`REVIEW_DAY` and `planSet` in `packages/engine/src/review.ts`).
 
 Export, for readers who keep their cards elsewhere:
@@ -372,7 +373,8 @@ anywhere except `private/`.
 
 - The day's reviews: at most 90 cards due a day, the rest wait in the pool; a set of 30 holds 5 new common words
   (15 a day at most), the reader's flagged list words up to 40% (80% when read and tapped in the last 2 days), and the
-  pool fills the rest. Fixed by the owner, not reader settings. 2026-11-16.
+  pool fills the rest. Fixed by the owner, not reader settings. Reviewing all 90 earns double review XP (600, once a
+  day). 2026-11-16.
 
 - Word lists and the Words tab: the common 5,000 words in one tap (progress through 500, 1,000, 2,000 and 5,000,
   a badge tier for each learned in full) and lists the reader imports (paste, text, CSV, Excel, Anki), kept on the
