@@ -27,6 +27,8 @@ export interface ReviewCard {
   /** Times an Easy card was forgotten at a check-back. */
   lapses: number;
   lastReview: number | null;
+  /** When the card last became Easy (null while Hard, Medium or Skipped): a word list word counts as learned after 2 weeks. */
+  easySince?: number | null;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -45,25 +47,33 @@ export const inPool = (c: ReviewCard, now: number): boolean => c.pool === "hard"
 
 const PRIORITY: Record<Pool, number> = { hard: 0, medium: 1, easy: 2, skipped: 3 };
 
-/** The pool in review order: Hard, then Medium, then Easy check-backs; oldest first within each. */
-export function reviewOrder(cards: readonly ReviewCard[], now: number): ReviewCard[] {
-  return cards.filter((c) => inPool(c, now)).sort((a, b) => PRIORITY[a.pool] - PRIORITY[b.pool] || a.due - b.due || a.lemma.localeCompare(b.lemma));
+/**
+ * The pool in review order. Words on the reader's word list that are Hard or Medium come first (Hard before Medium),
+ * then every other Hard, then Medium, then Easy check-backs (list words first); oldest first within each.
+ */
+export function reviewOrder(cards: readonly ReviewCard[], now: number, onList: (lemma: string) => boolean = () => false): ReviewCard[] {
+  const listFlagged = (c: ReviewCard) => (onList(c.lemma) && (c.pool === "hard" || c.pool === "medium") ? 0 : 1);
+  const list = (c: ReviewCard) => (onList(c.lemma) ? 0 : 1);
+  return cards
+    .filter((c) => inPool(c, now))
+    .sort((a, b) => listFlagged(a) - listFlagged(b) || PRIORITY[a.pool] - PRIORITY[b.pool] || list(a) - list(b) || a.due - b.due || a.lemma.localeCompare(b.lemma));
 }
 
 /** The next review set: up to `size` cards from the pool, in review order. */
-export const reviewSet = (cards: readonly ReviewCard[], now: number, size: number): ReviewCard[] => reviewOrder(cards, now).slice(0, clampSetSize(size));
+export const reviewSet = (cards: readonly ReviewCard[], now: number, size: number, onList?: (lemma: string) => boolean): ReviewCard[] =>
+  reviewOrder(cards, now, onList).slice(0, clampSetSize(size));
 
 /** The card after an answer. */
 export function answer(c: ReviewCard, a: Answer, now: number): ReviewCard {
   const base = { ...c, reps: c.reps + 1, lastReview: now };
-  if (a === "skip") return { ...base, pool: "skipped" };
+  if (a === "skip") return { ...base, pool: "skipped", easySince: null };
   if (a === "easy") {
     // A check-back passed (it was Easy and due): the next gap is longer. Otherwise it starts at the first gap.
     const step = c.pool === "easy" ? Math.min(c.easyStep + 1, EASY_GAPS_DAYS.length - 1) : 0;
-    return { ...base, pool: "easy", easyStep: step, due: now + EASY_GAPS_DAYS[step] * DAY };
+    return { ...base, pool: "easy", easyStep: step, due: now + EASY_GAPS_DAYS[step] * DAY, easySince: c.pool === "easy" ? (c.easySince ?? now) : now };
   }
   // Hard or Medium: back in the pool. An Easy card forgotten at its check-back is a lapse.
-  return { ...base, pool: a, easyStep: 0, lapses: c.pool === "easy" ? c.lapses + 1 : c.lapses, due: c.pool === a ? c.due : now };
+  return { ...base, pool: a, easyStep: 0, easySince: null, lapses: c.pool === "easy" ? c.lapses + 1 : c.lapses, due: c.pool === a ? c.due : now };
 }
 
 /** A skipped word brought back: in the pool as Medium. */

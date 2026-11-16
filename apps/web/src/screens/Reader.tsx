@@ -323,7 +323,7 @@ export function Reader({ bookId }: { bookId: string }) {
   async function finish(kind: "complete" | "ended" | "lookup", streakLength: number) {
     const s = r.session!;
     r.session = null;
-    const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : kind === "lookup" ? "left" : "strike", sentences: r.sentences });
+    const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : kind === "lookup" ? "left" : "strike", sentences: r.sentences, lookupMode: r.lookupMode });
     r.summary = { kind, streakLength, list, paragraphs: s.results.length };
     void checkAchievements(); // words looked up count once the session is recorded
     if (r.pos >= r.text!.paragraphs.length && r.book?.source !== "photo") r.pos = 0;
@@ -356,7 +356,7 @@ export function Reader({ bookId }: { bookId: string }) {
     r.session = null;
     if (!s.results.length && !s.reveals.length && !s.current?.reveals.length) return;
     const withCurrent = s.current ? { ...s, reveals: [...s.reveals, ...s.current.reveals], current: null } : s;
-    await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences });
+    await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences, lookupMode: r.lookupMode });
     void checkAchievements();
   }
 

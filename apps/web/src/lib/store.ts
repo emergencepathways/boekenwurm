@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 import * as E from "@boekenwurm/engine";
 import type { CefrLevel, Session } from "@boekenwurm/engine";
 import { db } from "./db.ts";
-import { setDictionary, setWordList } from "./words.ts";
+import { isCommonWord, isImportedListWord, setDictionary, setWordLists, wordLists as currentLists } from "./words.ts";
 import { loadDictionary } from "./dictionary.ts";
 import { hasKey } from "./claude.ts";
 import { newCard, upgradeCard } from "./cards.ts";
@@ -21,6 +21,7 @@ import {
   type WordBook,
   type WordDelta,
   type WordList,
+  type WordListSource,
 } from "./types.ts";
 
 export interface SyncState {
@@ -37,7 +38,8 @@ export interface State {
   meanings: Record<string, Meaning>;
   examples: Record<string, string>;
   cards: Record<string, CardState>;
-  wordList: { name: string; size: number } | null;
+  /** The reader's imported word lists (kept on this device), for the Words tab. */
+  wordLists: WordListInfo[];
   user: { id: string; email: string | null } | null;
   sync: SyncState;
   hasKey: boolean;
@@ -65,7 +67,7 @@ let state: State = {
   meanings: {},
   examples: {},
   cards: {},
-  wordList: null,
+  wordLists: [],
   user: null,
   sync: { status: "off", lastAt: null, error: null },
   hasKey: false,
@@ -99,8 +101,18 @@ const sortBooks = (books: Book[]) => [...books].sort((a, b) => b.updatedAt - a.u
 /** An earlier version of the app preloaded a sample story under this id; it is removed from devices on start. */
 const LEGACY_SAMPLE_ID = "sample";
 
+/** A list's card in the Words tab: everything but its words. */
+export interface WordListInfo {
+  id: string;
+  name: string;
+  source: WordListSource;
+  added: number;
+  size: number;
+}
+const infoOf = (l: WordList): WordListInfo => ({ id: l.id ?? "textbook", name: l.name, source: l.source ?? "textbook", added: l.added ?? 0, size: Object.keys(l.entries).length });
+
 export async function init(): Promise<void> {
-  const [profile, stored, wordbook, meanings, examples, cards, list] = await Promise.all([
+  const [profile, stored, wordbook, meanings, examples, cards, oldList, savedLists] = await Promise.all([
     db.get<Profile>("kv", "profile"),
     db.all<Book>("books"),
     db.get<WordBook>("kv", "wordbook"),
@@ -108,9 +120,12 @@ export async function init(): Promise<void> {
     db.get<Record<string, string>>("kv", "examples"),
     db.get<Record<string, CardState>>("kv", "cards"),
     db.get<WordList>("kv", "wordlist"),
+    db.get<WordList[]>("kv", "wordlists"),
   ]);
+  // One list (the textbook's) was kept before the Words tab; it becomes the first of the lists.
+  const lists = savedLists ?? (oldList ? [{ ...oldList, id: "textbook", source: "textbook" as const }] : []);
   if (stored.some((b) => b.id === LEGACY_SAMPLE_ID)) await Promise.all([db.del("books", LEGACY_SAMPLE_ID), db.del("texts", LEGACY_SAMPLE_ID)]);
-  setWordList(list ?? null);
+  setWordLists(lists);
   setState({
     ready: true,
     profile: profile ? { ...freshProfile(), ...profile, settings: { ...DEFAULT_SETTINGS, ...profile.settings, models: { ...DEFAULT_SETTINGS.models, ...profile.settings?.models } } } : freshProfile(),
@@ -120,7 +135,7 @@ export async function init(): Promise<void> {
     examples: examples ?? {},
     // Cards saved before the review pool (FSRS) are converted once, on load.
     cards: Object.fromEntries(Object.entries(cards ?? {}).map(([k, c]) => [k, upgradeCard(c, Date.now())])),
-    wordList: list ? { name: list.name, size: Object.keys(list.entries).length } : null,
+    wordLists: lists.map(infoOf),
     hasKey: hasKey(),
   });
   window.addEventListener("boekenwurm:key", () => setState({ hasKey: hasKey() }));
@@ -190,6 +205,8 @@ export interface FinishedSession {
   endedBy: SessionRow["ended_by"];
   /** lemma -> the sentence it was revealed in */
   sentences: Record<string, string>;
+  /** Read in unlimited lookup mode: words not tapped don't count towards "learned". */
+  lookupMode?: boolean;
 }
 
 /**
@@ -199,11 +216,11 @@ export interface FinishedSession {
 export async function recordFinished(f: FinishedSession): Promise<{ list: E.StudyItem[]; offer: boolean }> {
   const t = now();
   const s = f.session;
-  const wordbook = E.applySession(state.wordbook, s, t);
+  const wordbook = E.applySession(state.wordbook, s, t, { lookupMode: f.lookupMode });
   const list = E.studyList(s, wordbook);
 
   // What this session adds, for word_stats on the server (counters are added there, never overwritten).
-  const mine = E.applySession({}, s, t);
+  const mine = E.applySession({}, s, t, { lookupMode: f.lookupMode });
   const deltas = (await db.get<Record<string, WordDelta>>("kv", "wordDeltas")) ?? {};
   for (const w of Object.values(mine)) {
     const d = deltas[w.lemma] ?? { reveals: 0, encounters: 0, lastRevealed: null, example: null };
@@ -213,6 +230,7 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
       lastRevealed: Math.max(d.lastRevealed ?? 0, w.lastRevealed ?? 0) || null,
       example: d.example ?? f.sentences[w.lemma] ?? null,
       recent: [...(d.recent ?? []), ...(w.recent ?? [])],
+      untapped: (d.untapped ?? 0) + (w.untapped ?? 0),
     };
   }
 
@@ -313,18 +331,41 @@ export async function setWordbook(wordbook: WordBook): Promise<void> {
   await db.put("kv", wordbook, "wordbook");
 }
 
-export async function importWordList(list: WordList | null): Promise<void> {
-  setWordList(list);
-  if (list) await db.put("kv", list, "wordlist");
-  else await db.del("kv", "wordlist");
-  setState({ wordList: list ? { name: list.name, size: Object.keys(list.entries).length } : null });
+async function putWordLists(lists: WordList[]): Promise<void> {
+  setWordLists(lists);
+  await db.put("kv", lists, "wordlists");
+  await db.del("kv", "wordlist");
+  setState({ wordLists: lists.map(infoOf) });
 }
+
+/** Add an imported list (or replace the one with the same id). */
+export async function saveWordList(list: WordList): Promise<void> {
+  const withId: WordList = { ...list, id: list.id ?? crypto.randomUUID(), added: list.added ?? now() };
+  await putWordLists([...currentLists().filter((l) => (l.id ?? "textbook") !== withId.id), withId]);
+}
+
+export async function removeWordList(id: string): Promise<void> {
+  await putWordLists(currentLists().filter((l) => (l.id ?? "textbook") !== id));
+}
+
+/** Is the word on one of the reader's lists: an imported one, or the common words once added? */
+export const onWordList = (lemma: string): boolean => isImportedListWord(lemma) || (state.profile.settings.commonWords === true && isCommonWord(lemma));
+
+/** Where a word on a list stands: not met yet, seen, tapped; its colour; learned. */
+export const listStatus = (lemma: string, at = now()): E.ListWordStatus => E.listWordStatus(state.wordbook[lemma], state.cards[lemma], at);
 
 /** Words the reader knows: their word list plus words met often and rarely revealed. */
 export function knownLemmas(listLemmas: string[]): Set<string> {
   const known = new Set(listLemmas);
   for (const w of Object.values(state.wordbook)) if (w.encounters >= 3 && E.revealRate(w) < 0.5) known.add(w.lemma);
   return known;
+}
+
+/** A word from a list put into the review pool by hand (as Medium), before it was ever tapped. */
+export async function addToReview(lemma: string): Promise<void> {
+  if (state.cards[lemma]) return unskipCard(lemma);
+  await setCards({ ...state.cards, [lemma]: newCard(lemma, now()) });
+  changed();
 }
 
 /** A skipped word brought back into the pool. */
@@ -336,5 +377,5 @@ export async function unskipCard(lemma: string): Promise<void> {
   changed();
 }
 
-/** The review pool in order: Hard, Medium, then Easy check-backs that are due. */
-export const dueCards = (at = now()): CardState[] => E.reviewOrder(Object.values(state.cards), at) as CardState[];
+/** The review pool in order: word-list words rated Hard or Medium first, then Hard, Medium, and Easy check-backs that are due. */
+export const dueCards = (at = now()): CardState[] => E.reviewOrder(Object.values(state.cards), at, onWordList) as CardState[];

@@ -266,6 +266,30 @@ forgetting it then puts it back in the pool. This replaced FSRS scheduling (2026
 intervals didn't suit a reading game, and a set that ends when you know every word does
 (`packages/engine/src/review.ts`).
 
+### Word lists
+
+The **Words** tab follows the words the reader wants to learn as they read. A list is either the **common Dutch
+words** (added in one tap: the open dictionary's 5,000 most frequent words, ranked by wordfreq, with progress shown
+through the 500, 1,000, 2,000 and 5,000 most common) or a list the reader **imports**: pasted text, a .txt, .csv or
+.tsv file, an Excel workbook (.xlsx), an Anki deck (.apkg), or wordlist.json from the textbook tool. The reader picks
+the column with the Dutch words and the one with meanings, unticks rows they don't want, and names the list. Imported
+lists stay on the device and are never shared: a deck or a course list is often someone else's work. No list is
+written by AI.
+
+Each word on a list is shown as one of:
+
+- **not met yet** in anything read: faded;
+- **seen, never tapped**: a dotted outline, outside the colour scheme;
+- **tapped**: green, amber or red, the worse of its taps in the last 14 days (the colour-coded text's rule) and its
+  latest review rating (Easy green, Medium amber, Hard red);
+- **learned** (✓): read in **10 or more paragraphs without a tap**, counted once per paragraph and never in unlimited
+  lookup mode, and, if it was ever tapped, its flashcard **Easy for 2 weeks or more**.
+
+Reviews start with the reader's list words rated Hard or Medium (Hard first), then every other Hard word, Medium,
+and the Easy check-backs (list words first). Learning every word of the 500, 1,000, 2,000 and 5,000 most common words
+earns the **Common words** badge's tiers. Until the reader has a list, Home and the Words tab ask for one. Rules:
+`packages/engine/src/wordlist.ts`, `reviewOrder` in review.ts.
+
 Export, for readers who keep their cards elsewhere:
 
 - **Anki**: an `.apkg` deck download (works on every device), or direct sync through AnkiConnect on a desktop.
@@ -331,6 +355,12 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- Word lists and the Words tab: the common 5,000 words in one tap (progress through 500, 1,000, 2,000 and 5,000,
+  a badge tier for each learned in full) and lists the reader imports (paste, text, CSV, Excel, Anki), kept on the
+  device. Learned = 10 paragraphs read without a tap (not in unlimited lookup mode) and, if ever tapped, Easy in
+  review for 2 weeks. A list word's colour is the worse of its recent taps and its review rating; seen-but-never-tapped
+  words look different, unmet words are faded. List words rated Hard or Medium lead every review. 2026-11-16.
 
 - Unlimited lookup mode: unlocked by any badge at Bronze (a one-off counts), switched on and off in the reader
   ("Unlimited ∞"; the choice is remembered). No fouten: every paragraph passes and no streak builds, so there is no

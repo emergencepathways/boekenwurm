@@ -1,15 +1,16 @@
 /**
- * Where the reader is: a tab (Home · Study · Me) and, on top of it, at most one full screen (the reader, Add
+ * Where the reader is: a tab (Home · Study · Words · Me) and, on top of it, at most one full screen (the reader, Add
  * book, the camera flow). Full screens go into the browser history, so the phone's back gesture closes them.
  */
 import { useSyncExternalStore } from "react";
 
-export type Tab = "home" | "study" | "me";
+export type Tab = "home" | "study" | "words" | "me";
 export type Screen =
   | { name: "reader"; bookId: string }
   | { name: "add" }
   | { name: "photo"; bookId?: string }
-  | { name: "study-session"; lemmas?: string[]; afterLookupMode?: boolean };
+  | { name: "study-session"; lemmas?: string[]; afterLookupMode?: boolean }
+  | { name: "import-list" };
 
 interface Nav {
   tab: Tab;

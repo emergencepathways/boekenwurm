@@ -14,6 +14,7 @@ const I = ({ children, label }: { children: ReactNode; label?: string }) => (
 export const Icon = {
   home: () => <I><path d="M4 11.5 12 5l8 6.5" /><path d="M6 10v9h12v-9" /><path d="M10 19v-5h4v5" /></I>,
   study: () => <I><rect x="4" y="6" width="13" height="14" rx="2" /><path d="M8 3h10a2 2 0 0 1 2 2v12" /><path d="M8 13h5" /></I>,
+  words: () => <I><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M5 17a3 3 0 0 1 3-3h10" /><path d="M9 8h5" /></I>,
   me: () => <I><circle cx="12" cy="8.5" r="3.5" /><path d="M5 20c1.2-3.6 4-5.5 7-5.5s5.8 1.9 7 5.5" /></I>,
   epub: () => <I><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v4h4" /><path d="M9 12h7M9 15h7M9 18h4" /></I>,
   pdf: () => <I><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v4h4" /><path d="M9 17v-4h1.5a1.5 1.5 0 0 1 0 3H9" /><path d="M14 13v4" /></I>,

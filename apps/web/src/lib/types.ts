@@ -67,6 +67,8 @@ export interface Settings {
   reviewSetSize?: number;
   /** Unlimited lookup mode is on (once unlocked by a Bronze badge): no fouten, a quarter of the XP. */
   unlimitedMode?: boolean;
+  /** The 5,000 most common Dutch words are on the reader's word lists (Words tab). */
+  commonWords?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -94,6 +96,8 @@ export interface WordDelta {
   example: string | null;
   /** Reveal times not yet sent (for the colour-coded text, migration 0007). */
   recent?: number[];
+  /** Paragraphs read without tapping the word, not yet sent (word lists, migration 0009). */
+  untapped?: number;
 }
 
 /** A meaning shown on a tapped word or a flashcard: from the reader's word list, the open dictionary or Claude. */
@@ -129,8 +133,17 @@ export interface SessionRow {
 }
 
 /** A reader's own imported word list (e.g. from their textbook). Kept on the device. */
+/** Where a word list came from (shown on its card in the Words tab). */
+export type WordListSource = "textbook" | "paste" | "text" | "csv" | "excel" | "anki";
+
+/** A word list the reader imported. It stays on this device: it may be from a book or course they bought. */
 export interface WordList {
+  /** Lists saved before the Words tab have no id; they are the textbook list. */
+  id?: string;
   name: string;
+  source?: WordListSource;
+  added?: number;
+  /** Base form (lower case) -> meaning and article, in the list's own order. */
   entries: Record<string, { gloss: string | null; article: string | null; chapter: number | null }>;
 }
 

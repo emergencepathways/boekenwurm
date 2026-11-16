@@ -290,6 +290,25 @@ do $$ begin
 end $$;
 reset role;
 
+-- word lists (0009): untapped reads are added from every device; a card remembers when it became Easy
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  perform add_word_untapped('boom', 4);
+  perform add_word_untapped('boom', 6);
+  perform add_word_untapped('boom', -3);
+  if (select untapped from word_stats where lemma = 'boom') <> 10 then raise exception 'FAIL: expected 10 untapped reads'; end if;
+  update cards set easy_since = now() - interval '15 days' where lemma = 'huis';
+  if (select easy_since from cards where lemma = 'huis') is null then raise exception 'FAIL: easy_since not kept'; end if;
+  raise notice 'ok: untapped reads add up (never down), and cards keep when they became Easy';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  if exists (select 1 from word_stats where lemma = 'boom') then raise exception 'FAIL: C sees B''s untapped reads'; end if;
+  raise notice 'ok: untapped reads are each reader''s own';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

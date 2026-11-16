@@ -53,6 +53,8 @@ export interface Session {
   reveals: Reveal[];
   /** Every lemma met in a finished paragraph, with how often. */
   encounters: Record<string, number>;
+  /** Per lemma, finished paragraphs it was in without being tapped (once per paragraph). */
+  untapped?: Record<string, number>;
   current: ParagraphRun | null;
   ended: boolean;
 }
@@ -78,6 +80,7 @@ export function startSession(rules: CheckpointRules, opts: SessionOptions = {}):
     results: [],
     reveals: [],
     encounters: {},
+    untapped: {},
     current: null,
     ended: false,
   };
@@ -142,7 +145,10 @@ export function turnPage(s: Session): TurnOutcome {
   };
   const encounters = { ...s.encounters };
   for (const l of cur.lemmas) encounters[l] = (encounters[l] ?? 0) + 1;
-  const base = { ...s, results: [...s.results, result], reveals: [...s.reveals, ...cur.reveals], encounters, current: null };
+  const untapped = { ...s.untapped };
+  const tappedHere = new Set(cur.reveals.map((r) => r.lemma));
+  for (const l of new Set(cur.lemmas)) if (!tappedHere.has(l)) untapped[l] = (untapped[l] ?? 0) + 1;
+  const base = { ...s, results: [...s.results, result], reveals: [...s.reveals, ...cur.reveals], encounters, untapped, current: null };
   if (passed) {
     const run = s.passesInARow + 1;
     const tokenEarnedNow = !s.tokenEarned && run >= s.tokenAtStreak;

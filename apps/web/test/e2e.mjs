@@ -198,6 +198,8 @@ check(await page.getByText("Nieuwkomer").first().isVisible(), "every reader star
 check(await page.getByText("0 / 600 XP to A1").isVisible(), "with an XP bar towards A1");
 check((await page.locator(".bookbtn").count()) === 0, "no books on the shelf");
 check((await page.locator(".continue").count()) === 0, "no continue-reading card");
+check(await page.getByRole("heading", { name: "Add a word list" }).isVisible(), "Home asks for a word list until there is one");
+check(await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).locator(".dot").isVisible(), "the Words tab is marked too");
 await shot("02-home-empty");
 
 step("add an EPUB without a Claude key: import check, the reader chooses the level");
@@ -387,7 +389,53 @@ if (skippedWord) {
   check(true, "brought back, it waits in the pool");
 }
 await shot("06c-study");
+
+step("Words: no list yet, then a pasted list and a CSV file; list words come first in reviews");
+await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).click();
+await page.getByRole("heading", { name: "Add a word list" }).waitFor();
+check(await page.getByRole("button", { name: "Add the 5,000 most common Dutch words" }).isVisible(), "an empty Words tab offers the common words in one tap");
+await page.getByRole("button", { name: "Import your own list…" }).click();
+await page.getByRole("textbox", { name: "Words to import" }).fill("de markt = the market\nhet brood = bread\nop tijd = on time\nmarkten = markets");
+await page.getByRole("button", { name: "Continue" }).click();
+await page.getByText(/2 words ticked/).waitFor();
+check(await page.getByText(/1 phrase unticked/).isVisible() && await page.getByText(/1 repeat unticked/).isVisible(), "a phrase and a repeat (markten → markt) start unticked");
+await page.getByRole("textbox", { name: "Name" }).fill("Hoofdstuk 1");
+await shot("06d-import-preview");
+await page.getByRole("button", { name: "Add 2 words" }).click();
+await page.getByRole("heading", { name: "My lists" }).waitFor();
+check(await page.getByText("Hoofdstuk 1").first().isVisible(), "the pasted list is on the Words tab");
+await page.getByRole("button", { name: "Import a list…" }).click();
+await page.locator('input[type=file][accept*="apkg"]').setInputFiles({ name: "markt-lijst.csv", mimeType: "text/csv", buffer: Buffer.from("Dutch,English\nbakker,baker\nvis,fish\ntrein,train\n") });
+await page.getByText(/3 words ticked/).waitFor();
+check((await page.getByRole("combobox", { name: "Dutch words" }).inputValue()) === "0" && await page.getByRole("checkbox", { name: "The first row names the columns" }).isChecked(), "a CSV's Dutch column and header row are found");
+await page.getByRole("button", { name: "Add 3 words" }).click();
+await page.getByText("markt lijst").first().waitFor();
+check((await page.locator(".listrow").count()) === 2, "two lists");
+await page.getByText("Hoofdstuk 1").first().click();
+const chips = await page.evaluate(() => [...document.querySelectorAll(".wgrid .wchip")].map((b) => [b.textContent, b.className]));
+check(chips.length === 2 && chips.some(([w, c]) => w === "markt" && /s-(seen|tapped)/.test(c)), "markt was met in reading");
+await page.locator(".wgrid .wchip", { hasText: /^brood$/ }).click();
+check(await page.getByText(/Read without tapping: \d+ of 10/).isVisible(), "a word's details show how close it is to learned");
+await shot("06e-word-details");
+const addBrood = page.getByRole("button", { name: "Add to my reviews" });
+if (await addBrood.isVisible()) {
+  await addBrood.click();
+  if (skippedWord && !["markt", "brood", "bakker", "vis"].includes(skippedWord)) {
+    await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+    await page.getByRole("button", { name: /^Review 2 words$/ }).click();
+    check((await page.locator(".flash .front").textContent()) === "brood", "a list word rated Medium comes before an older word that isn't on a list");
+    await page.getByRole("button", { name: "Back", exact: true }).first().click();
+    await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).click();
+  }
+} else await page.getByRole("button", { name: "Close" }).click();
+await page.getByRole("button", { name: "Add the 5,000 most common words" }).click();
+await page.getByRole("heading", { name: "Common Dutch words" }).waitFor();
+check(await page.locator(".wgrid .wchip.s-tapped").count() > 0, "tapped words are coloured");
+await page.getByText("markt lijst").first().click();
+check(/s-unseen/.test(await page.locator(".wgrid .wchip", { hasText: /^trein$/ }).getAttribute("class")), "a word not met yet in reading is faded");
+await shot("06f-words");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+check(!(await page.getByRole("heading", { name: "Add a word list" }).isVisible()), "Home stops asking once there is a list");
 
 step("colour-coded text: off by default; on, words revealed before are coloured");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
@@ -427,7 +475,7 @@ await page.locator(".hello").waitFor();
 check(await page.getByRole("img", { name: /^Rank A1/ }).first().isVisible(), "the rank rose to A1 on its own");
 check(await page.getByText("Letterproever").first().isVisible(), "with its title");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
-check((await page.locator(".patchcell").count()) === 10, "Me shows the 10 badges");
+check((await page.locator(".patchcell").count()) === 11, "Me shows the 11 badges");
 check(await page.locator(".patchcell.got", { hasText: "Books finished" }).isVisible(), "Books finished is earned (Bronze)");
 check(await page.getByRole("img", { name: "Books finished: Bronze" }).isVisible(), "its patch wears the Bronze ribbon");
 check((await page.locator(".patchcell:not(.got)").count()) >= 5, "others are still locked");

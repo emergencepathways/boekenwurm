@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { bookProgress } from "@boekenwurm/books";
 import { deleteBook, dueCards, saveBook, useStore } from "../lib/store.ts";
-import { open } from "../nav.ts";
+import { open, setTab } from "../nav.ts";
 import type { Book } from "../lib/types.ts";
 import { bookShare, Cover, LevelPicker, plural, Sheet, toast } from "../ui.tsx";
 import * as E from "@boekenwurm/engine";
@@ -26,6 +26,7 @@ export function Home() {
   const books = useStore((s) => s.books);
   const cards = useStore((s) => s.cards);
   const [details, setDetails] = useState<Book | null>(null);
+  const noList = useStore((s) => !s.wordLists.length && !s.profile.settings.commonWords);
   const due = dueCards().length;
   const totalCards = Object.keys(cards).length;
   const shelf = books.filter((b) => b.status !== "archived");
@@ -77,6 +78,14 @@ export function Home() {
           </span>
         </span>
       </button>}
+
+      {noList && (
+        <section className="panel">
+          <h2>Add a word list</h2>
+          <p>Choose the words you want to learn: the 5,000 most common Dutch words in one tap, or your own list. Boekenwurm follows them as you read.</p>
+          <button className="btn" type="button" onClick={() => setTab("words")}>Go to Words</button>
+        </section>
+      )}
 
       {shelf.length > 0 && <section className="stack">
         <div className="shelf-head">

@@ -103,7 +103,7 @@ block belongs to the page most of its words are on.
 
 ## Screens (mobile first)
 
-Bottom tab bar, like a native app: **Home · Study · Me**. The reader opens full-screen over the tabs.
+Bottom tab bar, like a native app: **Home · Study · Words · Me**. The reader opens full-screen over the tabs.
 
 - **Home** — greeting with title badge and streak tokens; **Continue reading** card (last book, % done);
   **My books** as a grid of covers with a progress ring and level chip; a **+** card to add a book; a **Study words**
@@ -114,8 +114,9 @@ Bottom tab bar, like a native app: **Home · Study · Me**. The reader opens ful
   - **Photograph a book** — see below.
 - **Reader** — the playtest reader: tap-to-reveal, strikes, streaks, Match my level, Show original, words in context.
 - **Study** — flashcards of revealed words in a review pool (Hard first, sets repeated until every word is Easy), "not sticking" list, export to Anki/CSV.
-- **Me** — level, badges, word list (default dictionary or imported textbook), Claude key and models, account, export
-  and delete my data.
+- **Words** — the reader's word lists (the common 5,000 words in one tap, or lists they import) with progress, each word
+  shown as not met yet, seen, tapped (coloured) or learned (DESIGN.md "Word lists").
+- **Me** — rank, badges, Claude key and models, account, export and delete my data.
 
 ## Photographing a book you own
 
@@ -201,9 +202,15 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   attribution. Both sources are CC BY-SA 4.0, and so is the built file.
 - A word that is mostly a form of a commoner word (*was* → *zijn*) maps to that word; its own meaning (*laundry*) is
   kept but ranked lower. Dutch-language explanations still come from Claude; a Dutch Wiktionary build can add them later.
-- **Your textbook (private):** each reader can import their own textbook's word list from their own copy. Nothing from
-  any textbook is part of the app or this repository.
-- Words are tracked against the active list: "known", "in my textbook up to chapter 13", "new".
+- **Common words:** the first 5,000 lemmas of that dictionary (it is written most common first) are the common-words
+  list, added in one tap from the Words tab; nothing extra is downloaded.
+- **Your own lists (private):** paste, .txt/.csv/.tsv, Excel (.xlsx, read with JSZip), Anki (.apkg: JSZip plus
+  sql.js, and fzstd for the compressed collections of Anki 2.1.50+; loaded only when a deck is imported), or the
+  textbook tool's wordlist.json. Lists are kept in IndexedDB on the device and never uploaded (`lib/importlist.ts`).
+  Nothing from any textbook is part of the app or this repository.
+- What the Words tab needs from the server: `word_stats.untapped` (paragraphs read without a tap, added from every
+  device by `add_word_untapped`) and `cards.easy_since` (migration 0009). Before that migration runs, both stay on the
+  device.
 
 ## Security and privacy
 

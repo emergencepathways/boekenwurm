@@ -14,7 +14,7 @@ export function upgradeCard(c: CardState | (Record<string, unknown> & { lemma: s
   const old = c as { lemma: string; due: number; state?: number; reps?: number; lapses?: number; lastReview?: number | null; updatedAt?: number };
   const known = old.state === 2 && old.due > at;
   return {
-    lemma: old.lemma, pool: known ? "easy" : "medium", due: known ? old.due : at, easyStep: 0,
+    lemma: old.lemma, pool: known ? "easy" : "medium", due: known ? old.due : at, easyStep: 0, easySince: known ? (old.lastReview ?? at) : null,
     reps: old.reps ?? 0, lapses: old.lapses ?? 0, lastReview: old.lastReview ?? null, updatedAt: old.updatedAt ?? at, dirty: true,
   };
 }
@@ -30,6 +30,8 @@ export interface CardRow {
   /** Migration 0008; absent before it runs. */
   pool?: E.Pool | null;
   easy_step?: number | null;
+  /** Migration 0009. */
+  easy_since?: string | null;
 }
 
 export function fromRow(row: CardRow): CardState {
@@ -38,18 +40,26 @@ export function fromRow(row: CardRow): CardState {
     lemma: row.lemma, due, reps: row.reps, lapses: row.lapses, state: row.state,
     lastReview: row.last_review ? Date.parse(row.last_review) : null, updatedAt: Date.parse(row.updated_at),
   };
-  if (row.pool) return { lemma: row.lemma, pool: row.pool, due, easyStep: row.easy_step ?? 0, reps: row.reps, lapses: row.lapses, lastReview: card.lastReview, updatedAt: card.updatedAt, dirty: false };
+  if (row.pool) {
+    // Before 0009 an Easy card has no easy_since: count from its last review.
+    const easySince = row.easy_since ? Date.parse(row.easy_since) : row.pool === "easy" ? (card.lastReview ?? card.updatedAt) : null;
+    return { lemma: row.lemma, pool: row.pool, due, easyStep: row.easy_step ?? 0, reps: row.reps, lapses: row.lapses, lastReview: card.lastReview, easySince, updatedAt: card.updatedAt, dirty: false };
+  }
   return { ...upgradeCard(card, Date.now()), updatedAt: card.updatedAt, dirty: false };
 }
 
-/** The row to upsert. `withPool` false before migration 0008 has run. */
-export function toRow(c: CardState, userId: string, withPool = true) {
+/** Which newer columns the table has: 2 with 0009 (easy_since), 1 with 0008 (pool, easy_step), 0 before. */
+export type CardColumns = 0 | 1 | 2;
+
+/** The row to upsert, with the columns the table has. */
+export function toRow(c: CardState, userId: string, cols: CardColumns = 2) {
   return {
     user_id: userId, lemma: c.lemma, due: new Date(c.due).toISOString(), reps: c.reps, lapses: c.lapses,
     // The FSRS columns are no longer used; state 2 keeps older app versions from treating the card as new.
     state: 2, stability: null, difficulty: null,
     last_review: c.lastReview ? new Date(c.lastReview).toISOString() : null,
-    ...(withPool ? { pool: c.pool, easy_step: c.easyStep } : {}),
+    ...(cols >= 1 ? { pool: c.pool, easy_step: c.easyStep } : {}),
+    ...(cols >= 2 ? { easy_since: c.easySince ? new Date(c.easySince).toISOString() : null } : {}),
   };
 }
 

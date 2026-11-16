@@ -6,6 +6,7 @@
 import * as E from "@boekenwurm/engine";
 import { getState, updateProfile } from "./store.ts";
 import { localDay } from "./usage.ts";
+import { commonWords } from "./words.ts";
 import { toast } from "../ui.tsx";
 import type { Book } from "./types.ts";
 
@@ -60,7 +61,9 @@ export function statsNow(): E.AchievementStats {
   const s = getState();
   const pagesWithNumbers = s.books.reduce((n, b) => n + (b.pagesRead?.length ?? 0), 0);
   const wordsLookedUp = Object.values(s.wordbook).reduce((n, w) => n + w.reveals, 0);
-  return E.statsOf(playOf(), { today: today(), wordsLookedUp, pagesWithNumbers });
+  const t = Date.now();
+  const commonWordsLearned = E.commonListsLearned(commonWords(), (w) => E.listWordStatus(s.wordbook[w], s.cards[w], t).learned);
+  return { ...E.statsOf(playOf(), { today: today(), wordsLookedUp, pagesWithNumbers }), commonWordsLearned };
 }
 
 /** New tiers: held from now on, 80 XP each, and a toast for each. Safe to call any time. */

@@ -11,7 +11,7 @@ import {
   adoptBook, adoptMeanings, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook, SAVED_SOURCES,
 } from "./store.ts";
 import { bookToRow, mergeProgress, rowToBook, serverWins, wordbookFrom, type BookRow, type WordStatRow } from "./merge.ts";
-import { fromRow, toRow, type CardRow } from "./cards.ts";
+import { fromRow, toRow, type CardColumns, type CardRow } from "./cards.ts";
 import type { BookText, CardState, Meaning, Paragraph, SessionRow, WordDelta } from "./types.ts";
 
 let running: Promise<void> | null = null;
@@ -190,6 +190,11 @@ async function pushWordDeltas(sb: SB) {
           const { error } = await sb.rpc("add_recent_reveals", { p_lemma: lemma.slice(0, 80), p_times: d.recent.map((t) => new Date(t).toISOString()) });
           if (error && !/add_recent_reveals|could not find the function/i.test(error.message)) throw new Error(errText(error));
         }
+        // Untapped reads for word lists (0009). Until that migration runs they stay on this device only.
+        if (d.untapped) {
+          const { error } = await sb.rpc("add_word_untapped", { p_lemma: lemma.slice(0, 80), p_n: d.untapped });
+          if (error && !/add_word_untapped|could not find the function/i.test(error.message)) throw new Error(errText(error));
+        }
         sent.push(lemma);
       }),
     );
@@ -200,8 +205,9 @@ async function pushWordDeltas(sb: SB) {
     const was = deltas[lemma], now = latest[lemma];
     const sentTimes = new Set(was?.recent ?? []);
     const newTimes = (now?.recent ?? []).filter((t) => !sentTimes.has(t));
-    if (now && was && now.reveals === was.reveals && now.encounters === was.encounters && !newTimes.length) delete latest[lemma];
-    else if (now && was) latest[lemma] = { ...now, reveals: now.reveals - was.reveals, encounters: now.encounters - was.encounters, recent: newTimes };
+    const untapped = (now?.untapped ?? 0) - (was?.untapped ?? 0);
+    if (now && was && now.reveals === was.reveals && now.encounters === was.encounters && !newTimes.length && !untapped) delete latest[lemma];
+    else if (now && was) latest[lemma] = { ...now, reveals: now.reveals - was.reveals, encounters: now.encounters - was.encounters, recent: newTimes, untapped };
   }
   await db.put("kv", latest, "wordDeltas");
 }
@@ -209,14 +215,14 @@ async function pushWordDeltas(sb: SB) {
 async function pushCards(sb: SB, userId: string) {
   const dirty = Object.values(getState().cards).filter((c) => c.dirty);
   if (!dirty.length) return;
-  // The review pool's columns exist once migration 0008 has run; until then the card is sent without them.
-  let withPool = true;
+  // Newer columns exist once their migrations have run (0008 the pool, 0009 easy_since); until then, without them.
+  let cols: CardColumns = 2;
   for (let i = 0; i < dirty.length; i += 500) {
     const batch = dirty.slice(i, i + 500);
-    let res = await sb.from("cards").upsert(batch.map((c) => toRow(c, userId, withPool)), { onConflict: "user_id,lemma" });
-    if (res.error && withPool && /pool|easy_step/.test(res.error.message)) {
-      withPool = false;
-      res = await sb.from("cards").upsert(batch.map((c) => toRow(c, userId, false)), { onConflict: "user_id,lemma" });
+    let res = await sb.from("cards").upsert(batch.map((c) => toRow(c, userId, cols)), { onConflict: "user_id,lemma" });
+    while (res.error && cols > 0 && /pool|easy_step|easy_since/.test(res.error.message)) {
+      cols = (cols - 1) as CardColumns;
+      res = await sb.from("cards").upsert(batch.map((c) => toRow(c, userId, cols)), { onConflict: "user_id,lemma" });
     }
     check(res);
   }
@@ -274,8 +280,10 @@ async function pullWords(sb: SB) {
   const rows: WordStatRow[] = [];
   for (let from = 0; ; from += 1000) {
     // Recent reveal times exist once migration 0007 has run; until then, the counters alone.
+    // Untapped reads exist once 0009 has run.
     const cols = "lemma, reveals, encounters, first_seen, last_revealed, example";
-    let res: { data: unknown; error: { message: string; code?: string } | null } = await sb.from("word_stats").select(`${cols}, recent_reveals`).range(from, from + 999);
+    let res: { data: unknown; error: { message: string; code?: string } | null } = await sb.from("word_stats").select(`${cols}, recent_reveals, untapped`).range(from, from + 999);
+    if (res.error && /untapped/.test(res.error.message)) res = await sb.from("word_stats").select(`${cols}, recent_reveals`).range(from, from + 999);
     if (res.error && /recent_reveals/.test(res.error.message)) res = await sb.from("word_stats").select(cols).range(from, from + 999);
     const page = check(res) as WordStatRow[];
     rows.push(...page);

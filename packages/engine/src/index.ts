@@ -8,3 +8,4 @@ export * from "./xp.ts";
 export * from "./achievements.ts";
 export * from "./play.ts";
 export * from "./review.ts";
+export * from "./wordlist.ts";

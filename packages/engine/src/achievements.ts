@@ -29,6 +29,8 @@ export interface AchievementStats {
   finishedAboveRank: boolean;
   /** A book finished a second time. */
   finishedAgain: boolean;
+  /** The largest common-words list learned in full: 0, 500, 1,000, 2,000 or 5,000 (wordlist.ts). */
+  commonWordsLearned?: number;
 }
 
 export type Category = "reading" | "streak" | "words" | "study" | "books" | "explorer";
@@ -54,6 +56,7 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   { key: "study-days", name: "Study days in a row", category: "study", targets: [7, 14, 30, 100, 365], goal: (t) => `${n(t)} days`, measure: (s) => s.studyDayRun },
   { key: "reading-days", name: "Reading days in a row", category: "reading", targets: [3, 7, 30, 100, 365], goal: (t) => `${n(t)} days`, measure: (s) => s.readingDayRun },
   { key: "books", name: "Books finished", category: "books", targets: [1, 5, 15, 50, 100], goal: (t) => (t === 1 ? "1 book" : `${n(t)} books`), measure: (s) => s.booksFinished },
+  { key: "common-words", name: "Common words", category: "words", targets: [500, 1000, 2000, 5000], goal: (t) => `The ${n(t)} most common words`, measure: (s) => s.commonWordsLearned ?? 0 },
   { key: "every-level", name: "Every level", category: "explorer", targets: [1], goal: () => "A page at every level, A1 to C2", measure: (s) => (["A1", "A2", "B1", "B2", "C1", "C2"].every((l) => s.levelsRead.includes(l)) ? 1 : 0) },
   { key: "every-kind", name: "Every kind of book", category: "explorer", targets: [1], goal: () => "A page from an EPUB, a PDF and a photographed book", measure: (s) => (["epub", "pdf", "photo"].every((k) => s.kindsRead.includes(k)) ? 1 : 0) },
   { key: "reach-higher", name: "Reach higher", category: "explorer", targets: [1], goal: () => "A book finished above your rank", measure: (s) => (s.finishedAboveRank ? 1 : 0) },

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
-import { dueCards, getState, reviewCard, unskipCard, useStore } from "../lib/store.ts";
+import { dueCards, getState, onWordList, reviewCard, unskipCard, useStore } from "../lib/store.ts";
 import { meaningOf } from "../lib/words.ts";
 import { studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
@@ -18,6 +18,7 @@ export function Study() {
   const all = Object.values(cards).filter((c) => c.pool !== "skipped");
   const skipped = Object.values(cards).filter((c) => c.pool === "skipped").sort((a, b) => a.lemma.localeCompare(b.lemma));
   const pool = { hard: due.filter((c) => c.pool === "hard").length, medium: due.filter((c) => c.pool === "medium").length, easy: due.filter((c) => c.pool === "easy").length };
+  const fromLists = due.filter((c) => (c.pool === "hard" || c.pool === "medium") && onWordList(c.lemma)).length;
   const nextCheck = all.filter((c) => c.pool === "easy" && c.due > Date.now()).sort((a, b) => a.due - b.due)[0];
   const stuck = E.notSticking(wordbook);
   const revealed = Object.values(wordbook).filter((w) => w.reveals > 0).sort((a, b) => b.reveals - a.reveals || a.lemma.localeCompare(b.lemma));
@@ -44,7 +45,7 @@ export function Study() {
         <p>
           {all.length
             ? due.length
-              ? `${[pool.hard && `${pool.hard} hard`, pool.medium && `${pool.medium} medium`, pool.easy && `${pool.easy} to check`].filter(Boolean).join(", ")}. A review takes ${Math.min(setSize, due.length)} of them, hard first, and repeats each until you rate it Easy.`
+              ? `${[pool.hard && `${pool.hard} hard`, pool.medium && `${pool.medium} medium`, pool.easy && `${pool.easy} to check`].filter(Boolean).join(", ")}. A review takes ${Math.min(setSize, due.length)} of them, ${fromLists ? `your word lists' ${plural(fromLists, "word")} first, then hard` : "hard first"}, and repeats each until you rate it Easy.`
               : nextCheck ? `Your next check-back is ${inWords(nextCheck.due - Date.now())}.` : ""
             : "Every word you tap while reading becomes a flashcard. Rate it Hard, Medium or Easy; Hard and Medium words wait here for review."}
         </p>
@@ -143,7 +144,7 @@ export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: str
   const recap = Boolean(lemmas);
   // The set is fixed when the session opens.
   const initial = useMemo(
-    () => (lemmas ? lemmas.filter((l) => getState().cards[l]) : E.reviewSet(Object.values(getState().cards), Date.now(), setSize).map((c) => c.lemma)),
+    () => (lemmas ? lemmas.filter((l) => getState().cards[l]) : E.reviewSet(Object.values(getState().cards), Date.now(), setSize, onWordList).map((c) => c.lemma)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );

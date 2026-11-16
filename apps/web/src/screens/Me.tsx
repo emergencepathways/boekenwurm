@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import * as E from "@boekenwurm/engine";
-import { getState, importWordList, SAVED_SOURCES, updateProfile, useStore } from "../lib/store.ts";
+import { getState, SAVED_SOURCES, updateProfile, useStore } from "../lib/store.ts";
 import { lookupsToday } from "../lib/translate.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { MODELS, setClaudeKey, testKey, claudeKey } from "../lib/claude.ts";
-import { parseWordList } from "../lib/words.ts";
 import { sendSignInEmail, signOut, syncNow, verifyCode } from "../lib/sync.ts";
 import { connectionCheck, type CheckReport } from "../lib/check.ts";
 import { appUrl, supabase } from "../lib/supabase.ts";
@@ -140,7 +139,6 @@ export function Me() {
       <LookupsSection />
       <AccessCodeSection />
       <ClaudeSection />
-      <WordListSection />
 
       <section className="panel">
         <h2>On your home screen</h2>
@@ -455,48 +453,6 @@ function ClaudeSection() {
         <input type="checkbox" checked={preferFree} onChange={(e) => void updateProfile((x) => ({ ...x, settings: { ...x.settings, preferFreeReading: e.target.checked } }))} />
         Read photographed pages on this device even with a key (free, a little less accurate)
       </label>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------- word list
-
-function WordListSection() {
-  const list = useStore((s) => s.wordList);
-  const [err, setErr] = useState<string | null>(null);
-  return (
-    <section className="panel">
-      <h2>Word list</h2>
-      <p>
-        {list
-          ? <>Using <b>{list.name}</b>: {list.size.toLocaleString()} words, for meanings and for knowing which words you've already learned.</>
-          : "Import the word list made from your own textbook (wordlist.json from the textbook tool). It stays on this device and is never uploaded."}
-      </p>
-      <div className="actions">
-        <label className="btn small" style={{ position: "relative" }}>
-          {list ? "Replace…" : "Import wordlist.json…"}
-          <input
-            type="file"
-            accept=".json,application/json"
-            style={{ position: "absolute", inset: 0, opacity: 0 }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              try {
-                const parsed = parseWordList(f.name, await f.text());
-                await importWordList(parsed);
-                setErr(null);
-                toast(`Loaded ${Object.keys(parsed.entries).length.toLocaleString()} words.`);
-              } catch (x) {
-                setErr((x as Error).message);
-              }
-              e.target.value = "";
-            }}
-          />
-        </label>
-        {list && <button className="btn small ghost" type="button" onClick={() => void importWordList(null)}>Remove</button>}
-      </div>
-      {err && <p className="error">{err}</p>}
     </section>
   );
 }

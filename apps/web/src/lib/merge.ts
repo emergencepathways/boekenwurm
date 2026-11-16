@@ -117,6 +117,8 @@ export interface WordStatRow {
   example: string | null;
   /** Reveal times of the last 14 days (migration 0007); absent before that migration. */
   recent_reveals?: string[] | null;
+  /** Paragraphs read without a tap (migration 0009); absent before it. */
+  untapped?: number | null;
 }
 
 /**
@@ -133,6 +135,7 @@ export function wordbookFrom(rows: WordStatRow[], pending: Record<string, WordDe
       firstSeen: r.first_seen ? Date.parse(r.first_seen) : null,
       lastRevealed: r.last_revealed ? Date.parse(r.last_revealed) : null,
       recent: r.recent_reveals != null ? r.recent_reveals.map((t) => Date.parse(t)) : local[r.lemma]?.recent,
+      untapped: r.untapped != null ? r.untapped : local[r.lemma]?.untapped,
     };
   for (const [lemma, d] of Object.entries(pending)) {
     const w = (out[lemma] ??= { lemma, reveals: 0, encounters: 0, firstSeen: Date.now(), lastRevealed: null });
@@ -140,6 +143,7 @@ export function wordbookFrom(rows: WordStatRow[], pending: Record<string, WordDe
     w.encounters += d.encounters;
     w.lastRevealed = Math.max(w.lastRevealed ?? 0, d.lastRevealed ?? 0) || null;
     if (d.recent?.length) w.recent = [...new Set([...(w.recent ?? []), ...d.recent])].sort((a, b) => a - b);
+    if (d.untapped) w.untapped = (w.untapped ?? 0) + d.untapped;
   }
   return out;
 }

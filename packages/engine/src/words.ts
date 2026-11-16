@@ -16,6 +16,8 @@ export interface WordStats {
   lastRevealed: number | null;
   /** When the word was revealed in the last RECENT_DAYS days (ms), for the colour-coded text. */
   recent?: number[];
+  /** Paragraphs read with the word in them, outside lookup mode, where it wasn't tapped (word lists: "learned"). */
+  untapped?: number;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -29,8 +31,11 @@ export function keepRecent(times: number[], now: number): number[] {
 
 export type WordBook = Record<string, WordStats>;
 
-/** Fold a finished session into the lifetime word book (returns a new object). */
-export function applySession(book: WordBook, s: Session, now: number): WordBook {
+/**
+ * Fold a finished session into the lifetime word book (returns a new object). A paragraph in which a word appeared
+ * but wasn't tapped counts towards `untapped`, except in unlimited lookup mode, where not tapping proves nothing.
+ */
+export function applySession(book: WordBook, s: Session, now: number, opts: { lookupMode?: boolean } = {}): WordBook {
   const out: WordBook = { ...book };
   const touch = (lemma: string): WordStats =>
     (out[lemma] = out[lemma] ? { ...out[lemma] } : { lemma, reveals: 0, encounters: 0, firstSeen: now, lastRevealed: null });
@@ -42,6 +47,8 @@ export function applySession(book: WordBook, s: Session, now: number): WordBook 
     w.recent = [...(w.recent ?? []), r.at];
   }
   for (const w of Object.values(out)) if (w.recent) w.recent = keepRecent(w.recent, now);
+  if (!opts.lookupMode)
+    for (const [lemma, n] of Object.entries(s.untapped ?? {})) if (n > 0) out[lemma].untapped = (out[lemma].untapped ?? 0) + n;
   return out;
 }
 
