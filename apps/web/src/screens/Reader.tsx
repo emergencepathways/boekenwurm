@@ -503,11 +503,13 @@ export function Reader({ bookId }: { bookId: string }) {
     <main className="screen full reader">
       <TopBar
         title={book.title}
+        center={
+          <button className="btn small ghost" type="button" onClick={() => ((r.modal = { kind: "goto" }), bump())} aria-label="Go to a page">
+            {hasPages() ? `p. ${pageAt(r.pos) ?? "?"}` : "Go to"}
+          </button>
+        }
         right={
           <>
-            <button className="btn small ghost" type="button" onClick={() => ((r.modal = { kind: "goto" }), bump())} aria-label="Go to a page">
-              {hasPages() ? `p. ${pageAt(r.pos) ?? "?"}` : "Go to"}
-            </button>
             {admin && (above || mode === "match") && (
               <button className="btn small" type="button" onClick={() => ((r.modal = { kind: "match" }), bump())}>
                 {mode === "match" ? `Matched to ${progress.level}` : "Match my level"}
@@ -1124,15 +1126,18 @@ function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, 
   );
 }
 
-function TopBar({ title, right }: { title: string; right?: React.ReactNode }) {
+/** The reader's header: Home on the left, the page (Go to) in the middle of the screen, anything else on the right. */
+function TopBar({ title, center, right }: { title: string; center?: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="topbar">
+    <div className="topbar readerbar">
       <button className="back" type="button" onClick={close} aria-label="Back to Home">
         <span style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> Home
       </button>
-      <span className="grow" />
-      <span className="sr-only">{title}</span>
-      {right}
+      <span className="centre">
+        <span className="sr-only">{title}</span>
+        {center}
+      </span>
+      <span className="end">{right}</span>
     </div>
   );
 }

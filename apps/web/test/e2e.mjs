@@ -567,6 +567,7 @@ await page.locator(".continue").click();
 await page.locator(".para .w").first().waitFor();
 check(!/XP|%|A\d/.test(await page.locator(".strip").textContent()), "the reader shows no XP, percentage or rank: just the fouten");
 check(/^\d+ of \d+ fouten?$/.test((await page.locator(".strikes").textContent()).trim()), "as \"x of y fouten\"");
+check(await page.evaluate(() => { const b = document.querySelector('[aria-label="Go to a page"]').getBoundingClientRect(); return Math.abs(b.left + b.width / 2 - document.documentElement.clientWidth / 2) < 2; }), "the page number sits in the middle of the header");
 
 step("font: a button under the page picks the font pairing, bundled with the app");
 await page.getByRole("button", { name: /^Font:/ }).click();
