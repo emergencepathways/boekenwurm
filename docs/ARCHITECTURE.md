@@ -115,7 +115,7 @@ Bottom tab bar, like a native app: **Home · Study · Words · Me**. The reader 
 - **Reader** — the playtest reader: tap-to-reveal, strikes, streaks, Match my level, Show original, words in context.
 - **Study** — flashcards of revealed words in a review pool (Hard first, sets repeated until every word is Easy), "not sticking" list, export to Anki/CSV.
 - **Words** — the reader's word lists (the common 5,000 words in one tap, or lists they import) with progress, each word
-  shown as not met yet, seen, tapped (coloured) or learned (DESIGN.md "Word lists").
+  shown as not seen yet, seen, tapped (coloured) or learned (DESIGN.md "Word lists").
 - **Me** — rank, badges, Claude key and models, account, export and delete my data.
 
 ## Photographing a book you own

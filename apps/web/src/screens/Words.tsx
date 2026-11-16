@@ -1,7 +1,7 @@
 /**
  * The Words tab: the reader's word lists and how far along each one is. The common Dutch words (500, 1,000, 2,000
  * and 5,000) come from the open dictionary in one tap; the reader's own lists are imported (lib/importlist.ts).
- * Each word shows where it stands (docs/DESIGN.md "Word lists"): not met yet (faded), seen in reading but never
+ * Each word shows where it stands (docs/DESIGN.md "Word lists"): not seen yet (faded), seen in reading but never
  * tapped (dotted), tapped (coloured by recent taps and review rating, like the colour-coded text), and learned (✓).
  */
 import { useEffect, useMemo, useState } from "react";
@@ -13,7 +13,7 @@ import { open } from "../nav.ts";
 import { plural, Sheet, toast } from "../ui.tsx";
 
 type Filter = "all" | "work" | "unseen" | "seen" | "learned";
-const FILTERS: Array<[Filter, string]> = [["all", "All"], ["work", "Needs work"], ["seen", "Seen, never tapped"], ["unseen", "Not met yet"], ["learned", "Learned"]];
+const FILTERS: Array<[Filter, string]> = [["all", "All"], ["work", "Needs work"], ["seen", "Seen, never tapped"], ["unseen", "Not seen yet"], ["learned", "Learned"]];
 const PAGE = 300;
 const SOURCE: Record<WordListInfo["source"], string> = { textbook: "Textbook", paste: "Pasted", text: "Text file", csv: "CSV", excel: "Excel", anki: "Anki deck" };
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -145,7 +145,7 @@ function EmptyLists() {
     <section className="panel firstbook">
       <h2>Add a word list</h2>
       <p>
-        Pick the words you want to learn, and Boekenwurm follows them as you read: which ones you've met, which you tap, and which
+        Pick the words you want to learn, and Boekenwurm follows them as you read: which ones you've seen, which you tap, and which
         you've learned. Words from your lists that you rate Hard or Medium come first in every review.
       </p>
       <button className="btn primary" type="button" disabled={!dictionary} onClick={() => void setCommon(true)}>Add the 5,000 most common Dutch words</button>
@@ -171,11 +171,11 @@ function ListRow(props: { title: string; detail?: string; words: readonly string
           <b>{props.title}</b>
           <span className="num small">{fmt(c.learned)} / {fmt(c.total)} learned{c.learned === c.total && c.total ? " ✓" : ""}</span>
         </span>
-        <span className="stack3" role="img" aria-label={`${c.learned} learned, ${c.met} met and still learning, ${c.unseen} not met yet`}>
+        <span className="stack3" role="img" aria-label={`${c.learned} learned, ${c.met} seen and still learning, ${c.unseen} not seen yet`}>
           <i className="l" style={{ width: pct(c.learned) }} />
           <i className="m" style={{ width: pct(c.met) }} />
         </span>
-        <span className="small muted">{props.detail ? `${props.detail} · ` : ""}{fmt(c.learned + c.met)} met in reading · {fmt(c.unseen)} not yet</span>
+        <span className="small muted">{props.detail ? `${props.detail} · ` : ""}{fmt(c.learned + c.met)} seen in reading · {fmt(c.unseen)} not seen yet</span>
       </button>
     </div>
   );
@@ -205,7 +205,7 @@ function WordGrid({ title, words, status, onRemove }: { title: string; words: re
         ))}
       </div>
       <div className="legend small" aria-hidden="true">
-        <span className="wchip s-unseen">not met</span>
+        <span className="wchip s-unseen">not seen</span>
         <span className="wchip s-seen">seen</span>
         <span className="wchip s-tapped c-green">easy</span>
         <span className="wchip s-tapped c-yellow">medium</span>
@@ -246,7 +246,7 @@ function WordDetails({ lemma, status, onClose }: { lemma: string; status: E.List
       <h2 lang="nl">{m?.article ? `${m.article} ` : ""}{lemma}{status.learned ? " ✓" : ""}</h2>
       {m?.en && <p>{m.en}</p>}
       <ul className="facts small">
-        <li>{w?.encounters ? `Met in ${plural(w.encounters, "paragraph")}` : "Not met in your reading yet"}{w?.reveals ? ` · tapped ${plural(w.reveals, "time")}${recent ? ` (${recent} in the last 2 weeks)` : ""}` : w?.encounters ? " · never tapped" : ""}</li>
+        <li>{w?.encounters ? `Seen in ${plural(w.encounters, "paragraph")}` : "Not seen in your reading yet"}{w?.reveals ? ` · tapped ${plural(w.reveals, "time")}${recent ? ` (${recent} in the last 2 weeks)` : ""}` : w?.encounters ? " · never tapped" : ""}</li>
         <li>Read without tapping: {untapped} of {E.LEARNED_UNTAPPED_READS}{w && (w.untapped ?? 0) > untapped ? "+" : ""}</li>
         {card && <li>Flashcard: {POOL_NAME[card.pool]}{card.pool === "easy" && card.easySince ? ` since ${day(card.easySince)} (${plural(easyDays, "day")} of ${E.LEARNED_EASY_DAYS})` : ""}</li>}
       </ul>

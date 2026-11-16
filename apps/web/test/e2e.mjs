@@ -413,7 +413,7 @@ await page.getByText("markt lijst").first().waitFor();
 check((await page.locator(".listrow").count()) === 2, "two lists");
 await page.getByText("Hoofdstuk 1").first().click();
 const chips = await page.evaluate(() => [...document.querySelectorAll(".wgrid .wchip")].map((b) => [b.textContent, b.className]));
-check(chips.length === 2 && chips.some(([w, c]) => w === "markt" && /s-(seen|tapped)/.test(c)), "markt was met in reading");
+check(chips.length === 2 && chips.some(([w, c]) => w === "markt" && /s-(seen|tapped)/.test(c)), "markt was seen in reading");
 await page.locator(".wgrid .wchip", { hasText: /^brood$/ }).click();
 check(await page.getByText(/Read without tapping: \d+ of 10/).isVisible(), "a word's details show how close it is to learned");
 await shot("06e-word-details");
@@ -432,7 +432,7 @@ await page.getByRole("button", { name: "Add the 5,000 most common words" }).clic
 await page.getByRole("heading", { name: "Common Dutch words" }).waitFor();
 check(await page.locator(".wgrid .wchip.s-tapped").count() > 0, "tapped words are coloured");
 await page.getByText("markt lijst").first().click();
-check(/s-unseen/.test(await page.locator(".wgrid .wchip", { hasText: /^trein$/ }).getAttribute("class")), "a word not met yet in reading is faded");
+check(/s-unseen/.test(await page.locator(".wgrid .wchip", { hasText: /^trein$/ }).getAttribute("class")), "a word not seen yet in reading is faded");
 await shot("06f-words");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 check(!(await page.getByRole("heading", { name: "Add a word list" }).isVisible()), "Home stops asking once there is a list");

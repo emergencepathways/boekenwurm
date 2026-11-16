@@ -278,7 +278,7 @@ written by AI.
 
 Each word on a list is shown as one of:
 
-- **not met yet** in anything read: faded;
+- **not seen yet** in anything read: faded;
 - **seen, never tapped**: a dotted outline, outside the colour scheme;
 - **tapped**: green, amber or red, the worse of its taps in the last 14 days (the colour-coded text's rule) and its
   latest review rating (Easy green, Medium amber, Hard red);
@@ -360,7 +360,7 @@ anywhere except `private/`.
   a badge tier for each learned in full) and lists the reader imports (paste, text, CSV, Excel, Anki), kept on the
   device. Learned = 10 paragraphs read without a tap (not in unlimited lookup mode) and, if ever tapped, Easy in
   review for 2 weeks. A list word's colour is the worse of its recent taps and its review rating; seen-but-never-tapped
-  words look different, unmet words are faded. List words rated Hard or Medium lead every review. 2026-11-16.
+  words look different, words not seen yet are faded. List words rated Hard or Medium lead every review. 2026-11-16.
 
 - Unlimited lookup mode: unlocked by any badge at Bronze (a one-off counts), switched on and off in the reader
   ("Unlimited ∞"; the choice is remembered). No fouten: every paragraph passes and no streak builds, so there is no
