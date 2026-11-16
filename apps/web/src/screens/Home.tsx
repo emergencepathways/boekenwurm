@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { bookProgress } from "@boekenwurm/books";
-import { deleteBook, dueCards, saveBook, useStore } from "../lib/store.ts";
+import { deleteBook, dueToday, saveBook, useStore, waitingAfterToday } from "../lib/store.ts";
 import { open, setTab } from "../nav.ts";
 import type { Book } from "../lib/types.ts";
 import { bookShare, Cover, LevelPicker, plural, Sheet, toast } from "../ui.tsx";
@@ -27,7 +27,8 @@ export function Home() {
   const cards = useStore((s) => s.cards);
   const [details, setDetails] = useState<Book | null>(null);
   const noList = useStore((s) => !s.wordLists.length && !s.profile.settings.commonWords);
-  const due = dueCards().length;
+  const due = dueToday();
+  const waiting = waitingAfterToday();
   const totalCards = Object.keys(cards).length;
   const shelf = books.filter((b) => b.status !== "archived");
   const last = [...shelf].filter((b) => b.position.at).sort((a, b) => (b.position.at ?? 0) - (a.position.at ?? 0))[0] ?? shelf[0];
@@ -69,12 +70,14 @@ export function Home() {
         </button>
       )}
 
-      {totalCards > 0 && <button className="studycard" type="button" onClick={() => open({ name: "study-session" })}>
+      {(totalCards > 0 || due > 0) && <button className="studycard" type="button" onClick={() => open({ name: "study-session" })}>
         <span className="big">{due}</span>
         <span className="grow">
           <b>Study words</b>
           <span className="small muted">
-            {due ? `${plural(due, "word")} due for review` : "Nothing due right now. Well done."}
+            {due
+              ? `${plural(due, "word")} due today${waiting ? ` · ${waiting} more in your pool` : ""}`
+              : waiting ? `Done for today. ${plural(waiting, "word")} wait for tomorrow.` : "Nothing due right now. Well done."}
           </span>
         </span>
       </button>}

@@ -84,3 +84,55 @@ test("a set ends only when every card has been rated Easy", () => {
   assert.equal(q.length, 0);
   assert.equal(turns, 6);
 });
+
+// ---------------------------------------------------------------- the day's reviews
+import { dueToday, NEW_PER_DAY, planSet, REVIEW_DAY, waitingAfterToday } from "../src/review.ts";
+
+const many = (prefix: string, n: number, o: Partial<ReviewCard> = {}) =>
+  Array.from({ length: n }, (_, i) => card(`${prefix}${String(i).padStart(3, "0")}`, { pool: "medium", due: NOW - DAY - i, ...o }));
+const day = { now: NOW, reviewedToday: 0, newToday: 0 };
+
+test("at most 90 cards are due in a day; the rest wait in the pool", () => {
+  assert.deepEqual(REVIEW_DAY, { maxDue: 90, newPer30: 5, listShare: 0.4, recentListShare: 0.8, recentDays: 2 });
+  const cards = many("w", 200);
+  assert.equal(dueToday({ ...day, cards }), 90);
+  assert.equal(waitingAfterToday({ ...day, cards }), 110);
+  assert.equal(dueToday({ ...day, cards, reviewedToday: 60 }), 30, "60 reviewed today: 30 left");
+  assert.equal(dueToday({ ...day, cards, reviewedToday: 90 }), 0);
+  assert.equal(planSet({ ...day, cards, reviewedToday: 80 }, 30).lemmas.length, 10, "the last set is what's left of the 90");
+  assert.equal(dueToday({ ...day, cards: many("w", 12) }), 12, "fewer in the pool: all of them");
+});
+
+test("every set of 30 brings in 5 new common words, at most 15 a day", () => {
+  assert.equal(NEW_PER_DAY, 15);
+  const newWords = Array.from({ length: 40 }, (_, i) => `nieuw${i}`);
+  const plan = planSet({ ...day, cards: many("w", 100), newWords }, 30);
+  assert.equal(plan.lemmas.length, 30);
+  assert.deepEqual(plan.fresh, ["nieuw0", "nieuw1", "nieuw2", "nieuw3", "nieuw4"], "most common first");
+  assert.equal(planSet({ ...day, cards: many("w", 100), newWords }, 50).fresh.length, 8, "a set of 50: 8 (5 per 30, rounded)");
+  assert.equal(planSet({ ...day, cards: many("w", 100), newWords, newToday: 13 }, 30).fresh.length, 2, "13 brought in today: 2 left");
+  assert.equal(dueToday({ ...day, cards: many("w", 20), newWords }), 35, "20 in the pool + 15 new");
+});
+
+test("the reader's flagged list words take up to 40% of a set; tapped in the last 2 days, up to 80%", () => {
+  const onList = (l: string) => l.startsWith("L");
+  const cards = [...many("w", 60), ...many("L", 40, { due: NOW })];
+  const listIn = (p: { lemmas: string[] }) => p.lemmas.filter(onList).length;
+  assert.equal(listIn(planSet({ ...day, cards, onList }, 30)), 12, "40% of 30");
+  const recent = (l: string) => l >= "L000" && l < "L020";
+  const plan = planSet({ ...day, cards, onList, tappedRecently: recent }, 30);
+  assert.equal(listIn(plan), 20, "all 20 tapped lately (more than 40%), no others");
+  assert.equal(listIn(planSet({ ...day, cards, onList, tappedRecently: () => true }, 30)), 24, "never more than 80% of 30");
+  assert.ok(plan.lemmas.slice(0, 20).every(recent), "the recently tapped ones come first");
+  const withNew = planSet({ ...day, cards, onList, tappedRecently: () => true, newWords: ["a", "b", "c", "d", "e", "f"] }, 30);
+  assert.deepEqual([listIn(withNew), withNew.fresh.length, withNew.lemmas.length], [24, 5, 30], "24 list words, 5 new, 1 from the pool");
+});
+
+test("not enough flagged list words: the pool fills the set", () => {
+  const onList = (l: string) => l.startsWith("L");
+  const cards = [...many("w", 60), ...many("L", 3, { pool: "hard" }), card("Leasy", { pool: "easy", due: NOW - DAY })];
+  const plan = planSet({ ...day, cards, onList }, 30);
+  assert.deepEqual(plan.lemmas.slice(0, 3).sort(), ["L000", "L001", "L002"], "the 3 flagged list words lead");
+  assert.equal(plan.lemmas.length, 30);
+  assert.equal(new Set(plan.lemmas).size, 30, "no card twice");
+});

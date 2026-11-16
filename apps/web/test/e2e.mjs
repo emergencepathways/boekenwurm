@@ -443,6 +443,28 @@ for (const width of [320, 768]) {
 await page.setViewportSize({ width: 390, height: 844 });
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 check(!(await page.getByRole("heading", { name: "Add a word list" }).isVisible()), "Home stops asking once there is a list");
+check(/due today/.test(await page.locator(".studycard").textContent()), "Home counts the words due today");
+
+step("reviews: today's set brings in new common words, at most 90 cards a day");
+await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+await page.getByRole("heading", { name: /due today$/ }).waitFor();
+check(/Up to 90 words a day/.test(await page.locator(".panel").first().textContent()), "the day's limit is explained");
+check(/\d+ new common words?/.test(await page.locator(".panel").first().textContent()), "the set includes new common words");
+await page.getByRole("button", { name: /^Review \d+ words?$/ }).click();
+let sawNew = false;
+for (let i = 0; i < 40 && !sawNew; i++) {
+  if (await page.getByText(/^Set done/).isVisible()) break;
+  sawNew = await page.locator(".flash .chip", { hasText: "New word" }).isVisible();
+  if (sawNew) break;
+  await page.getByRole("button", { name: "Show meaning" }).click();
+  await page.getByRole("button", { name: "Easy", exact: true }).click();
+}
+check(sawNew, "a new common word is marked New word on its card");
+await page.getByRole("button", { name: "Show meaning" }).click();
+check(await page.locator(".flash .answer").isVisible(), "and shows its meaning from the dictionary");
+await page.getByRole("button", { name: "Easy", exact: true }).click();
+await page.getByRole("button", { name: "Back", exact: true }).first().click();
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("colour-coded text: off by default; on, words revealed before are coloured");
 await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();

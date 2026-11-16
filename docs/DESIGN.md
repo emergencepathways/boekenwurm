@@ -285,10 +285,24 @@ Each word on a list is shown as one of:
 - **learned** (✓): read in **10 or more paragraphs without a tap**, counted once per paragraph and never in unlimited
   lookup mode, and, if it was ever tapped, its flashcard **Easy for 2 weeks or more**.
 
-Reviews start with the reader's list words rated Hard or Medium (Hard first), then every other Hard word, Medium,
-and the Easy check-backs (list words first). Learning every word of the 500, 1,000, 2,000 and 5,000 most common words
+How a day of reviews is shaped is described under "The day's reviews" below. Learning every word of the 500, 1,000, 2,000 and 5,000 most common words
 earns the **Common words** badge's tiers. Until the reader has a list, Home and the Words tab ask for one. Rules:
 `packages/engine/src/wordlist.ts`, `reviewOrder` in review.ts.
+
+### The day's reviews
+
+At most **90 cards are due in a day**; the rest of the pool waits for the days after (Home shows "N due today · M
+more in your pool"). Each review set (30 by default) is made of:
+
+1. the reader's **list words rated Hard or Medium**: up to **40%** of the set, or up to **80%** when they were
+   read and tapped in the last **2 days** (those come first);
+2. **new common words**, most common first and not yet learned: **5 per 30 cards**, at most 15 a day (only once the
+   common-words list is added). A new word gets its card when it is first rated;
+3. the rest of the pool in review order (Hard, Medium, Easy check-backs) to fill the set. Flagged list words past their
+   share wait for the next set unless nothing else is left.
+
+Only answers in review sets count towards the 90; a reading session's recap doesn't. These numbers are the owner's
+and may change; they are not reader settings (`REVIEW_DAY` and `planSet` in `packages/engine/src/review.ts`).
 
 Export, for readers who keep their cards elsewhere:
 
@@ -355,6 +369,10 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- The day's reviews: at most 90 cards due a day, the rest wait in the pool; a set of 30 holds 5 new common words
+  (15 a day at most), the reader's flagged list words up to 40% (80% when read and tapped in the last 2 days), and the
+  pool fills the rest. Fixed by the owner, not reader settings. 2026-11-16.
 
 - Word lists and the Words tab: the common 5,000 words in one tap (progress through 500, 1,000, 2,000 and 5,000,
   a badge tier for each learned in full) and lists the reader imports (paste, text, CSV, Excel, Anki), kept on the

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
-import { dueCards, getState, onWordList, reviewCard, unskipCard, useStore } from "../lib/store.ts";
+import { dueCards, dueToday, getState, planReviewSet, reviewCard, unskipCard, useStore, waitingAfterToday } from "../lib/store.ts";
 import { meaningOf } from "../lib/words.ts";
 import { studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
@@ -18,7 +18,11 @@ export function Study() {
   const all = Object.values(cards).filter((c) => c.pool !== "skipped");
   const skipped = Object.values(cards).filter((c) => c.pool === "skipped").sort((a, b) => a.lemma.localeCompare(b.lemma));
   const pool = { hard: due.filter((c) => c.pool === "hard").length, medium: due.filter((c) => c.pool === "medium").length, easy: due.filter((c) => c.pool === "easy").length };
-  const fromLists = due.filter((c) => (c.pool === "hard" || c.pool === "medium") && onWordList(c.lemma)).length;
+  // Today: at most 90 cards (new common words included); the rest of the pool waits for the days after.
+  const today = dueToday();
+  const waiting = waitingAfterToday();
+  const plan = planReviewSet();
+  const fresh = plan.fresh.length;
   const nextCheck = all.filter((c) => c.pool === "easy" && c.due > Date.now()).sort((a, b) => a.due - b.due)[0];
   const stuck = E.notSticking(wordbook);
   const revealed = Object.values(wordbook).filter((w) => w.reveals > 0).sort((a, b) => b.reveals - a.reveals || a.lemma.localeCompare(b.lemma));
@@ -41,17 +45,20 @@ export function Study() {
     <main className="screen">
       <div className="topbar"><h1>Study</h1></div>
       <section className="panel">
-        <h2>{due.length ? `${plural(due.length, "word")} to review` : all.length ? "All caught up" : "No flashcards yet"}</h2>
+        <h2>{today ? `${plural(today, "word")} due today` : due.length ? "Done for today" : all.length ? "All caught up" : "No flashcards yet"}</h2>
         <p>
-          {all.length
-            ? due.length
-              ? `${[pool.hard && `${pool.hard} hard`, pool.medium && `${pool.medium} medium`, pool.easy && `${pool.easy} to check`].filter(Boolean).join(", ")}. A review takes ${Math.min(setSize, due.length)} of them, ${fromLists ? `your word lists' ${plural(fromLists, "word")} first, then hard` : "hard first"}, and repeats each until you rate it Easy.`
-              : nextCheck ? `Your next check-back is ${inWords(nextCheck.due - Date.now())}.` : ""
-            : "Every word you tap while reading becomes a flashcard. Rate it Hard, Medium or Easy; Hard and Medium words wait here for review."}
+          {today
+            ? `Up to 90 words a day. A review takes ${plan.lemmas.length}: your list words that need work first${fresh ? `, ${plural(fresh, "new common word")}` : ""}, then the rest of your pool, each repeated until you rate it Easy.`
+            : due.length
+              ? "You've reviewed today's 90 words. The rest come back tomorrow."
+              : all.length
+                ? nextCheck ? `Your next check-back is ${inWords(nextCheck.due - Date.now())}.` : ""
+                : "Every word you tap while reading becomes a flashcard. Rate it Hard, Medium or Easy; Hard and Medium words wait here for review."}
         </p>
-        {due.length > 0 && (
+        {due.length > 0 && <p className="small">In your pool: {[pool.hard && `${pool.hard} hard`, pool.medium && `${pool.medium} medium`, pool.easy && `${pool.easy} to check`].filter(Boolean).join(", ")}{waiting ? ` · ${plural(waiting, "word")} wait for the days after today` : ""}.</p>}
+        {plan.lemmas.length > 0 && (
           <button className="btn primary block" type="button" onClick={() => open({ name: "study-session" })}>
-            Review {plural(Math.min(setSize, due.length), "word")}
+            Review {plural(plan.lemmas.length, "word")}
           </button>
         )}
         {all.length > 0 && <p className="small">{plural(all.length, "card")} in total · sets of {setSize} (change it under Me → Reading).</p>}
@@ -140,11 +147,10 @@ export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: str
   const cards = useStore((s) => s.cards);
   const meanings = useStore((s) => s.meanings);
   const examples = useStore((s) => s.examples);
-  const setSize = useStore((s) => E.clampSetSize(s.profile.settings.reviewSetSize));
   const recap = Boolean(lemmas);
   // The set is fixed when the session opens.
   const initial = useMemo(
-    () => (lemmas ? lemmas.filter((l) => getState().cards[l]) : E.reviewSet(Object.values(getState().cards), Date.now(), setSize, onWordList).map((c) => c.lemma)),
+    () => (lemmas ? lemmas.filter((l) => getState().cards[l]) : planReviewSet().lemmas),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -169,9 +175,11 @@ export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: str
   }, [queue.length, award]);
 
   const lemma = queue[0];
-  const card = lemma ? cards[lemma] : null;
+  // A new common word has no card until it is first rated.
+  const card = lemma ? (cards[lemma] ?? (recap ? null : E.newReviewCard(lemma, Date.now()))) : null;
+  const isNew = Boolean(lemma && !cards[lemma]);
   const answer = (a: E.Answer) => {
-    void reviewCard(lemma, a);
+    void reviewCard(lemma, a, { inSet: !recap });
     setFlipped(false);
     if (recap) {
       setQueue((q) => q.slice(1));
@@ -209,6 +217,7 @@ export function StudySession({ lemmas, afterLookupMode = false }: { lemmas?: str
       ) : (
         <>
           <div className="flash">
+            {isNew && <span className="chip" style={{ justifySelf: "center" }}>New word</span>}
             <div className="front" lang="nl">{lemma}</div>
             {examples[lemma] && (
               <div

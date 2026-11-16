@@ -6,7 +6,8 @@ import { useSyncExternalStore } from "react";
 import * as E from "@boekenwurm/engine";
 import type { CefrLevel, Session } from "@boekenwurm/engine";
 import { db } from "./db.ts";
-import { isCommonWord, isImportedListWord, setDictionary, setWordLists, wordLists as currentLists } from "./words.ts";
+import { commonWords, isCommonWord, isImportedListWord, setDictionary, setWordLists, wordLists as currentLists } from "./words.ts";
+import { localDay } from "./usage.ts";
 import { loadDictionary } from "./dictionary.ts";
 import { hasKey } from "./claude.ts";
 import { newCard, upgradeCard } from "./cards.ts";
@@ -310,11 +311,16 @@ export async function adoptMeanings(incoming: Record<string, Meaning>, keepLocal
   await db.put("kv", meanings, "meanings");
 }
 
-/** A flashcard answered: Hard, Medium, Easy or Skip (packages/engine/src/review.ts). */
-export async function reviewCard(lemma: string, a: E.Answer): Promise<void> {
-  const c = state.cards[lemma];
-  if (!c) return;
+/**
+ * A flashcard answered: Hard, Medium, Easy or Skip (packages/engine/src/review.ts). A new common word has no card
+ * until its first answer. Answers in a review set count towards today's 90 (`inSet`); a recap's don't.
+ */
+export async function reviewCard(lemma: string, a: E.Answer, o: { inSet?: boolean } = {}): Promise<void> {
   const t = now();
+  const fresh = !state.cards[lemma];
+  if (fresh && !o.inSet) return;
+  const c = state.cards[lemma] ?? newCard(lemma, t);
+  if (o.inSet) noteReviewed(lemma, fresh);
   const cards = { ...state.cards, [lemma]: { ...E.answer(c, a, t), updatedAt: t, dirty: true } };
   setState({ cards });
   await db.put("kv", cards, "cards");
@@ -376,6 +382,58 @@ export async function unskipCard(lemma: string): Promise<void> {
   await setCards({ ...state.cards, [lemma]: { ...E.unskip(c, t), updatedAt: t, dirty: true } });
   changed();
 }
+
+// ---------------------------------------------------------------- today's reviews (REVIEW_DAY in the engine)
+
+const REVIEWED = "boekenwurm-reviewed-today";
+const today = () => localDay(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+
+/** Cards answered in review sets today on this device, and which of them were new words. */
+function reviewedToday(): { day: string; lemmas: string[]; fresh: string[] } {
+  try {
+    const r = JSON.parse(localStorage.getItem(REVIEWED) ?? "null") as { day: string; lemmas: string[]; fresh: string[] } | null;
+    if (r?.day === today()) return r;
+  } catch {
+    /* storage unavailable: start the day afresh */
+  }
+  return { day: today(), lemmas: [], fresh: [] };
+}
+
+function noteReviewed(lemma: string, fresh: boolean): void {
+  const r = reviewedToday();
+  if (r.lemmas.includes(lemma)) return;
+  r.lemmas.push(lemma);
+  if (fresh) r.fresh.push(lemma);
+  try {
+    localStorage.setItem(REVIEWED, JSON.stringify(r));
+  } catch {
+    /* counted for this session only */
+  }
+}
+
+/** Everything the engine needs to shape today's reviews. */
+function day(at = now()): E.DayInput {
+  const r = reviewedToday();
+  // New words: the common words (once added) with no card yet and not learned, most common first.
+  const newWords: string[] = [];
+  if (state.profile.settings.commonWords)
+    for (const w of commonWords()) {
+      if (newWords.length >= 60) break;
+      if (!state.cards[w] && !E.listWordStatus(state.wordbook[w], undefined, at).learned) newWords.push(w);
+    }
+  const since = at - E.REVIEW_DAY.recentDays * 86400000;
+  return {
+    cards: Object.values(state.cards), now: at, reviewedToday: r.lemmas.length, newToday: r.fresh.length, newWords, onList: onWordList,
+    tappedRecently: (l) => (state.wordbook[l]?.recent ?? []).some((t) => t >= since),
+  };
+}
+
+/** Cards due today: at most 90 a day, new words included. */
+export const dueToday = (): number => E.dueToday(day());
+/** Cards in the pool beyond today's 90, for the days after. */
+export const waitingAfterToday = (): number => E.waitingAfterToday(day());
+/** The next review set (the reader's set size, or what's left of today's 90). */
+export const planReviewSet = (): E.ReviewPlan => E.planSet(day(), E.clampSetSize(state.profile.settings.reviewSetSize));
 
 /** The review pool in order: word-list words rated Hard or Medium first, then Hard, Medium, and Easy check-backs that are due. */
 export const dueCards = (at = now()): CardState[] => E.reviewOrder(Object.values(state.cards), at, onWordList) as CardState[];

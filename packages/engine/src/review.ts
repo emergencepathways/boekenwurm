@@ -93,3 +93,81 @@ export function requeue(queue: readonly string[], a: Answer): string[] {
   const at = Math.min(AGAIN_AFTER[a], rest.length);
   return [...rest.slice(0, at), front, ...rest.slice(at)];
 }
+
+// ---------------------------------------------------------------- the day's reviews (the owner's numbers, not settings)
+
+/**
+ * How a day of reviews is shaped (docs/DESIGN.md "Flashcards"). Not reader settings: the owner tunes them.
+ * - At most 90 cards are due in a day; the rest wait in the review pool for the days after.
+ * - Every set brings in new words from the common-words list (most common first): 5 per 30 cards, at most 15 a day.
+ * - The reader's list words rated Hard or Medium take up to 40% of a set, up to 80% when they were read and tapped
+ *   in the last 2 days (those come first).
+ * - Whatever is left is filled from the pool in review order.
+ */
+export const REVIEW_DAY = { maxDue: 90, newPer30: 5, listShare: 0.4, recentListShare: 0.8, recentDays: 2 } as const;
+
+/** New words a day may bring in: 5 per 30 of the day's 90, so 15. */
+export const NEW_PER_DAY = Math.round((REVIEW_DAY.maxDue * REVIEW_DAY.newPer30) / 30);
+
+export interface DayInput {
+  cards: readonly ReviewCard[];
+  now: number;
+  /** Different cards already answered in review sets today. */
+  reviewedToday: number;
+  /** Of those, new words brought in today. */
+  newToday: number;
+  /** Words on the common-words list with no card yet and not learned, most common first. */
+  newWords?: readonly string[];
+  onList?: (lemma: string) => boolean;
+  /** Read and tapped in the last 2 days (REVIEW_DAY.recentDays). */
+  tappedRecently?: (lemma: string) => boolean;
+}
+
+const leftToday = (d: DayInput) => Math.max(0, REVIEW_DAY.maxDue - d.reviewedToday);
+const newLeft = (d: DayInput) => Math.max(0, Math.min(NEW_PER_DAY - d.newToday, d.newWords?.length ?? 0));
+
+/** Cards due today, for Home and the Study tab: the pool and today's new words, at most 90 less those already reviewed. */
+export function dueToday(d: DayInput): number {
+  const pool = d.cards.filter((c) => inPool(c, d.now)).length;
+  return Math.min(leftToday(d), pool + newLeft(d));
+}
+
+/** Cards in the pool beyond today's 90: they wait for the days after. */
+export function waitingAfterToday(d: DayInput): number {
+  const pool = d.cards.filter((c) => inPool(c, d.now)).length;
+  return Math.max(0, pool - Math.max(0, leftToday(d) - newLeft(d)));
+}
+
+export interface ReviewPlan {
+  /** The set, in the order it is shown. */
+  lemmas: string[];
+  /** The new words in it (no card yet: one is made when the word is first rated). */
+  fresh: string[];
+}
+
+/**
+ * The next review set of `size` cards (the reader's 20–50, or what is left of today's 90): the reader's list words
+ * rated Hard or Medium (tapped in the last 2 days first, up to 80% of the set; others up to 40% in all), new
+ * common words (5 per 30), then the pool in review order.
+ */
+export function planSet(d: DayInput, size: number): ReviewPlan {
+  const onList = d.onList ?? (() => false);
+  const recent = d.tappedRecently ?? (() => false);
+  const n = Math.min(clampSetSize(size), leftToday(d));
+  if (n <= 0) return { lemmas: [], fresh: [] };
+  const order = reviewOrder(d.cards, d.now, onList);
+  const fresh = (d.newWords ?? []).slice(0, Math.min(newLeft(d), Math.round((n * REVIEW_DAY.newPer30) / 30)));
+  const room = n - fresh.length;
+  const flagged = order.filter((c) => onList(c.lemma) && (c.pool === "hard" || c.pool === "medium"));
+  const list: string[] = [];
+  for (const c of flagged.filter((c) => recent(c.lemma)))
+    if (list.length < Math.min(room, Math.floor(n * REVIEW_DAY.recentListShare))) list.push(c.lemma);
+  for (const c of flagged.filter((c) => !recent(c.lemma)))
+    if (list.length < Math.min(room, Math.floor(n * REVIEW_DAY.listShare))) list.push(c.lemma);
+  // The rest of the pool; flagged list words past their share wait for the next set, unless nothing else is left.
+  const taken = new Set(list);
+  const isFlagged = new Set(flagged.map((c) => c.lemma));
+  const rest = order.filter((c) => !taken.has(c.lemma));
+  const fill = [...rest.filter((c) => !isFlagged.has(c.lemma)), ...rest.filter((c) => isFlagged.has(c.lemma))].slice(0, room - list.length).map((c) => c.lemma);
+  return { lemmas: [...list, ...fresh, ...fill], fresh };
+}

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useStore, dueCards } from "./lib/store.ts";
+import { useStore, dueToday } from "./lib/store.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
 import { Icon, Toaster } from "./ui.tsx";
 import { Home } from "./screens/Home.tsx";
@@ -23,7 +23,8 @@ const TABS: Array<[Tab, string, () => React.JSX.Element]> = [
 export function App() {
   const ready = useStore((s) => s.ready);
   const onboarded = useStore((s) => s.profile.onboarded);
-  const due = useStore((s) => (s.ready ? dueCards().length : 0));
+  useStore((s) => s.cards); // today's count changes with every answer
+  const due = useStore((s) => (s.ready ? dueToday() : 0));
   const noList = useStore((s) => s.ready && !s.wordLists.length && !s.profile.settings.commonWords);
   const { tab, screen } = useNav();
 
