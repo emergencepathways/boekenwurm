@@ -351,13 +351,18 @@ ol.how { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
 button.chip { border: 1px solid transparent; cursor: pointer; min-height: 32px; padding: 6px 11px; background: var(--paper); border-color: var(--line); }
 button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--leaf-ink); }
 .listhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.tiers { display: grid; gap: 8px; }
+.tiers { display: grid; gap: 8px; min-width: 0; }
+/* Grid and flex children may shrink below their content's width, so nothing pushes the page wider than the screen. */
+.screen > *, .panel > *, .tiers > * { min-width: 0; }
+.listhead h2 { min-width: 0; overflow-wrap: anywhere; }
+.listhead .btn { flex-shrink: 0; }
 .listrow { border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
 .listrow[aria-current="true"] { border-color: var(--leaf); box-shadow: inset 3px 0 0 var(--leaf); }
 .listrow .pick { flex: 1; min-width: 0; display: grid; gap: 6px; text-align: left; background: none; border: 0; padding: 10px; cursor: pointer; color: inherit; font: inherit; }
-.listrow .name { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.listrow .name b { font: 700 0.98rem var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.listrow .name .num { white-space: nowrap; flex-shrink: 0; }
+/* Title and count share a line when there is room and wrap onto two when there isn't (narrow phones). */
+.listrow .name { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; }
+.listrow .name b { font: 700 0.98rem var(--display); min-width: 0; overflow-wrap: anywhere; }
+.listrow .name .num { white-space: nowrap; }
 .stack3 { display: flex; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .stack3 i { display: block; height: 100%; }
 .stack3 i.l { background: var(--leaf); }
@@ -367,7 +372,7 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .wgrid { display: flex; flex-wrap: wrap; gap: 6px; }
 .wchip {
   font: 500 0.95rem/1.2 var(--read); padding: 6px 10px; min-height: 36px; border-radius: 8px; cursor: pointer;
-  border: 1.5px solid var(--line); background: var(--sheet); color: var(--ink);
+  border: 1.5px solid var(--line); background: var(--sheet); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; text-align: left;
 }
 /* Not met yet: faded. */
 .wchip.s-unseen { opacity: 0.42; border-style: solid; }
@@ -382,8 +387,10 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .wchip.skipped { text-decoration: line-through; opacity: 0.6; }
 .facts { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
 .plainlist { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.preview { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.row2 > * { min-width: 0; }
+.preview { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }
+.preview th:first-child { width: 36px; }
 .preview th { text-align: left; font: 500 0.68rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; }
 .preview td { border-top: 1px solid var(--line); padding: 6px; vertical-align: top; overflow-wrap: anywhere; }
 .preview td:first-child { width: 36px; }

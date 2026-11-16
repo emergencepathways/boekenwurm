@@ -434,6 +434,11 @@ check(await page.locator(".wgrid .wchip.s-tapped").count() > 0, "tapped words ar
 await page.getByText("markt lijst").first().click();
 check(/s-unseen/.test(await page.locator(".wgrid .wchip", { hasText: /^trein$/ }).getAttribute("class")), "a word not seen yet in reading is faded");
 await shot("06f-words");
+for (const width of [320, 768]) {
+  await page.setViewportSize({ width, height: 844 });
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `the Words tab fits a ${width}px screen (no sideways scrolling)`);
+}
+await page.setViewportSize({ width: 390, height: 844 });
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 check(!(await page.getByRole("heading", { name: "Add a word list" }).isVisible()), "Home stops asking once there is a list");
 
