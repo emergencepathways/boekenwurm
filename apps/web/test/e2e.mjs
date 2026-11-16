@@ -381,7 +381,7 @@ check(await page.getByText(`Set done: all ${setCount} word${setCount === 1 ? "" 
 check(turns === setCount, "each word needed one Easy (the Hard one twice in all)");
 await page.getByRole("button", { name: "Back", exact: true }).first().click();
 await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
-check(await page.getByText("All caught up").isVisible(), "the pool is empty until the Easy words' check-back in 3 days");
+check(await page.getByText("No words to review right now.").isVisible(), "the pool is empty until the Easy words' check-back in 3 days");
 if (skippedWord) {
   check(await page.getByRole("button", { name: `Bring back ${skippedWord}` }).isVisible(), "a skipped word is listed and can be brought back");
   await page.getByRole("button", { name: `Bring back ${skippedWord}` }).click();
@@ -460,9 +460,10 @@ check(/due today/.test(await page.locator(".studycard").textContent()), "Home co
 
 step("reviews: today's set brings in new common words, at most 90 cards a day");
 await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
-await page.getByRole("heading", { name: /due today$/ }).waitFor();
-check(/Up to 90 words a day/.test(await page.locator(".panel").first().textContent()), "the day's limit is explained");
-check(/\d+ new common words?/.test(await page.locator(".panel").first().textContent()), "the set includes new common words");
+await page.getByRole("heading", { name: "Daily Challenge: Study 90 words" }).waitFor();
+check(await page.getByText("Studying up to 90 words a day will help you improve your vocabulary. Earn extra XP if you complete it today!").isVisible(), "the daily challenge is explained in a line");
+check(/^\d+ \/ 90 words reviewed/.test(await page.locator(".panel").first().locator("p.num").textContent()), "with progress towards 90");
+check(!/pool/i.test(await page.locator(".panel").first().textContent()), "and no pool details");
 await page.getByRole("button", { name: /^Review \d+ words?$/ }).click();
 let sawNew = false;
 for (let i = 0; i < 40 && !sawNew; i++) {
@@ -497,7 +498,7 @@ if (await lastSet.isVisible()) {
     if (m === k) break;
     k = m;
   }
-  check(/double review XP \(\+600\)/.test(await page.locator(".panel").first().textContent()), "the last set of the day promises double review XP");
+  check(/Earn extra XP/.test(await page.locator(".panel").first().textContent()), "the last set of the day still offers the extra XP");
   await page.getByRole("button", { name: /^Review \d+ words?$/ }).click();
   for (let i = 0; i < 60 && !(await page.getByText(/^Set done/).isVisible()); i++) {
     await page.getByRole("button", { name: "Show meaning" }).click();
@@ -506,7 +507,7 @@ if (await lastSet.isVisible()) {
   check(await page.getByText(/All 90 words reviewed today: double review XP! \+\d+ XP/).waitFor({ timeout: 5000 }).then(() => true, () => false), "finishing the 90th word earns double review XP");
   await page.getByRole("button", { name: "Back", exact: true }).first().click();
   await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
-  check(await page.getByRole("heading", { name: "Done for today" }).isVisible(), "then reviews are done for today");
+  check(/90 \/ 90 words reviewed · done!/.test(await page.locator(".panel").first().textContent()), "then the challenge shows done");
 } else check(false, "a set to finish the day with");
 await page.evaluate(() => ["boekenwurm-study-sessions", "boekenwurm-reviewed-today"].forEach((k) => localStorage.removeItem(k))); // later steps start a fresh day
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
-import { dueCards, dueToday, getState, planReviewSet, reviewCard, reviewedTodayCount, unskipCard, useStore, waitingAfterToday } from "../lib/store.ts";
+import { dueCards, getState, planReviewSet, reviewCard, reviewedTodayCount, unskipCard, useStore } from "../lib/store.ts";
 import { meaningOf } from "../lib/words.ts";
 import { studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
@@ -13,17 +13,11 @@ export function Study() {
   const cards = useStore((s) => s.cards);
   const wordbook = useStore((s) => s.wordbook);
   const meanings = useStore((s) => s.meanings);
-  const setSize = useStore((s) => E.clampSetSize(s.profile.settings.reviewSetSize));
-  const due = dueCards();
   const all = Object.values(cards).filter((c) => c.pool !== "skipped");
   const skipped = Object.values(cards).filter((c) => c.pool === "skipped").sort((a, b) => a.lemma.localeCompare(b.lemma));
-  const pool = { hard: due.filter((c) => c.pool === "hard").length, medium: due.filter((c) => c.pool === "medium").length, easy: due.filter((c) => c.pool === "easy").length };
   // Today: at most 90 cards (new common words included); the rest of the pool waits for the days after.
-  const today = dueToday();
-  const waiting = waitingAfterToday();
   const plan = planReviewSet();
-  const fresh = plan.fresh.length;
-  const nextCheck = all.filter((c) => c.pool === "easy" && c.due > Date.now()).sort((a, b) => a.due - b.due)[0];
+  const reviewed = Math.min(reviewedTodayCount(), E.REVIEW_DAY.maxDue);
   const stuck = E.notSticking(wordbook);
   const revealed = Object.values(wordbook).filter((w) => w.reveals > 0).sort((a, b) => b.reveals - a.reveals || a.lemma.localeCompare(b.lemma));
 
@@ -45,23 +39,19 @@ export function Study() {
     <main className="screen">
       <div className="topbar"><h1>Study</h1></div>
       <section className="panel">
-        <h2>{today ? `${plural(today, "word")} due today` : due.length || reviewedTodayCount() >= E.REVIEW_DAY.maxDue ? "Done for today" : all.length ? "All caught up" : "No flashcards yet"}</h2>
-        <p>
-          {today
-            ? `Up to 90 words a day. A review takes ${plan.lemmas.length}: your list words that need work first${fresh ? `, ${plural(fresh, "new common word")}` : ""}, then the rest of your pool, each repeated until you rate it Easy.${reviewedTodayCount() + today >= E.REVIEW_DAY.maxDue ? ` Review all ${E.REVIEW_DAY.maxDue} today for double review XP (+${E.XP.fullDayReview}).` : ""}`
-            : due.length || reviewedTodayCount() >= E.REVIEW_DAY.maxDue
-              ? `You've reviewed today's ${E.REVIEW_DAY.maxDue} words and earned double review XP. The rest come back tomorrow.`
-              : all.length
-                ? nextCheck ? `Your next check-back is ${inWords(nextCheck.due - Date.now())}.` : ""
-                : "Every word you tap while reading becomes a flashcard. Rate it Hard, Medium or Easy; Hard and Medium words wait here for review."}
-        </p>
-        {due.length > 0 && <p className="small">In your pool: {[pool.hard && `${pool.hard} hard`, pool.medium && `${pool.medium} medium`, pool.easy && `${pool.easy} to check`].filter(Boolean).join(", ")}{waiting ? ` · ${plural(waiting, "word")} wait for the days after today` : ""}.</p>}
-        {plan.lemmas.length > 0 && (
+        <h2>Daily Challenge: Study {E.REVIEW_DAY.maxDue} words</h2>
+        <p>Studying up to {E.REVIEW_DAY.maxDue} words a day will help you improve your vocabulary. Earn extra XP if you complete it today!</p>
+        <div className="xpbar" role="progressbar" aria-label="Words reviewed today" aria-valuemin={0} aria-valuemax={E.REVIEW_DAY.maxDue} aria-valuenow={reviewed}>
+          <i style={{ width: `${Math.round((reviewed / E.REVIEW_DAY.maxDue) * 100)}%` }} />
+        </div>
+        <p className="small num">{reviewed} / {E.REVIEW_DAY.maxDue} words reviewed{reviewed >= E.REVIEW_DAY.maxDue ? ` · done! +${E.XP.fullDayReview} XP` : ""}</p>
+        {plan.lemmas.length > 0 ? (
           <button className="btn primary block" type="button" onClick={() => open({ name: "study-session" })}>
             Review {plural(plan.lemmas.length, "word")}
           </button>
+        ) : reviewed < E.REVIEW_DAY.maxDue && (
+          <p className="small muted">{all.length ? "No words to review right now." : "Tap words while reading: each one becomes a flashcard here."}</p>
         )}
-        {all.length > 0 && <p className="small">{plural(all.length, "card")} in total · sets of {setSize} (change it under Me → Reading).</p>}
       </section>
 
       <section className="panel">
