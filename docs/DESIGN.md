@@ -301,8 +301,11 @@ more in your pool"). Each review set (30 by default) is made of:
 3. the rest of the pool in review order (Hard, Medium, Easy check-backs) to fill the set. Flagged list words past their
    share wait for the next set unless nothing else is left.
 
-Only answers in review sets count towards the 90; a reading session's recap doesn't. Reviewing all 90 in a day
-earns **double the review reward** (600 XP, once a day, on top of the 300 for the first set finished). These numbers are the owner's
+Only answers in review sets count towards the 90; a reading session's recap doesn't. Reaching 90 different words
+reviewed in a day completes the **Daily Challenge**: **double the review reward** (600 XP, once a day), whether the
+words came from finished sets or several partly finished ones. Finishing a whole set still earns its own 300 (the
+first set of the day); a set left unfinished doesn't. Home shows the challenge's progress (x / 90) and, once done,
+"Daily Challenge: Completed!" greyed out. These numbers are the owner's
 and may change; they are not reader settings (`REVIEW_DAY` and `planSet` in `packages/engine/src/review.ts`).
 
 Export, for readers who keep their cards elsewhere:

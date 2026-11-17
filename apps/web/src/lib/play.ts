@@ -142,11 +142,25 @@ export async function studyFinished(o: { cards: number; dueAtStart: number; comp
   if (session) dayCount(STUDY_SESSIONS, 1);
   const t = today();
   const daily = o.completedSet && !play.studyDays.includes(t) ? E.XP.dailyReview : 0;
-  const fullDays = play.fullReviewDays ?? [];
-  const full = reviewedTodayCount() >= E.REVIEW_DAY.maxDue && !fullDays.includes(t) ? E.XP.fullDayReview : 0;
-  const gained = session + daily + full;
+  const gained = session + daily;
   if (!gained) return 0;
-  toast(full ? `All ${E.REVIEW_DAY.maxDue} words reviewed today: double review XP! +${gained} XP` : `Study: +${gained} XP${daily ? " (review set finished)" : ""}`, 5000);
-  await commit({ ...play, studyDays: daily ? [...play.studyDays, t] : play.studyDays, fullReviewDays: full ? [...fullDays, t] : fullDays }, gained);
+  toast(`Study: +${gained} XP${daily ? " (review set finished)" : ""}`, 4000);
+  await commit({ ...play, studyDays: daily ? [...play.studyDays, t] : play.studyDays }, gained);
   return gained;
+}
+
+/**
+ * The Daily Challenge: once 90 different words have been reviewed today, in one set or across several partly
+ * finished ones, it is complete: 600 XP (double the review reward), once a day. Finishing a whole set still earns its
+ * own reward separately (studyFinished). Safe to call after every answer.
+ */
+export async function checkDailyChallenge(): Promise<number> {
+  const play = playOf();
+  const t = today();
+  const fullDays = play.fullReviewDays ?? [];
+  if (reviewedTodayCount() < E.REVIEW_DAY.maxDue || fullDays.includes(t)) return 0;
+  await commit({ ...play, fullReviewDays: [...fullDays, t] }, E.XP.fullDayReview);
+  // After the commit, so a badge or rank it brings doesn't hide the challenge's own message.
+  toast(`Daily Challenge completed: ${E.REVIEW_DAY.maxDue} words! +${E.XP.fullDayReview} XP`, 5000);
+  return E.XP.fullDayReview;
 }

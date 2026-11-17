@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as E from "@boekenwurm/engine";
 import { dueCards, getState, planReviewSet, reviewCard, reviewedTodayCount, unskipCard, useStore } from "../lib/store.ts";
 import { meaningOf } from "../lib/words.ts";
-import { studyFinished } from "../lib/play.ts";
+import { checkDailyChallenge, studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
 import { close, open } from "../nav.ts";
 import { Icon, plural } from "../ui.tsx";
@@ -226,7 +226,7 @@ export function StudySession({ lemmas, afterLookupMode = false, bookId }: { lemm
   const card = lemma ? (cards[lemma] ?? (recap ? null : E.newReviewCard(lemma, Date.now()))) : null;
   const isNew = Boolean(lemma && !cards[lemma]);
   const answer = (a: E.Answer) => {
-    void reviewCard(lemma, a, { inSet: !recap });
+    void reviewCard(lemma, a, { inSet: !recap }).then(() => (recap ? 0 : checkDailyChallenge()));
     setFlipped(false);
     if (recap) {
       setQueue((q) => q.slice(1));

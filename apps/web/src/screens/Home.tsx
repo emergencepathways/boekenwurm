@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { bookProgress } from "@boekenwurm/books";
-import { deleteBook, dueToday, saveBook, useStore, waitingAfterToday } from "../lib/store.ts";
+import { deleteBook, dueToday, reviewedTodayCount, saveBook, useStore } from "../lib/store.ts";
 import { open, setTab } from "../nav.ts";
 import type { Book } from "../lib/types.ts";
 import { bookShare, Cover, LevelPicker, plural, Sheet, toast } from "../ui.tsx";
@@ -28,7 +28,8 @@ export function Home() {
   const [details, setDetails] = useState<Book | null>(null);
   const noList = useStore((s) => !s.wordLists.length && !s.profile.settings.commonWords);
   const due = dueToday();
-  const waiting = waitingAfterToday();
+  // The Daily Challenge's progress: different words reviewed today (lib/store.ts), towards 90.
+  const reviewed = Math.min(reviewedTodayCount(), E.REVIEW_DAY.maxDue);
   const totalCards = Object.keys(cards).length;
   const shelf = books.filter((b) => b.status !== "archived");
   const last = [...shelf].filter((b) => b.position.at).sort((a, b) => (b.position.at ?? 0) - (a.position.at ?? 0))[0] ?? shelf[0];
@@ -70,17 +71,20 @@ export function Home() {
         </button>
       )}
 
-      {(totalCards > 0 || due > 0) && <button className="studycard" type="button" onClick={() => open({ name: "study-session" })}>
-        <span className="big">{due}</span>
-        <span className="grow">
-          <b>Study words</b>
-          <span className="small muted">
-            {due
-              ? `${plural(due, "word")} due today${waiting ? ` · ${waiting} more in your pool` : ""}`
-              : waiting ? `Done for today. ${plural(waiting, "word")} wait for tomorrow.` : "Nothing due right now. Well done."}
-          </span>
-        </span>
-      </button>}
+      {(totalCards > 0 || due > 0 || reviewed > 0) &&
+        (reviewed >= E.REVIEW_DAY.maxDue ? (
+          <div className="studycard challenge done" role="status">
+            <b>Daily Challenge: Completed!</b>
+          </div>
+        ) : (
+          <button className="studycard challenge" type="button" onClick={() => open({ name: "study-session" })}>
+            <b>Daily Challenge: Study {E.REVIEW_DAY.maxDue} words</b>
+            <span className="xpbar" role="progressbar" aria-label="Words reviewed today" aria-valuemin={0} aria-valuemax={E.REVIEW_DAY.maxDue} aria-valuenow={reviewed}>
+              <i style={{ width: `${Math.round((reviewed / E.REVIEW_DAY.maxDue) * 100)}%` }} />
+            </span>
+            <span className="small muted num">{reviewed} / {E.REVIEW_DAY.maxDue} words reviewed</span>
+          </button>
+        ))}
 
       {noList && (
         <section className="panel">

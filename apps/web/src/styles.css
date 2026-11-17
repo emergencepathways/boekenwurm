@@ -444,3 +444,9 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .subtabs button { flex: 1 0 auto; min-height: 44px; border: 0; border-radius: 10px; background: none; color: var(--muted); font: 700 0.8rem var(--ui); cursor: pointer; padding: 0 8px; white-space: nowrap; }
 .subtabs button[aria-selected="true"] { background: var(--leaf); color: var(--leaf-ink); }
 .panels { display: grid; gap: 16px; }
+
+/* The Daily Challenge card on Home: title and progress stacked; greyed out once completed. */
+.studycard.challenge { display: grid; gap: 8px; align-items: stretch; }
+.studycard.challenge .xpbar { display: block; }
+.studycard.challenge.done { cursor: default; background: var(--sheet); border-color: var(--line); color: var(--muted); opacity: 0.7; }
+.studycard.challenge.done b { color: var(--muted); }

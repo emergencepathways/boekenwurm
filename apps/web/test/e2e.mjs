@@ -385,7 +385,7 @@ await page.reload();
 await page.locator(".continue").waitFor();
 check(await page.getByText("Continue reading").isVisible(), "continue-reading card after a reload");
 check((await page.locator(".continue").textContent()).includes("Marktdag"), "it points at the book");
-check(Number(await page.locator(".studycard .big").textContent()) >= 1, "words due on the Study card");
+check(/^Daily Challenge: Study 90 words/.test(await page.locator(".studycard").textContent()), "the Daily Challenge on Home");
 
 step("review: a set from the pool, Hard first, repeated until every word is Easy");
 await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
@@ -486,7 +486,7 @@ for (const width of [320, 768]) {
 await page.setViewportSize({ width: 390, height: 844 });
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 check(!(await page.getByRole("heading", { name: "Add a word list" }).isVisible()), "Home stops asking once there is a list");
-check(/due today/.test(await page.locator(".studycard").textContent()), "Home counts the words due today");
+check(/^Daily Challenge: Study 90 words/.test(await page.locator(".studycard").textContent()), "Home shows the Daily Challenge");
 
 step("reviews: today's set brings in new common words, at most 90 cards a day");
 await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
@@ -509,36 +509,28 @@ check(await page.locator(".flash .answer").isVisible(), "and shows its meaning f
 await page.getByRole("button", { name: "Easy", exact: true }).click();
 await page.getByRole("button", { name: "Back", exact: true }).first().click();
 
-step("all of the day's 90 reviewed: double review XP (+600)");
+step("Daily Challenge: 90 words across partly finished sets completes it (+600), without the set reward");
 const seedReviewed = (n) => page.evaluate((n) => {
   const d = new Date(); const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   localStorage.setItem("boekenwurm-reviewed-today", JSON.stringify({ day, lemmas: Array.from({ length: n }, (_, i) => `earlier${i}`), fresh: [] }));
 }, n);
-await seedReviewed(80);
+await seedReviewed(89); // 89 words reviewed earlier today, in sets left unfinished
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+check(/89 \/ 90 words reviewed/.test(await page.locator(".studycard").textContent()), "Home shows the challenge's progress");
+await shot("06g-home-challenge");
 await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
-const lastSet = page.getByRole("button", { name: /^Review \d+ words?$/ });
-if (await lastSet.isVisible()) {
-  // Leave exactly as many of today's 90 as the next set holds (a smaller set can hold fewer new words).
-  for (let k = Number((await lastSet.textContent()).match(/\d+/)[0]), tries = 0; tries < 5; tries++) {
-    await seedReviewed(90 - k);
-    await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
-    await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
-    const m = Number((await lastSet.textContent()).match(/\d+/)[0]);
-    if (m === k) break;
-    k = m;
-  }
-  check(/Earn extra XP/.test(await page.locator(".panel").first().textContent()), "the last set of the day still offers the extra XP");
-  await page.getByRole("button", { name: /^Review \d+ words?$/ }).click();
-  for (let i = 0; i < 60 && !(await page.getByText(/^Set done/).isVisible()); i++) {
-    await page.getByRole("button", { name: "Show meaning" }).click();
-    await page.getByRole("button", { name: "Easy", exact: true }).click();
-  }
-  check(await page.getByText(/All 90 words reviewed today: double review XP! \+\d+ XP/).waitFor({ timeout: 5000 }).then(() => true, () => false), "finishing the 90th word earns double review XP");
-  await page.getByRole("button", { name: "Back", exact: true }).first().click();
-  await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
-  check(/90 \/ 90 words reviewed · done!/.test(await page.locator(".panel").first().textContent()), "then the challenge shows done");
-} else check(false, "a set to finish the day with");
+check(/Earn extra XP/.test(await page.locator(".panel").first().textContent()), "the last word of the day still offers the extra XP");
+await page.getByRole("button", { name: /^Review \d+ words?$/ }).click();
+await page.getByRole("button", { name: "Show meaning" }).click();
+await page.getByRole("button", { name: "Hard", exact: true }).click(); // the set isn't finished: Hard comes round again
+check(await page.getByText(/Daily Challenge completed: 90 words! \+600 XP/).waitFor({ timeout: 5000 }).then(() => true, () => false), "the 90th word completes the Daily Challenge, set finished or not");
+await page.getByRole("button", { name: "Back", exact: true }).first().click();
+check(!(await page.getByText(/review set finished/).isVisible()), "an unfinished set earns no set reward");
+await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+check(/90 \/ 90 words reviewed · done!/.test(await page.locator(".panel").first().textContent()), "Study shows the challenge done");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+check(await page.getByText("Daily Challenge: Completed!").isVisible() && (await page.locator(".studycard.done").count()) === 1, "Home greys it out: Daily Challenge: Completed!");
+await shot("06g-home-challenge-done");
 await page.evaluate(() => ["boekenwurm-study-sessions", "boekenwurm-reviewed-today"].forEach((k) => localStorage.removeItem(k))); // later steps start a fresh day
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
@@ -705,7 +697,7 @@ check((await page.locator(".bookbtn").count()) === 1, "the book is gone from the
 await page.reload();
 await page.locator(".continue").waitFor();
 check((await page.locator(".bookbtn").count()) === 1, "and stays gone after a reload");
-check(Number(await page.locator(".studycard .big").textContent()) >= 1, "its words stay on the Study card");
+check((await page.locator(".studycard").count()) === 1, "its words stay: the Daily Challenge is still on Home");
 await shot("10-home-two-books");
 
 step("photo flow: camera explanation, then a library photo fallback");
