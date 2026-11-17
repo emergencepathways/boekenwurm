@@ -227,10 +227,11 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   policy (`vite.config.ts`). The privacy notice must name LanguageTool as a recipient.
 - **Weekly diary reminder (Web Push):** a reader who opts in stores this device's push address and time zone in
   `push_subscriptions` (migration 0011, owner-only rows, deleted with the account). `.github/workflows/diary-reminder.yml`
-  calls `supabase/functions/diary-reminder` on Sundays with `CRON_SECRET`; it reads the diary record (not text) and
-  sends a reminder when the week's entry is still to write, removing addresses the push service reports gone. Keys:
-  `VAPID_PUBLIC_KEY` (built into the app) and `VAPID_PRIVATE_KEY` (function only). On iPhone, notifications need the
-  app on the Home Screen (iOS 16.4+).
+  calls `supabase/functions/diary-reminder` on Sundays; it reads the diary record (not text) and sends a reminder when
+  the week's entry is still to write, at most one per device in 6 days (so the call needs no secret), and removes
+  addresses the push service reports gone. The VAPID key pair is generated once by the deploy workflow straight into
+  the function's Supabase secrets (never printed, never in GitHub); the app gets the public key from the function's
+  GET. On iPhone, notifications need the app on the Home Screen (iOS 16.4+).
 
 - Fonts are bundled with the app (fontsource packages, SIL Open Font License 1.1) and served from Boekenwurm itself;
   the content-security policy allows fonts from this site only, so no reader's IP address reaches a font service.

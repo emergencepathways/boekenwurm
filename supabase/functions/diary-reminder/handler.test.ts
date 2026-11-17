@@ -18,19 +18,33 @@ function world(o: { subs: Subscription[]; play: Record<string, { diaryDone?: num
     return new Response(null, { status: 204 });
   }) as typeof fetch;
   const config = {
-    supabaseUrl: "https://x.supabase.co", serviceKey: "service", cronSecret: "s3cret", now: NOW, fetch: fetchFn,
+    supabaseUrl: "https://x.supabase.co", serviceKey: "service", publicKey: "BPublicKey", cronSecret: "", now: NOW, fetch: fetchFn,
     send: async (s: Subscription) => (sent.push(s.endpoint), o.status?.(s) ?? 201),
   };
   return { calls, sent, config };
 }
-const call = (secret = "s3cret") => new Request("https://f/diary-reminder", { method: "POST", headers: { "x-cron-secret": secret } });
+const call = (secret = "") => new Request("https://f/diary-reminder", { method: "POST", headers: { "x-cron-secret": secret } });
 
-test("only the weekly workflow can run it: the cron secret is required", async () => {
+test("GET gives the app the public key; nothing is sent before the keys exist", async () => {
   const w = world({ subs: [sub("a")], play: {} });
-  assert.equal((await handle(call("wrong"), w.config)).status, 403);
-  assert.equal((await handle(new Request("https://f", { method: "GET" }), w.config)).status, 405);
-  assert.equal((await handle(call(""), { ...w.config, cronSecret: "" })).status, 403, "no secret set: nobody can run it");
+  const get = await handle(new Request("https://f", { method: "GET", headers: { origin: "https://boekenwurm.pages.dev" } }), w.config);
+  assert.deepEqual(await get.json(), { publicKey: "BPublicKey" });
+  assert.equal(get.headers.get("access-control-allow-origin"), "https://boekenwurm.pages.dev");
+  assert.equal((await handle(call(), { ...w.config, publicKey: "" })).status, 503);
+  assert.equal((await handle(new Request("https://f", { method: "PUT" }), w.config)).status, 405);
   assert.equal(w.sent.length, 0);
+});
+
+test("a cron secret, when set, is required", async () => {
+  const w = world({ subs: [sub("a")], play: { a: {} } });
+  assert.equal((await handle(call("wrong"), { ...w.config, cronSecret: "s3cret" })).status, 403);
+  assert.equal((await handle(call("s3cret"), { ...w.config, cronSecret: "s3cret" })).status, 200);
+});
+
+test("at most one reminder per device in 6 days, so calling it again sends nothing more", async () => {
+  const w = world({ subs: [{ ...sub("a", 1), last_sent: "2026-11-18T10:00:00Z" }, { ...sub("a", 2), last_sent: "2026-11-15T15:00:00Z" }], play: { a: {} } });
+  const r = await (await handle(call(), w.config)).json();
+  assert.deepEqual([r.sent, w.sent], [1, ["https://push.example/a/2"]], "4 days ago: skipped; 7 days ago: sent");
 });
 
 test("a reminder goes to readers whose diary is waiting this week, on each of their devices", async () => {

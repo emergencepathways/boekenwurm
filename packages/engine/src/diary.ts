@@ -1,8 +1,8 @@
 /**
- * The diary (the owner's rules, docs/DESIGN.md "Diary"). Twenty prompts in Dutch come up in random order, one entry a
- * day at most; a weekly reminder asks for one until all twenty are written. Then free writing opens: anything, once a
- * day, for the Daily Challenge's reward. A prompt can be skipped (another one comes instead) and, after all twenty,
- * written again.
+ * The diary (the owner's rules, docs/DESIGN.md "Diary"). Twenty prompts in Dutch come up in random order; a weekly
+ * reminder asks for one until all twenty are written. The week's first entry earns the weekly reward (600 XP), each
+ * further entry that week 30 XP, and writing the twentieth prompt a one-time 2,000 XP. Then free writing opens:
+ * anything, or any prompt again, on the same weekly rewards. A prompt can be skipped (another one comes instead).
  *
  * Only what the entry earned is recorded (prompt numbers and days). The text itself stays on the reader's device and
  * is never part of this record or the server (docs/ARCHITECTURE.md, privacy).
@@ -41,10 +41,12 @@ export const DIARY_PROMPTS: readonly DiaryPrompt[] = [
 ];
 
 export const DIARY = {
-  /** XP for a prompt's entry (like a badge tier). */
-  promptXp: 80,
-  /** XP for a free entry, once a day: the Daily Challenge's reward. */
-  freeXp: 600,
+  /** XP for the week's first entry (weeks run Monday to Sunday). */
+  weekXp: 600,
+  /** XP for each further entry in the same week. */
+  extraXp: 30,
+  /** XP, once, for writing all twenty prompts. */
+  allPromptsXp: 2000,
   /** Words an entry needs to count. */
   minWordsPrompt: 25,
   minWordsFree: 40,
@@ -62,7 +64,7 @@ export const countWords = (text: string): number => (text.match(/[\p{L}\p{N}]+(?
 /** Free writing opens once every prompt has been written. */
 export const freeWritingOpen = (r: DiaryRecord): boolean => DIARY_PROMPTS.every((p) => r.done.includes(p.id));
 
-/** One entry a day counts. */
+/** An entry counted today already. */
 export const wroteToday = (r: DiaryRecord, today: string): boolean => r.days.includes(today);
 
 const DAY_MS = 86400000;
@@ -95,19 +97,28 @@ export interface EntryResult {
   record: DiaryRecord;
   xp: number;
   counted: boolean;
+  /** The week's first entry (600 XP) rather than a further one (30 XP). */
+  firstThisWeek?: boolean;
+  /** This entry wrote the twentieth prompt (+2,000 XP, once). */
+  allPrompts?: boolean;
   /** Why it didn't count, if it didn't. */
-  reason?: "already-today" | "too-short";
+  reason?: "too-short" | "not-open";
 }
 
 /**
- * An entry saved: does it count, and for how much? Before free writing opens, a prompt's entry (25 words or more)
- * marks the prompt written and earns 80 XP. After, any entry of 40 words or more earns 600 XP. One entry a day counts.
+ * An entry saved: does it count, and for how much? A prompt's entry needs 25 words; free writing (open after all
+ * twenty) 40. The week's first entry earns 600 XP, each further one that week 30; writing the twentieth prompt adds
+ * 2,000 XP once. Any number of entries a day count.
  */
 export function saveEntry(r: DiaryRecord, e: { promptId: number | null; words: number; today: string }): EntryResult {
-  if (wroteToday(r, e.today)) return { record: r, xp: 0, counted: false, reason: "already-today" };
-  const free = freeWritingOpen(r) || e.promptId == null;
+  const open = freeWritingOpen(r);
+  if (!open && e.promptId == null) return { record: r, xp: 0, counted: false, reason: "not-open" };
+  const free = open || e.promptId == null;
   if (e.words < (free ? DIARY.minWordsFree : DIARY.minWordsPrompt)) return { record: r, xp: 0, counted: false, reason: "too-short" };
-  if (!freeWritingOpen(r) && e.promptId == null) return { record: r, xp: 0, counted: false, reason: "too-short" };
+  const firstThisWeek = !r.days.some((d) => weekStart(d) === weekStart(e.today));
   const done = e.promptId != null && !r.done.includes(e.promptId) ? [...r.done, e.promptId].sort((a, b) => a - b) : [...r.done];
-  return { record: { done, days: [...r.days, e.today].sort() }, xp: free ? DIARY.freeXp : DIARY.promptXp, counted: true };
+  const allPrompts = !open && DIARY_PROMPTS.every((p) => done.includes(p.id));
+  const days = r.days.includes(e.today) ? [...r.days] : [...r.days, e.today].sort();
+  const xp = (firstThisWeek ? DIARY.weekXp : DIARY.extraXp) + (allPrompts ? DIARY.allPromptsXp : 0);
+  return { record: { done, days }, xp, counted: true, firstThisWeek, allPrompts };
 }

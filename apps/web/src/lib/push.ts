@@ -7,9 +7,20 @@
  * On iPhone, notifications work once Boekenwurm is on the Home Screen (iOS 16.4 or later).
  */
 import { getState } from "./store.ts";
-import { supabase } from "./supabase.ts";
+import { supabase, supabaseHost } from "./supabase.ts";
 
-export const VAPID_PUBLIC_KEY: string = import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "";
+/** The public Web Push key: from the build if given, else from the diary-reminder function (its secrets hold the pair). */
+let publicKey: string | null = import.meta.env.VITE_VAPID_PUBLIC_KEY || null;
+async function vapidKey(): Promise<string | null> {
+  if (publicKey || !supabaseHost) return publicKey;
+  try {
+    const res = await fetch(`https://${supabaseHost}/functions/v1/diary-reminder`);
+    if (res.ok) publicKey = ((await res.json()) as { publicKey?: string }).publicKey ?? null;
+  } catch {
+    /* offline or not deployed: reminders stay hidden */
+  }
+  return publicKey;
+}
 
 export type PushState = "unsupported" | "install-first" | "no-account" | "off-in-build" | "denied" | "off" | "on";
 
@@ -19,7 +30,7 @@ const standalone = () => window.matchMedia?.("(display-mode: standalone)").match
 
 /** Where this device stands with reminders. */
 export async function pushState(): Promise<PushState> {
-  if (!VAPID_PUBLIC_KEY || !supabase) return "off-in-build";
+  if (!supabase || !(await vapidKey())) return "off-in-build";
   if (!supported()) return isIos() && !standalone() ? "install-first" : "unsupported";
   if (!getState().user) return "no-account";
   if (Notification.permission === "denied") return "denied";
@@ -38,10 +49,11 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
 
 /** Turn the weekly reminder on for this device (asks for permission). */
 export async function turnOn(): Promise<PushState> {
-  if (!supabase) return "off-in-build";
+  const key = await vapidKey();
+  if (!supabase || !key) return "off-in-build";
   if ((await Notification.requestPermission()) !== "granted") return "denied";
   const reg = await navigator.serviceWorker.ready;
-  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_PUBLIC_KEY) }));
+  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) }));
   const j = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
   const { error } = await supabase.from("push_subscriptions").upsert(
     { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Amsterdam" },

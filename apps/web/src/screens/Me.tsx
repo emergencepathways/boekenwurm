@@ -16,6 +16,7 @@ import { Sheet, toast } from "../ui.tsx";
 import { Patch, RankBar, RankShield } from "../badges.tsx";
 import { statsNow } from "../lib/play.ts";
 import { loadEntries } from "../lib/diary.ts";
+import { consentText, LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
@@ -203,11 +204,45 @@ export function Me() {
         <p className="small">Boekenwurm is a reading game for learners of Dutch. Your books stay private: on this device, and in your own account when you sign in.</p>
         <DictionaryCredit />
         <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). </p>
+        <Privacy />
         <VersionRow />
       </section>
         </div>
       )}
     </main>
+  );
+}
+
+/** Contact for privacy questions and data requests (GDPR). */
+export const PRIVACY_CONTACT = "contact@emergencepathways.org";
+
+/**
+ * The privacy notice, in plain words: what goes where, and the LanguageTool choice (lib/consent.ts). The full text
+ * is docs/PRIVACY.md; keep both in step.
+ */
+function Privacy() {
+  const lt = useStore((s) => s.profile.settings.languageTool);
+  const t = consentText();
+  return (
+    <details className="privacypanel" id="privacy">
+      <summary><b>Privacy</b>: what Boekenwurm keeps, and where</summary>
+      <ul className="small">
+        <li><b>On this device:</b> your books, reading progress, words, flashcards and settings. Your <b>diary</b> stays only here: Boekenwurm never receives or stores it.</li>
+        <li><b>In your account</b> (if you sign in; Supabase, servers in the EU): your books, progress, words and settings, so they sync between your devices. Never your diary.</li>
+        <li><b>LanguageTool</b> (LanguageTool GmbH, Germany, EU): only if you agree, and only when you tap “Check my writing”, that diary entry is sent from your device to be checked. <a href={LANGUAGETOOL_PRIVACY} target="_blank" rel="noopener noreferrer">LanguageTool's privacy policy</a>.</li>
+        <li><b>Google Translate</b>: only the single word you tapped, when the dictionary doesn't know it (signed-in readers).</li>
+        <li><b>Google Cloud Vision</b>: page photos, only for access-code holders who choose Google page reading.</li>
+        <li><b>Anthropic (Claude)</b>: only if you add your own Claude key (Experimental), the text a feature needs.</li>
+        <li><b>Weekly reminder</b>: if you turn it on, this phone's notification address and your time zone, nothing you write.</li>
+        <li><b>Fonts</b> are part of the app: opening it sends nothing to a font service.</li>
+      </ul>
+      <div className="row">
+        <span className="small grow">LanguageTool for your diary: <b>{lt == null ? "not asked yet" : lt.allowed ? "on" : "off"}</b>{lt ? ` (since ${new Date(lt.at).toLocaleDateString("en-GB")})` : ""}</span>
+        {lt?.allowed !== true && <button className="btn small" type="button" onClick={() => void setLanguageTool(true).then(() => toast("LanguageTool on for your diary."))}>{t.yes}</button>}
+        {lt?.allowed !== false && <button className="btn small ghost" type="button" onClick={() => void setLanguageTool(false).then(() => toast("LanguageTool off: nothing you write is sent anywhere."))}>Turn off</button>}
+      </div>
+      <p className="small">You can export or erase your data under Your data. Questions or requests about your data: <a href={`mailto:${PRIVACY_CONTACT}`}>{PRIVACY_CONTACT}</a> (Emergence Pathways, Den Haag).</p>
+    </details>
   );
 }
 

@@ -71,6 +71,8 @@ export interface Settings {
   commonWords?: boolean;
   /** Font pairing (lib/fonts.ts); Literata + Atkinson Hyperlegible Next by default. */
   font?: "literata" | "source" | "newsreader";
+  /** The reader's answer to using LanguageTool in the diary, and when (lib/consent.ts). Absent: not asked yet. */
+  languageTool?: { allowed: boolean; at: number };
   /** Reading text size; Medium by default. */
   textSize?: "small" | "medium" | "large";
 }

@@ -1,5 +1,5 @@
 // Supabase Edge Function entry point (Deno). The logic is in handler.ts. Deployed by .github/workflows/publish.yml
-// with --no-verify-jwt: it is called by the weekly workflow with the cron secret, never by readers.
+// with --no-verify-jwt. The VAPID key pair is generated once by that workflow straight into this function's secrets.
 import webpush from "npm:web-push@3.6.7";
 import { handle, type Subscription } from "./handler.ts";
 
@@ -20,6 +20,7 @@ Deno.serve((req) =>
     supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
     serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     cronSecret: Deno.env.get("CRON_SECRET") ?? "",
+    publicKey: Deno.env.get("VAPID_PUBLIC_KEY") ?? "",
     send,
   }),
 );

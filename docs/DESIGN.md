@@ -312,16 +312,20 @@ and may change; they are not reader settings (`REVIEW_DAY` and `planSet` in `pac
 
 Study has two categories, **Review** and **Diary**. The diary has **20 prompts in Dutch** (packages/engine/src/diary.ts),
 written for A2 learners; #13 and #15 are gentle versions that don't assume a job or a home country. A prompt comes up at
-random from those not yet written; **Skip** brings another. **One entry a day counts**: a prompt's entry needs 25 words
-and earns 80 XP. Once a week, until all 20 are written, Home shows the **weekly diary challenge**, and readers who turn
-it on get a phone notification (Sundays, when the week's entry is still to write). After all 20, **free writing**
-opens: anything, or any prompt again, 40 words, **600 XP once a day** (the Daily Challenge's reward). The **Diary
-badge**: Bronze 5, Silver 10, Gold 15, Platinum 20 prompts.
+random from those not yet written; **Skip** brings another. A prompt's entry needs 25 words. **The week's first entry
+earns 600 XP** (weeks run Monday to Sunday), **each further entry that week 30 XP**, any number a day, and each counts
+towards the 20. **Writing all 20 earns a one-time 2,000 XP.** Until then, Home shows the **weekly diary challenge**, and
+readers who turn it on get a phone notification on Sundays when the week's entry is still to write. After all 20,
+**free writing** opens (anything, or any prompt again; 40 words) on the same weekly rewards. The **Diary badge**:
+Bronze 5, Silver 10, Gold 15, Platinum 20 prompts.
 
 Writing is helped, not done for the reader: the phone's autocorrect is off and its spellcheck on; **word
 suggestions** come from the open dictionary on the device (the reader's own words first, de/het for nouns).
 **Check my writing** sends the entry from the reader's device to **LanguageTool** (EU), and only then: mistakes are
-marked in the text with an explanation and tap-to-fix suggestions, or kept as written.
+marked in the text with an explanation and tap-to-fix suggestions, or kept as written. It needs the reader's
+**consent**, asked on the first visit like a cookie notice, in the language Boekenwurm explains Dutch in (English for
+now; `lib/consent.ts`). Declining keeps the diary fully usable with no outside service: a short self-check guide
+replaces the button. The choice can be changed in Account → Settings → About → Privacy (docs/PRIVACY.md).
 
 **Diary entries are saved only on the reader's device** and never on Boekenwurm's servers: a diary can hold the most
 personal things a reader writes (GDPR special-category data). The synced play record holds only which prompts were
@@ -393,10 +397,11 @@ anywhere except `private/`.
 
 ## Decided
 
-- Diary: 20 Dutch prompts (gentle #13 and #15, Skip), one entry a day (25 words, 80 XP), a weekly Home card and an
-  opt-in weekly notification until all 20 are written, then free writing (40 words, 600 XP once a day); Diary badge at
-  5/10/15/20. Entries stay on the reader's device; corrections by LanguageTool's free API, called from the reader's
-  device. 2026-11-17.
+- Diary: 20 Dutch prompts (gentle #13 and #15, Skip); the week's first entry 600 XP, further entries 30 XP each (any
+  number a day, all counting towards the 20); all 20 a one-time 2,000 XP; then free writing on the same weekly rewards.
+  A weekly Home card and an opt-in weekly notification until all 20 are written; Diary badge at 5/10/15/20. Entries
+  stay on the reader's device; corrections by LanguageTool's free API from the reader's device, only with consent
+  asked on the first visit. 2026-11-17.
 
 - Text size next to the font under the page: Small, Medium (the original size, default) and Large. It scales the book
   text and the word cards; Me → Reading has the same choice. 2026-11-17.

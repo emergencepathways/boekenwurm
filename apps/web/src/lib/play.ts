@@ -180,6 +180,13 @@ export async function diaryEntrySaved(e: { promptId: number | null; words: numbe
   const r = E.saveEntry(diaryRecord(), { ...e, today: today() });
   if (!r.counted) return r;
   await commit({ ...play, diaryDone: [...r.record.done], diaryDays: [...r.record.days] }, r.xp);
-  toast(e.promptId != null && r.xp === E.DIARY.promptXp ? `Diary entry saved: +${r.xp} XP` : `Free writing: +${r.xp} XP!`, 5000);
+  toast(
+    r.allPrompts
+      ? `All 20 diary prompts written! +${r.xp} XP`
+      : r.firstThisWeek
+        ? `This week's diary entry: +${r.xp} XP!`
+        : `Diary entry saved: +${r.xp} XP`,
+    5000,
+  );
   return r;
 }

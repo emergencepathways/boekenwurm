@@ -1,12 +1,18 @@
 /**
- * The weekly diary reminder (Web Push). Called once a week by .github/workflows/diary-reminder.yml with the cron
- * secret; never by readers. For each reminder address (push_subscriptions, migration 0011) it checks the reader's
- * diary record (in their synced progress: prompt numbers and days, never the text) and sends a reminder when the
- * week's entry is still to write. Addresses the push service says are gone (404, 410) are removed.
+ * The weekly diary reminder (Web Push).
+ *
+ * GET: the public Web Push key, which the app needs to turn reminders on (the key pair lives only in this function's
+ * secrets, generated once by the deploy workflow, so no one handles it).
+ *
+ * POST: called once a week by .github/workflows/diary-reminder.yml. For each reminder address (push_subscriptions,
+ * migration 0011) it checks the reader's diary record (in their synced progress: prompt numbers and days, never the
+ * text) and sends a reminder when the week's entry is still to write. A device gets at most one reminder in 6 days,
+ * so calling it again, by anyone, sends nothing more; it needs no secret (CRON_SECRET, if set, is required). Addresses
+ * the push service says are gone (404, 410) are removed.
  *
  * Plain TypeScript, tested under Node (handler.test.ts); index.ts is the Deno entry with the Web Push library.
  */
-import { timeZone } from "../_shared/common.ts";
+import { cors, timeZone } from "../_shared/common.ts";
 
 export interface Subscription {
   endpoint: string;
@@ -14,12 +20,16 @@ export interface Subscription {
   p256dh: string;
   auth: string;
   time_zone: string;
+  last_sent?: string | null;
 }
 
 export interface Config {
   supabaseUrl: string;
   serviceKey: string;
-  cronSecret: string;
+  /** Optional: when set, POST needs it in x-cron-secret. */
+  cronSecret?: string;
+  /** The public Web Push key, given to the app on GET. */
+  publicKey: string;
   /** Sends one push; returns the push service's HTTP status. */
   send: (sub: Subscription, payload: string) => Promise<number>;
   now?: Date;
@@ -27,6 +37,8 @@ export interface Config {
 }
 
 export const PROMPTS = 20;
+/** At most one reminder per device in this many days. */
+export const MIN_GAP_DAYS = 6;
 
 export const PAYLOAD = JSON.stringify({
   title: "Je wekelijkse dagboek",
@@ -66,13 +78,18 @@ function same(a: string, b: string): boolean {
 }
 
 export async function handle(req: Request, c: Config): Promise<Response> {
+  const headers0 = { ...cors(req.headers.get("origin")), "access-control-allow-methods": "GET, POST, OPTIONS" };
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers0 });
+  if (req.method === "GET")
+    return Response.json(c.publicKey ? { publicKey: c.publicKey } : { error: "Reminders aren't set up yet" }, { status: c.publicKey ? 200 : 503, headers: headers0 });
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  if (!same(req.headers.get("x-cron-secret") ?? "", c.cronSecret)) return new Response("Forbidden", { status: 403 });
+  if (c.cronSecret && !same(req.headers.get("x-cron-secret") ?? "", c.cronSecret)) return new Response("Forbidden", { status: 403 });
+  if (!c.publicKey) return Response.json({ error: "Reminders aren't set up yet" }, { status: 503 });
   const f = c.fetch ?? fetch;
   const headers = { apikey: c.serviceKey, authorization: `Bearer ${c.serviceKey}` };
   const rest = `${c.supabaseUrl}/rest/v1`;
 
-  const subsRes = await f(`${rest}/push_subscriptions?select=endpoint,user_id,p256dh,auth,time_zone`, { headers });
+  const subsRes = await f(`${rest}/push_subscriptions?select=endpoint,user_id,p256dh,auth,time_zone,last_sent`, { headers });
   if (!subsRes.ok) return Response.json({ error: "Couldn't read reminder addresses" }, { status: 502 });
   const subs = (await subsRes.json()) as Subscription[];
   if (!subs.length) return Response.json({ sent: 0, skipped: 0, removed: 0 });
@@ -85,7 +102,8 @@ export async function handle(req: Request, c: Config): Promise<Response> {
   const now = c.now ?? new Date();
   let sent = 0, skipped = 0, removed = 0;
   for (const s of subs) {
-    if (!due(play.get(s.user_id), localDay(now, s.time_zone))) {
+    const recent = s.last_sent != null && now.getTime() - Date.parse(s.last_sent) < MIN_GAP_DAYS * 86400000;
+    if (recent || !due(play.get(s.user_id), localDay(now, s.time_zone))) {
       skipped++;
       continue;
     }

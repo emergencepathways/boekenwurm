@@ -32,23 +32,34 @@ test("the next prompt is a random one not written yet; skipped ones wait unless 
   assert.ok(DIARY_PROMPTS.some((p) => p.id === nextPrompt(all, 0.37).id), "after all 20, any prompt can come up again");
 });
 
-test("a prompt's entry needs 25 words and earns 80 XP; one entry a day", () => {
-  assert.deepEqual([DIARY.minWordsPrompt, DIARY.promptXp], [25, 80]);
+test("the week's first entry earns 600 XP, each further one that week 30; a prompt needs 25 words", () => {
+  assert.deepEqual([DIARY.minWordsPrompt, DIARY.weekXp, DIARY.extraXp], [25, 600, 30]);
   assert.equal(saveEntry(none, { promptId: 4, words: 24, today: "2026-11-17" }).reason, "too-short");
-  const ok = saveEntry(none, { promptId: 4, words: 25, today: "2026-11-17" });
-  assert.deepEqual([ok.counted, ok.xp, ok.record.done, ok.record.days], [true, 80, [4], ["2026-11-17"]]);
-  const again = saveEntry(ok.record, { promptId: 5, words: 60, today: "2026-11-17" });
-  assert.deepEqual([again.counted, again.xp, again.reason], [false, 0, "already-today"]);
-  assert.equal(saveEntry(ok.record, { promptId: 5, words: 60, today: "2026-11-18" }).counted, true, "the next day");
+  const first = saveEntry(none, { promptId: 4, words: 25, today: "2026-11-17" }); // Tuesday
+  assert.deepEqual([first.counted, first.xp, first.firstThisWeek, first.record.done, first.record.days], [true, 600, true, [4], ["2026-11-17"]]);
+  const sameDay = saveEntry(first.record, { promptId: 5, words: 30, today: "2026-11-17" });
+  assert.deepEqual([sameDay.counted, sameDay.xp, sameDay.record.done], [true, 30, [4, 5]], "a second prompt the same day: 30 XP, and it counts towards the 20");
+  const laterInWeek = saveEntry(sameDay.record, { promptId: 6, words: 30, today: "2026-11-22" }); // Sunday
+  assert.equal(laterInWeek.xp, 30);
+  assert.equal(saveEntry(laterInWeek.record, { promptId: 7, words: 30, today: "2026-11-23" }).xp, 600, "Monday: a new week");
 });
 
-test("after all 20: free writing (40 words) earns 600 XP once a day, prompts can be written again", () => {
+test("writing the twentieth prompt adds 2,000 XP, once", () => {
+  assert.equal(DIARY.allPromptsXp, 2000);
+  const nineteen: DiaryRecord = { done: DIARY_PROMPTS.map((p) => p.id).filter((id) => id !== 20), days: ["2026-11-16"] };
+  const last = saveEntry(nineteen, { promptId: 20, words: 30, today: "2026-11-17" });
+  assert.deepEqual([last.allPrompts, last.xp, freeWritingOpen(last.record)], [true, 30 + 2000, true]);
+  assert.equal(saveEntry(last.record, { promptId: 3, words: 50, today: "2026-11-24" }).xp, 600, "afterwards: no second bonus");
+});
+
+test("after all 20: free writing (40 words) and any prompt again, on the same weekly rewards", () => {
   assert.equal(freeWritingOpen(all), true);
   assert.equal(freeWritingOpen({ done: [1, 2], days: [] }), false);
-  assert.equal(saveEntry({ done: [1], days: [] }, { promptId: null, words: 100, today: "2026-11-17" }).counted, false, "no free writing before all 20");
+  assert.equal(saveEntry({ done: [1], days: [] }, { promptId: null, words: 100, today: "2026-11-17" }).reason, "not-open", "no free writing before all 20");
   assert.equal(saveEntry(all, { promptId: null, words: 39, today: "2026-11-17" }).reason, "too-short");
-  assert.deepEqual([saveEntry(all, { promptId: null, words: 40, today: "2026-11-17" }).xp, DIARY.freeXp], [600, 600]);
-  assert.equal(saveEntry(all, { promptId: 3, words: 40, today: "2026-11-17" }).xp, 600, "a prompt written again counts as free writing");
+  const free = saveEntry(all, { promptId: null, words: 40, today: "2026-11-17" });
+  assert.equal(free.xp, 600, "the week's first");
+  assert.equal(saveEntry(free.record, { promptId: 3, words: 40, today: "2026-11-17" }).xp, 30, "a prompt again, the same week");
 });
 
 test("the weekly reminder: due until an entry counts that week (Monday to Sunday), and never once free writing is open", () => {

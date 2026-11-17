@@ -1,6 +1,6 @@
 # The weekly diary reminder: once a week, asks the diary-reminder function to notify readers whose diary prompt is
 # waiting (supabase/functions/diary-reminder). Sunday afternoon in the Netherlands, so the week's prompt can still be
-# written. Needs the CRON_SECRET and VITE_SUPABASE_URL secrets (see publish.yml); without them it does nothing.
+# written. The function sends a device at most one reminder in 6 days, so it needs no secret; only the project URL.
 name: Weekly diary reminder
 
 on:
@@ -18,10 +18,9 @@ jobs:
       - name: Send the reminders
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "::warning::Add the CRON_SECRET secret to send weekly diary reminders."
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::warning::Add the VITE_SUPABASE_URL secret (see publish.yml) to send weekly diary reminders."
             exit 0
           fi
-          curl -fsS --retry 2 -X POST "${SUPABASE_URL%/}/functions/v1/diary-reminder" -H "x-cron-secret: $CRON_SECRET"
+          curl -fsS --retry 2 -X POST "${SUPABASE_URL%/}/functions/v1/diary-reminder"

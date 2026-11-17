@@ -12,6 +12,7 @@ import { applyFix, checkDutch, type Mistake } from "../lib/grammar.ts";
 import { applySuggestion, buildSuggester, wordAtCaret, type Suggestion } from "../lib/suggest.ts";
 import { dictionaryData } from "../lib/words.ts";
 import { Reminders } from "./Reminders.tsx";
+import { consentText, LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
 import { plural } from "../ui.tsx";
 
 const promptById = (id: number | null) => E.DIARY_PROMPTS.find((p) => p.id === id) ?? null;
@@ -20,10 +21,9 @@ const dateOf = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { weekda
 export function Diary() {
   useStore((s) => s.profile.progress.play); // the record changes when an entry counts
   const record = diaryRecord();
-  const today = todayLocal();
   const freeOpen = E.freeWritingOpen(record);
-  const doneToday = E.wroteToday(record, today);
-  const [anyway, setAnyway] = useState(false);
+  const thisWeek = !E.weeklyDue({ done: [], days: record.days }, todayLocal()); // an entry counted this week
+  const allowed = useStore((s) => s.profile.settings.languageTool?.allowed ?? null);
   const [entries, setEntries] = useState<DiaryEntry[] | null>(null);
   const [saved, setSaved] = useState<DiaryEntry | null>(null);
   useEffect(() => void loadEntries().then(setEntries), []);
@@ -34,14 +34,18 @@ export function Diary() {
         <h2>Diary</h2>
         <p>
           {freeOpen
-            ? "All 20 prompts written: free writing is open. Write anything you like, once a day, for 600 XP, or answer a prompt again."
-            : "Write a few sentences in Dutch about a prompt. One entry a day counts; a new prompt waits each week."}
+            ? "All 20 prompts written: free writing is open. Write anything you like, or answer a prompt again."
+            : "Write a few sentences in Dutch about a prompt. Write all 20 for a 2,000 XP bonus."}{" "}
+          {thisWeek ? `This week's ${E.DIARY.weekXp} XP is earned; each further entry this week adds ${E.DIARY.extraXp}.` : `Your first entry this week earns ${E.DIARY.weekXp} XP; each one after that, ${E.DIARY.extraXp}.`}
         </p>
         <div className="xpbar" role="progressbar" aria-label="Diary prompts written" aria-valuemin={0} aria-valuemax={20} aria-valuenow={record.done.length}>
           <i style={{ width: `${(record.done.length / 20) * 100}%` }} />
         </div>
         <p className="small muted num">{record.done.length} / 20 prompts written</p>
-        <p className="small privacy">🔒 Your diary is saved only on this phone. Boekenwurm never sees or stores it. “Check my writing” sends the text to LanguageTool (an EU service) to find mistakes, and only when you tap it.</p>
+        <p className="small privacy">
+          🔒 Your diary is saved only on this phone. Boekenwurm never sees or stores it.{" "}
+          {allowed ? "“Check my writing” sends an entry to LanguageTool (EU) to find mistakes, only when you tap it." : allowed === false ? "LanguageTool is off: nothing you write is sent anywhere." : ""}
+        </p>
       </section>
 
       {saved ? (
@@ -52,24 +56,19 @@ export function Diary() {
           <p className="small muted">Saved on this phone. Want to keep it somewhere else too? Copy it into your own notes.</p>
           <button className="btn" type="button" onClick={() => setSaved(null)}>Done</button>
         </section>
-      ) : doneToday && !anyway ? (
-        <section className="panel">
-          <h2>Today's entry is written</h2>
-          <p>Goed gedaan! Come back tomorrow{freeOpen ? " to write again" : " for the next prompt"}.</p>
-          <button className="btn ghost" type="button" onClick={() => setAnyway(true)}>Write more today (no XP)</button>
-        </section>
       ) : (
         <Composer
           key={record.done.length}
           freeOpen={freeOpen}
-          extra={doneToday}
+          checker={allowed === true}
           onSaved={async (e) => {
             setSaved(e);
-            setAnyway(false);
             setEntries(await loadEntries());
           }}
         />
       )}
+
+      {allowed === null && <ConsentPrompt />}
 
       <Reminders />
 
@@ -78,7 +77,35 @@ export function Diary() {
   );
 }
 
-function Composer({ freeOpen, extra, onSaved }: { freeOpen: boolean; extra: boolean; onSaved: (e: DiaryEntry) => void }) {
+/**
+ * Asked on the first visit, like a cookie notice: may "Check my writing" use LanguageTool? Both answers are equally
+ * easy, and the diary works either way (lib/consent.ts).
+ */
+function ConsentPrompt() {
+  const t = consentText();
+  return (
+    <div className="consent" role="dialog" aria-modal="false" aria-labelledby="consent-title">
+      <h2 id="consent-title">{t.title}</h2>
+      <p>{t.intro}</p>
+      <ul>{t.points.map((x) => <li key={x}>{x}</li>)}</ul>
+      <p className="small"><a href={LANGUAGETOOL_PRIVACY} target="_blank" rel="noopener noreferrer">{t.privacyLink}</a></p>
+      <div className="choices">
+        <button className="btn" type="button" onClick={() => void setLanguageTool(true)}>{t.yes}</button>
+        <button className="btn" type="button" onClick={() => void setLanguageTool(false)}>{t.no}</button>
+      </div>
+    </div>
+  );
+}
+
+/** Things to look for when checking an entry yourself (LanguageTool off). */
+const SELF_CHECK = [
+  "The verb comes second in a sentence: “Vandaag ga ik…”, not “Vandaag ik ga…”.",
+  "de or het? Tap a suggested word to see its article.",
+  "Verb endings: ik werk, jij werkt, wij werken.",
+  "A capital letter at the start of each sentence, and a full stop at the end.",
+];
+
+function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: boolean; onSaved: (e: DiaryEntry) => void }) {
   const [skipped, setSkipped] = useState<number[]>([]);
   // Before all 20: a random open prompt. After: free writing unless the reader picks a prompt.
   const [promptId, setPromptId] = useState<number | null>(() => (freeOpen ? null : E.nextPrompt(diaryRecord(), Math.random()).id));
@@ -106,7 +133,7 @@ function Composer({ freeOpen, extra, onSaved }: { freeOpen: boolean; extra: bool
 
   const prompt = promptById(promptId);
   const free = freeOpen || promptId == null;
-  const min = extra ? 1 : free ? E.DIARY.minWordsFree : E.DIARY.minWordsPrompt;
+  const min = free ? E.DIARY.minWordsFree : E.DIARY.minWordsPrompt;
   const words = E.countWords(text);
   const typing = wordAtCaret(text, caret).word;
   const suggestions: Suggestion[] = suggester && typing.length >= 2 ? suggester.suggest(typing) : [];
@@ -148,7 +175,7 @@ function Composer({ freeOpen, extra, onSaved }: { freeOpen: boolean; extra: bool
   const save = async () => {
     setBusy(true);
     const entry = await addEntry({ promptId, text: text.trim() });
-    if (!extra) await diaryEntrySaved({ promptId, words });
+    await diaryEntrySaved({ promptId, words });
     setBusy(false);
     onSaved(entry);
   };
@@ -208,7 +235,7 @@ function Composer({ freeOpen, extra, onSaved }: { freeOpen: boolean; extra: bool
         </div>
       )}
       <p className="small muted num" aria-live="polite">
-        {plural(words, "word")}{!extra && words < min ? ` · ${min - words} more to save` : ""}
+        {plural(words, "word")}{words < min ? ` · ${min - words} more to save` : ""}
       </p>
 
       {mistakes && (
@@ -243,10 +270,15 @@ function Composer({ freeOpen, extra, onSaved }: { freeOpen: boolean; extra: bool
       {problem && <p className="error" role="alert">{problem}</p>}
 
       <div className="actions">
-        <button className="btn" type="button" disabled={!words || checking} onClick={() => void check()}>{checking ? "Checking…" : mistakes ? "Check again" : "Check my writing"}</button>
+        {checker && <button className="btn" type="button" disabled={!words || checking} onClick={() => void check()}>{checking ? "Checking…" : mistakes ? "Check again" : "Check my writing"}</button>}
         <button className="btn primary" type="button" disabled={busy || words < min} onClick={() => void save()}>Save entry</button>
       </div>
-      {extra && <p className="small muted">Today's entry already counted, so this one earns no XP.</p>}
+      {!checker && (
+        <details className="selfcheck">
+          <summary className="small">Check it yourself: what to look for</summary>
+          <ul className="small">{SELF_CHECK.map((x) => <li key={x}>{x}</li>)}</ul>
+        </details>
+      )}
     </section>
   );
 }

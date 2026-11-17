@@ -472,3 +472,19 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 details.entry { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
 details.entry summary { cursor: pointer; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
 .panel.weekly { border-color: var(--leaf); }
+
+/* LanguageTool consent: a notice over the bottom of the page, like a cookie notice; both choices look the same. */
+.consent {
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--tabbar) + 12px); z-index: 30; max-width: 36rem; margin: 0 auto;
+  max-height: 72dvh; overflow-y: auto; padding: 18px; border-radius: 16px; background: var(--sheet); border: 1px solid var(--leaf);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45); display: grid; gap: 10px;
+}
+.consent h2 { font: 700 1.1rem/1.25 var(--display); margin: 0; }
+.consent p, .consent ul { margin: 0; }
+.consent ul { padding-left: 1.2em; display: grid; gap: 6px; font-size: 0.9rem; color: var(--muted); }
+.consent a, .privacypanel a { color: var(--leaf); }
+.consent .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.selfcheck ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 4px; color: var(--muted); }
+.privacypanel { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.privacypanel summary { cursor: pointer; }
+.privacypanel ul { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 6px; color: var(--muted); }
