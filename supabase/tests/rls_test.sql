@@ -328,6 +328,33 @@ do $$ begin
 end $$;
 reset role;
 
+-- push subscriptions (0011): a reader keeps only their own reminder addresses
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  insert into push_subscriptions (endpoint, p256dh, auth) values ('https://push.example/b1', 'key', 'secret');
+  begin
+    insert into push_subscriptions (endpoint, user_id, p256dh, auth) values ('https://push.example/x', '00000000-0000-0000-0000-00000000000c', 'k', 's');
+    raise exception 'FAIL: B added a reminder for C';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into push_subscriptions (endpoint, p256dh, auth) values ('http://insecure.example', 'k', 's');
+    raise exception 'FAIL: a non-https address was accepted';
+  exception when check_violation then null;
+  end;
+  raise notice 'ok: a reader adds reminders for themselves only, to https addresses';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  if exists (select 1 from push_subscriptions) then raise exception 'FAIL: C sees B''s reminder'; end if;
+  delete from push_subscriptions where endpoint = 'https://push.example/b1';
+  set role postgres;
+  if not exists (select 1 from push_subscriptions where endpoint = 'https://push.example/b1') then raise exception 'FAIL: C deleted B''s reminder'; end if;
+  raise notice 'ok: readers can''t see or delete each other''s reminders';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

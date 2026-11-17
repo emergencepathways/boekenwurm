@@ -108,6 +108,15 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && !/supabase|Failed to load resource|fonts\.g|Estimating resolution/i.test(m.text()) && errors.push(m.text()));
 await ctx.route("https://api.anthropic.com/**", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*" } }) : mockClaude(r)));
 await ctx.route(/supabase\.co/, (r) => r.abort());
+// LanguageTool (the diary's "Check my writing"), mocked: "vandag" is a spelling mistake, nothing else is.
+const ltChecks = [];
+await ctx.route("https://api.languagetool.org/**", (r) => {
+  const text = new URLSearchParams(r.request().postData() ?? "").get("text") ?? "";
+  ltChecks.push(text);
+  const i = text.indexOf("vandag ");
+  const matches = i >= 0 ? [{ message: "Possible spelling mistake found.", offset: i, length: 6, replacements: [{ value: "vandaag" }], rule: { issueType: "misspelling" } }] : [];
+  return r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ matches }) });
+});
 // The translate function (supabase/functions/translate), mocked: 200 words a day, then refused. A word comes back
 // translated, except "Elke", which comes back unchanged (no meaning).
 const translated = [];
@@ -190,6 +199,9 @@ const totalXp = () => page.evaluate(() => new Promise((ok) => {
   };
 }));
 const fontRequests = [];
+/** Every request that carries a body, to check where diary text goes. */
+const posted = [];
+page.on("request", (q) => q.postData() && posted.push({ url: q.url(), body: q.postData() }));
 page.on("request", (q) => /fonts\.(googleapis|gstatic)\.com/.test(q.url()) && fontRequests.push(q.url()));
 /** Tap a word in the text. The meaning of the last word tapped lies over the text below it, so close it first. */
 const tapWord = async (word) => {
@@ -216,6 +228,7 @@ check(await page.getByText("0 / 600 XP to A1").isVisible(), "with an XP bar towa
 check((await page.locator(".bookbtn").count()) === 0, "no books on the shelf");
 check((await page.locator(".continue").count()) === 0, "no continue-reading card");
 check(await page.getByRole("heading", { name: "Add a word list" }).isVisible(), "Home asks for a word list until there is one");
+check(await page.getByRole("heading", { name: "Weekly diary challenge" }).isVisible(), "and shows the weekly diary challenge");
 check(await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).locator(".dot").isVisible(), "the Words tab is marked too");
 await shot("02-home-empty");
 
@@ -534,6 +547,48 @@ await shot("06g-home-challenge-done");
 await page.evaluate(() => ["boekenwurm-study-sessions", "boekenwurm-reviewed-today"].forEach((k) => localStorage.removeItem(k))); // later steps start a fresh day
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
+step("diary: a weekly prompt in Dutch, word suggestions, LanguageTool corrections, saved only on this phone");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+await page.getByRole("button", { name: "Write in my diary" }).click();
+await page.getByRole("tab", { name: "Diary" }).waitFor();
+check(await page.getByRole("tab", { name: "Diary" }).getAttribute("aria-selected") === "true", "Home's weekly card opens Study → Diary");
+const firstPrompt = await page.locator(".diaryprompt .q").textContent();
+await page.getByRole("button", { name: "Show in English" }).click();
+check(await page.locator(".diaryprompt .muted").isVisible(), "the prompt can be shown in English");
+await page.getByRole("button", { name: "Skip: another prompt" }).click();
+check((await page.locator(".diaryprompt .q").textContent()) !== firstPrompt, "Skip brings another prompt");
+const box = page.getByRole("textbox", { name: "Your entry, in Dutch" });
+check(await box.getAttribute("autocorrect") === "off" && await box.getAttribute("spellcheck") === "true", "autocorrect off (practice typing), spellcheck on");
+await box.fill("Op woe");
+await page.locator(".suggestions button", { hasText: "woensdag" }).waitFor();
+check((await page.locator(".suggestions button").first().textContent()).includes("de"), "word suggestions while typing, with de/het for nouns");
+await page.locator(".suggestions button", { hasText: "woensdag" }).click();
+check((await box.inputValue()) === "Op woensdag ", "tapping a suggestion completes the word");
+await box.pressSequentially("ga ik naar de markt. Het weer is vandag mooi en ik koop verse groente, fruit en een boterhammetje bij de bakker. Daarna drink ik koffie en lees ik mijn boek op het terras.");
+check(await page.getByRole("button", { name: "Save entry" }).isEnabled(), "25 words or more: it can be saved");
+await page.getByRole("button", { name: "Check my writing" }).click();
+await page.locator(".mistakes li").first().waitFor();
+check(await page.locator(".marked mark").textContent() === "vandag", "the mistake is marked in the text");
+await page.locator(".mistakes").getByRole("button", { name: "vandaag" }).click();
+check((await box.inputValue()).includes("Het weer is vandaag mooi"), "tapping the fix corrects the entry");
+check((await box.inputValue()).startsWith("Op woensdag ga ik naar de markt.") && (await box.inputValue()).endsWith("terras."), "typing after a suggestion carries on where the word ended");
+await shot("06h-diary");
+await page.getByRole("button", { name: "Save entry" }).click();
+await page.getByRole("heading", { name: "Saved" }).waitFor();
+check(await page.getByText(/Diary entry saved: \+80 XP/).isVisible(), "a prompt's entry earns 80 XP");
+await page.getByRole("button", { name: "Done" }).click();
+check(await page.getByRole("heading", { name: "Today's entry is written" }).isVisible(), "one entry a day: today's is written");
+check(/1 \/ 20 prompts written/.test(await page.locator(".panel").first().textContent()), "1 of 20 prompts");
+check(await page.locator("details.entry").count() === 1, "the entry is kept on this phone");
+check(ltChecks.length === 1, "LanguageTool was asked once: only on Check my writing");
+check(!posted.some((q) => !q.url.includes("api.languagetool.org") && q.body.includes("boterhammetje")), "the diary text went nowhere else (not to Boekenwurm's servers)");
+await page.reload();
+await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
+await page.getByRole("tab", { name: "Diary" }).click();
+check(await page.locator("details.entry").count() === 1, "still there after a reload");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+check(!(await page.getByRole("heading", { name: "Weekly diary challenge" }).isVisible()), "Home's weekly card is gone for this week");
+
 step("colour-coded text: off by default; on, words revealed before are coloured");
 await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
 await page.getByRole("tab", { name: "Reading" }).click();
@@ -599,7 +654,7 @@ await page.setViewportSize({ width: 320, height: 844 });
 check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "Account fits a 320px screen");
 await page.setViewportSize({ width: 390, height: 844 });
 check(await page.evaluate(() => { const b = document.querySelector(".subtabs"); return b.scrollWidth <= b.clientWidth; }), "all four categories fit across a 390px screen");
-check((await page.locator(".patchcell").count()) === 11, "Achievements shows the 11 badges");
+check((await page.locator(".patchcell").count()) === 12, "Achievements shows the 12 badges");
 check(await page.locator(".patchcell.got", { hasText: "Books finished" }).isVisible(), "Books finished is earned (Bronze)");
 check(await page.getByRole("img", { name: "Books finished: Bronze" }).isVisible(), "its patch wears the Bronze ribbon");
 check((await page.locator(".patchcell:not(.got)").count()) >= 5, "others are still locked");

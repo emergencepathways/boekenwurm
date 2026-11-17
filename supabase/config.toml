@@ -10,3 +10,7 @@ verify_jwt = false
 [functions.read-page]
 # Same as translate: the reader's token is checked by the database (claim_page_read runs as them).
 verify_jwt = false
+
+[functions.diary-reminder]
+# Called by the weekly workflow with the cron secret (handler.ts checks it), never by readers.
+verify_jwt = false

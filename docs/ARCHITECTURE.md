@@ -116,6 +116,8 @@ Bottom tab bar, like a native app: **Home · Study · Words · Account**. The re
 - **Study** — flashcards of revealed words in a review pool (Hard first, sets repeated until every word is Easy), "not sticking" list, export to Anki/CSV.
 - **Words** — the reader's word lists (the common 5,000 words in one tap, or lists they import) with progress, each word
   shown as not seen yet, seen, tapped (coloured) or learned (DESIGN.md "Word lists").
+- **Study** — two categories: **Review** (flashcards, the Daily Challenge, words revealed) and **Diary** (prompts,
+  free writing, entries on this device, the weekly reminder).
 - **Account** — four categories (new features join one of them): **Achievements** (rank and badges, earned and in
   progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, name, install,
   connection check, export and delete my data, about and updates), **Experimental** (Claude key and models, access code).
@@ -215,6 +217,20 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   device.
 
 ## Security and privacy
+
+- **Diary entries never reach Boekenwurm's servers.** They are kept in IndexedDB on the reader's device
+  (`apps/web/src/lib/diary.ts`); only the prompt numbers and days an entry counted are in the synced play record.
+- **Diary corrections:** "Check my writing" posts the entry from the reader's device to LanguageTool's public API
+  (`https://api.languagetool.org/v2/check`, LanguageTool GmbH, Germany). Its limits (20 checks and 75 KB a minute, 20 KB
+  a check) are per internet address, so per reader. Nothing is sent while typing. To move to LanguageTool's paid API or
+  a self-hosted server (e.g. a small EU VPS), set `VITE_LANGUAGETOOL_URL` and add the host to the content-security
+  policy (`vite.config.ts`). The privacy notice must name LanguageTool as a recipient.
+- **Weekly diary reminder (Web Push):** a reader who opts in stores this device's push address and time zone in
+  `push_subscriptions` (migration 0011, owner-only rows, deleted with the account). `.github/workflows/diary-reminder.yml`
+  calls `supabase/functions/diary-reminder` on Sundays with `CRON_SECRET`; it reads the diary record (not text) and
+  sends a reminder when the week's entry is still to write, removing addresses the push service reports gone. Keys:
+  `VAPID_PUBLIC_KEY` (built into the app) and `VAPID_PRIVATE_KEY` (function only). On iPhone, notifications need the
+  app on the Home Screen (iOS 16.4+).
 
 - Fonts are bundled with the app (fontsource packages, SIL Open Font License 1.1) and served from Boekenwurm itself;
   the content-security policy allows fonts from this site only, so no reader's IP address reaches a font service.

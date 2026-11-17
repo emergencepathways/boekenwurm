@@ -48,6 +48,8 @@ export function setDictionary(next: Dictionary | null): void {
 }
 
 export const commonWords = (): readonly string[] => common;
+/** The open dictionary as loaded (null before it arrives, or in a build without one). */
+export const dictionaryData = (): Dictionary | null => dict;
 export const isCommonWord = (lemma: string): boolean => commonSet.has(lemma);
 /** Is the word on one of the reader's imported lists? */
 export const isImportedListWord = (lemma: string): boolean => lemma in entries;

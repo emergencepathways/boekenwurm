@@ -7,7 +7,7 @@ import * as E from "@boekenwurm/engine";
 import { useStore } from "./lib/store.ts";
 import { rankTitle } from "./lib/play.ts";
 
-/** Category → [ring, fill, ink]: reading green, streaks amber, words blue, study purple, books coral, explorer pink. */
+/** Category → [ring, fill, ink]: reading green, streaks amber, words blue, study purple, books coral, explorer pink, diary lavender. */
 const CATEGORY: Record<E.Category, [string, string, string]> = {
   reading: ["#3B6D11", "#639922", "#EAF3DE"],
   streak: ["#854F0B", "#EF9F27", "#FAEEDA"],
@@ -15,6 +15,7 @@ const CATEGORY: Record<E.Category, [string, string, string]> = {
   study: ["#534AB7", "#7F77DD", "#EEEDFE"],
   books: ["#993C1D", "#D85A30", "#FAECE7"],
   explorer: ["#993556", "#D4537E", "#FBEAF0"],
+  diary: ["#5b4a8b", "#9C87D6", "#F1ECFB"],
 };
 const LOCKED: [string, string, string] = ["#888780", "#B4B2A9", "#F1EFE8"];
 /** Ribbon colours, Bronze … Diamond; a one-off wears gold. */
@@ -41,6 +42,9 @@ function Symbol({ k, ink, deep }: { k: string; ink: string; deep: string }) {
       return <g fill="none" stroke={ink} strokeWidth="3.5" strokeLinejoin="round"><circle cx="0" cy="0" r="17" /><path d="M0 -12 L5 0 L0 12 L-5 0 Z" fill={ink} /></g>;
     case "reach-higher":
       return <g fill={ink}><path d="M-20 14 L-6 -10 L2 2 L8 -6 L20 14 Z" /><path d="M-6 -10 L-6 -22 L4 -18 L-6 -14" /></g>;
+    case "diary":
+      // An open notebook with a pen.
+      return <g><rect x="-17" y="-18" width="26" height="34" rx="3" fill={ink} /><g stroke={deep} strokeWidth="2.5" strokeLinecap="round"><line x1="-11" y1="-9" x2="3" y2="-9" /><line x1="-11" y1="-2" x2="3" y2="-2" /><line x1="-11" y1="5" x2="-1" y2="5" /></g><path d="M8 14 L19 -10 L23 -8 L12 16 Z" fill={deep} /></g>;
     default:
       return <g fill="none" stroke={ink} strokeWidth="4" strokeLinecap="round"><path d="M-14 -4 A14 14 0 1 1 -10 10" /><path d="M-18 -10 L-14 -2 L-6 -6" /></g>;
   }

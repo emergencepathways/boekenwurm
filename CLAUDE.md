@@ -18,6 +18,7 @@ owner asks, and update the design doc and the tests together.
 
 - `packages/engine/` — pure TypeScript rules: `checkpoint.ts` (strikes, streak tightening, strike minimum), `progress.ts` (streak tokens, level-up offer), `badges.ts` (level badges and titles),
   `review.ts` (flashcard pool, list words first), `wordlist.ts` (word list states, learned, common-words progress),
+  `diary.ts` (the 20 prompts, one entry a day, weekly reminder, free writing),
   `xp.ts` (XP and ranks A0–C2), `achievements.ts` (tiered badges), `play.ts` (the synced play record and its merge),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
   `definitions.ts` (English/Dutch). No dependencies, so it ports to Lua for KOReader.
@@ -41,6 +42,9 @@ owner asks, and update the design doc and the tests together.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.
 - `apps/web/` — the installable app (React + Vite PWA), deployed to Cloudflare Pages by `.github/workflows/publish.yml`.
   `src/lib/importlist.ts` reads word lists (paste, CSV, Excel, Anki) on the device; imported lists are never uploaded.
+  Diary entries stay on the device too (`src/lib/diary.ts`): never sync or upload them. `src/lib/grammar.ts` asks
+  LanguageTool from the reader's device; `src/lib/push.ts` and `supabase/functions/diary-reminder/` send the weekly
+  reminder (Web Push).
   Nothing is preloaded except the open dictionary (`public/dict/nl.json`, built at deploy time, not committed).
 - `apps/playtest/` — the first reader, built into one page; kept for reference, no longer hosted.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,

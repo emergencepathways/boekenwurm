@@ -4,12 +4,37 @@ import { dueCards, getState, planReviewSet, reviewCard, reviewedTodayCount, unsk
 import { meaningOf } from "../lib/words.ts";
 import { checkDailyChallenge, studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
-import { close, open } from "../nav.ts";
+import { close, open, useNav } from "../nav.ts";
+import { Diary } from "./Diary.tsx";
 import { Icon, plural } from "../ui.tsx";
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** The Study tab: two categories, Review (flashcards) and Diary. Links can open one (setTab("study", "diary")). */
 export function Study() {
+  const nav = useNav();
+  const [view, setView] = useState<"review" | "diary">(nav.section === "diary" ? "diary" : "review");
+  useEffect(() => {
+    if (nav.section === "diary" || nav.section === "review") setView(nav.section);
+  }, [nav.section]);
+  return (
+    <main className="screen">
+      <div className="topbar"><h1>Study</h1></div>
+      <div className="subtabs" role="tablist" aria-label="Study">
+        {(["review", "diary"] as const).map((v) => (
+          <button key={v} type="button" role="tab" id={`tab-${v}`} aria-selected={view === v} aria-controls={`view-${v}`} onClick={() => setView(v)}>
+            {v === "review" ? "Review" : "Diary"}
+          </button>
+        ))}
+      </div>
+      <div className="panels" role="tabpanel" id={`view-${view}`} aria-labelledby={`tab-${view}`}>
+        {view === "review" ? <ReviewView /> : <Diary />}
+      </div>
+    </main>
+  );
+}
+
+function ReviewView() {
   const cards = useStore((s) => s.cards);
   const wordbook = useStore((s) => s.wordbook);
   const meanings = useStore((s) => s.meanings);
@@ -36,8 +61,8 @@ export function Study() {
   };
 
   return (
-    <main className="screen">
-      <div className="topbar"><h1>Study</h1></div>
+    <>
+
       <section className="panel">
         <h2>Daily Challenge: Study {E.REVIEW_DAY.maxDue} words</h2>
         <p>Studying up to {E.REVIEW_DAY.maxDue} words a day will help you improve your vocabulary. Earn extra XP if you complete it today!</p>
@@ -93,7 +118,7 @@ export function Study() {
         )}
         {revealed.length ? <RevealedWords words={revealed} plan={plan.lemmas} /> : <p className="empty">Read a page and tap a word to start your list.</p>}
       </section>
-    </main>
+    </>
   );
 }
 

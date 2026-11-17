@@ -17,6 +17,9 @@ export interface PlayState {
   readDays: string[];
   /** Days with every due card reviewed. */
   studyDays: string[];
+  /** Diary prompts written (ids), and days with a diary entry that counted (diary.ts; never the text). */
+  diaryDone?: number[];
+  diaryDays?: string[];
   /** Days with all of the day's 90 cards reviewed (the full-day review reward). */
   fullReviewDays?: string[];
   bestStreak: number;
@@ -55,6 +58,8 @@ export function mergePlay(a: PlayState | undefined, b: PlayState | undefined): P
     readDays: union(x.readDays, y.readDays).slice(-KEEP_DAYS),
     studyDays: union(x.studyDays, y.studyDays).slice(-KEEP_DAYS),
     fullReviewDays: union(x.fullReviewDays ?? [], y.fullReviewDays ?? []).slice(-KEEP_DAYS),
+    diaryDone: [...new Set([...(x.diaryDone ?? []), ...(y.diaryDone ?? [])])].sort((a, b) => a - b),
+    diaryDays: union(x.diaryDays ?? [], y.diaryDays ?? []).slice(-KEEP_DAYS),
     bestStreak: Math.max(x.bestStreak, y.bestStreak),
     levelsRead: union(x.levelsRead, y.levelsRead),
     kindsRead: union(x.kindsRead, y.kindsRead),
@@ -80,6 +85,7 @@ export function statsOf(p: PlayState, o: { today: string; wordsLookedUp: number;
     kindsRead: p.kindsRead,
     finishedAboveRank: p.finishedAboveRank,
     finishedAgain: Object.values(p.finished).some((n) => n > 1),
+    diaryPrompts: p.diaryDone?.length ?? 0,
   };
 }
 

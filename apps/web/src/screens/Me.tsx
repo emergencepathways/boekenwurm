@@ -15,6 +15,7 @@ import { GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "..
 import { Sheet, toast } from "../ui.tsx";
 import { Patch, RankBar, RankShield } from "../badges.tsx";
 import { statsNow } from "../lib/play.ts";
+import { loadEntries } from "../lib/diary.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
@@ -560,6 +561,8 @@ function YourData() {
       books: s.books,
       paragraphs: texts,
       words: s.wordbook, meanings: s.meanings, examples: s.examples, cards: s.cards,
+      // Kept only on this device; part of the export because it is the reader's own writing.
+      diary: await loadEntries(),
     };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
@@ -578,6 +581,8 @@ function YourData() {
         if (data?.length) await supabase.storage.from(b).remove(data.map((f) => `${user.id}/${f.name}`));
       }
       for (const t of ["cards", "word_stats", "reading_sessions", "word_lists", "books"]) await supabase.from(t).delete().eq("user_id", user.id);
+      // Reminder subscriptions (migration 0011); ignored before that migration runs.
+      await supabase.from("push_subscriptions").delete().eq("user_id", user.id);
       await supabase.from("profiles").update({ progress: {}, settings: {}, display_name: null }).eq("user_id", user.id);
       await signOut(true);
       toast("Your data was erased from your account and this device.");

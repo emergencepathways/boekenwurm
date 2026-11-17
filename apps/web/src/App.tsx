@@ -31,6 +31,12 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.lang = "en";
+    // Opened from the weekly diary reminder (public/push-handler.js): straight to Study → Diary.
+    const q = new URLSearchParams(location.search);
+    if (q.get("open") === "diary") {
+      history.replaceState(null, "", location.pathname);
+      setTab("study", "diary");
+    }
   }, []);
   const font = useStore((s) => s.profile.settings.font);
   useEffect(() => applyFont(font), [font]);

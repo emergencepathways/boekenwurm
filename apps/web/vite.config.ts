@@ -71,7 +71,8 @@ function contentSecurityPolicy(): Plugin {
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self'",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com",
+    // LanguageTool: the diary's "Check my writing", sent from the reader's device only when they tap it.
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.languagetool.org",
     "img-src 'self' data: blob: https://*.supabase.co",
     "media-src 'self' blob:",
     "object-src 'none'",
@@ -120,6 +121,8 @@ export default defineConfig({
         // The app shell is precached; the big on-device reading files are cached the first time they are used.
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
         globIgnores: ["tesseract/**", "dict/**"],
+        // The weekly diary reminder's push and click handlers (public/push-handler.js).
+        importScripts: ["push-handler.js"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // A new version takes over at once (with the reload in src/main.tsx), and old caches are cleared.
         skipWaiting: true,

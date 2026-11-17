@@ -164,3 +164,22 @@ export async function checkDailyChallenge(): Promise<number> {
   toast(`Daily Challenge completed: ${E.REVIEW_DAY.maxDue} words! +${E.XP.fullDayReview} XP`, 5000);
   return E.XP.fullDayReview;
 }
+
+// ---------------------------------------------------------------- diary
+
+/** The diary's part of the record: which prompts are written and on which days (never the text). */
+export const diaryRecord = (): E.DiaryRecord => {
+  const p = playOf();
+  return { done: p.diaryDone ?? [], days: p.diaryDays ?? [] };
+};
+export const todayLocal = (): string => today();
+
+/** A diary entry saved: records the prompt and the day (not the text), and the XP. Returns how it counted. */
+export async function diaryEntrySaved(e: { promptId: number | null; words: number }): Promise<E.EntryResult> {
+  const play = playOf();
+  const r = E.saveEntry(diaryRecord(), { ...e, today: today() });
+  if (!r.counted) return r;
+  await commit({ ...play, diaryDone: [...r.record.done], diaryDays: [...r.record.days] }, r.xp);
+  toast(e.promptId != null && r.xp === E.DIARY.promptXp ? `Diary entry saved: +${r.xp} XP` : `Free writing: +${r.xp} XP!`, 5000);
+  return r;
+}

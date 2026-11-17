@@ -6,6 +6,7 @@ import type { Book } from "../lib/types.ts";
 import { bookShare, Cover, LevelPicker, plural, Sheet, toast } from "../ui.tsx";
 import * as E from "@boekenwurm/engine";
 import { RankBar, RankShield } from "../badges.tsx";
+import { diaryRecord, todayLocal } from "../lib/play.ts";
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -27,6 +28,8 @@ export function Home() {
   const cards = useStore((s) => s.cards);
   const [details, setDetails] = useState<Book | null>(null);
   const noList = useStore((s) => !s.wordLists.length && !s.profile.settings.commonWords);
+  // The weekly diary prompt: until an entry counts this week (packages/engine/src/diary.ts).
+  const diaryDue = E.weeklyDue(diaryRecord(), todayLocal());
   const due = dueToday();
   // The Daily Challenge's progress: different words reviewed today (lib/store.ts), towards 90.
   const reviewed = Math.min(reviewedTodayCount(), E.REVIEW_DAY.maxDue);
@@ -85,6 +88,14 @@ export function Home() {
             <span className="small muted num">{reviewed} / {E.REVIEW_DAY.maxDue} words reviewed</span>
           </button>
         ))}
+
+      {diaryDue && (
+        <section className="panel weekly">
+          <h2>Weekly diary challenge</h2>
+          <p>A new prompt is waiting: write a few sentences in Dutch (about {E.DIARY.minWordsPrompt} words).</p>
+          <button className="btn primary" type="button" onClick={() => setTab("study", "diary")}>Write in my diary</button>
+        </section>
+      )}
 
       {noList && (
         <section className="panel">
