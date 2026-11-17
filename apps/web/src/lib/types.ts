@@ -71,6 +71,8 @@ export interface Settings {
   commonWords?: boolean;
   /** Font pairing (lib/fonts.ts); Literata + Atkinson Hyperlegible Next by default. */
   font?: "literata" | "source" | "newsreader";
+  /** Reading text size; Medium by default. */
+  textSize?: "small" | "medium" | "large";
 }
 
 export const DEFAULT_SETTINGS: Settings = {

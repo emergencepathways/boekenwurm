@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useStore, dueToday } from "./lib/store.ts";
-import { applyFont } from "./lib/fonts.ts";
+import { applyFont, applyTextSize } from "./lib/fonts.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
 import { Icon, Toaster } from "./ui.tsx";
 import { Home } from "./screens/Home.tsx";
@@ -34,6 +34,8 @@ export function App() {
   }, []);
   const font = useStore((s) => s.profile.settings.font);
   useEffect(() => applyFont(font), [font]);
+  const textSize = useStore((s) => s.profile.settings.textSize);
+  useEffect(() => applyTextSize(textSize), [textSize]);
 
   if (!ready) return <div className="app" aria-busy="true" />;
   if (!onboarded) return <Welcome />;

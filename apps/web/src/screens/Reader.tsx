@@ -17,7 +17,7 @@ import { reportTranslation, translateWord, type TranslateResult } from "../lib/t
 import { bookFinished, checkAchievements, paragraphRead, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { ADMIN } from "../lib/features.ts";
-import { FONTS, fontOf } from "../lib/fonts.ts";
+import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
@@ -72,6 +72,7 @@ export function Reader({ bookId }: { bookId: string }) {
   // Match my level is experimental: only the owner's admin account sees it (lib/features.ts).
   const admin = useStore((s) => s.features.includes(ADMIN));
   const font = useStore((s) => s.profile.settings.font);
+  const textSize = useStore((s) => s.profile.settings.textSize);
   const meanings = useStore((s) => s.meanings);
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
@@ -732,11 +733,23 @@ export function Reader({ bookId }: { bookId: string }) {
     );
   }
 
+  /** Under the page: the font pairing and, next to it, the text size (Small, Medium, Large). */
   function fontButton() {
+    const size = sizeOf(textSize);
     return (
-      <button className="btn small ghost fontbtn" type="button" onClick={() => ((r.modal = { kind: "font" }), bump())}>
-        <span aria-hidden="true" className="aa">Aa</span> Font: {fontOf(font).name}
-      </button>
+      <div className="readprefs">
+        <button className="btn small ghost fontbtn" type="button" onClick={() => ((r.modal = { kind: "font" }), bump())}>
+          <span aria-hidden="true" className="aa">Aa</span> Font: {fontOf(font).name}
+        </button>
+        <span className="sizes" role="group" aria-label="Text size">
+          {TEXT_SIZES.map((t) => (
+            <button key={t.id} type="button" className={t.id[0]} aria-pressed={size === t.id} aria-label={`${t.name} text`} title={`${t.name} text`}
+              onClick={() => void updateProfile((x) => ({ ...x, settings: { ...x.settings, textSize: t.id } }))}>
+              A
+            </button>
+          ))}
+        </span>
+      </div>
     );
   }
 

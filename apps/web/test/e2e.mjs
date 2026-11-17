@@ -581,6 +581,16 @@ check(await page.evaluate(() => document.documentElement.dataset.font) === "sour
 check(await page.evaluate(() => getComputedStyle(document.querySelector(".para")).fontFamily.includes("Source Serif 4")), "the book text uses it");
 await page.getByRole("button", { name: "Done" }).click();
 check(await page.evaluate(() => document.fonts.check('16px "Source Serif 4 Variable"')), "the font is loaded from Boekenwurm itself");
+const paraSize = () => page.evaluate(() => parseFloat(getComputedStyle(document.querySelector(".para")).fontSize));
+check(await page.getByRole("button", { name: "Medium text" }).getAttribute("aria-pressed") === "true", "text size: Medium by default, next to the font");
+const medium = await paraSize();
+await page.getByRole("button", { name: "Large text" }).click();
+const large = await paraSize();
+await page.getByRole("button", { name: "Small text" }).click();
+const small = await paraSize();
+check(small < medium && medium < large, `Small, Medium and Large change the book text (${small}px < ${medium}px < ${large}px)`);
+await page.getByRole("button", { name: "Medium text" }).click();
+check(await paraSize() === medium && await page.getByRole("button", { name: "Medium text" }).getAttribute("aria-pressed") === "true", "and back to Medium");
 for (let i = 0; i < 12 && !(await page.getByRole("heading", { name: /read to the end/ }).isVisible()); i++)
   await page.getByRole("button", { name: "Next page →" }).click({ timeout: 3000 }).catch(() => {});
 await page.getByRole("heading", { name: /read to the end/ }).waitFor();

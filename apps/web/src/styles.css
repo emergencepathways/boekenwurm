@@ -198,7 +198,11 @@ textarea { font-family: var(--read); line-height: 1.5; min-height: 120px; }
 .sheet { background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; padding: clamp(18px, 5vw, 36px); display: grid; gap: 18px; touch-action: pan-y; box-shadow: var(--shadow); }
 .folio { display: flex; justify-content: space-between; gap: 12px; font: 500 0.7rem var(--mono); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
 .folio span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.para { font: 400 1.3rem/1.8 var(--read); margin: 0; overflow-wrap: anywhere; }
+/* Reading text size (lib/fonts.ts): Medium is the original 1.3rem; the word cards scale with it. */
+:root { --read-size: 1.3rem; }
+:root[data-size="small"] { --read-size: 1.12rem; }
+:root[data-size="large"] { --read-size: 1.55rem; }
+.para { font: 400 var(--read-size)/1.8 var(--read); margin: 0; overflow-wrap: anywhere; }
 .w { font: inherit; color: inherit; background: none; border: 0; padding: 0 1px; margin: 0 -1px; border-radius: 3px; cursor: pointer; touch-action: manipulation; }
 .w:hover { background: var(--leaf-soft); }
 .w.rev { background: var(--mark); color: var(--mark-ink); }
@@ -229,9 +233,9 @@ textarea { font-family: var(--read); line-height: 1.5; min-height: 120px; }
 }
 .popclose:hover { background: var(--paper); color: var(--ink); }
 .def .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
-.def .word { font: 600 1.15rem var(--read); }
+.def .word { font: 600 calc(var(--read-size) * 0.9) var(--read); }
 .def .lemma { font: 500 0.78rem var(--mono); color: var(--muted); }
-.def .meaning { font: 400 1.05rem/1.45 var(--read); }
+.def .meaning { font: 400 calc(var(--read-size) * 0.8)/1.45 var(--read); }
 .def .meaning.nl { font-style: italic; }
 .def .undo { margin-left: auto; }
 .ctx { border-left: 3px solid var(--leaf); padding-left: 10px; display: grid; gap: 4px; }
@@ -424,3 +428,11 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .font-literata .sample { font-family: "Literata Variable", Georgia, serif; } .font-literata .name { font-family: "Atkinson Hyperlegible Next Variable", sans-serif; }
 .font-source .sample { font-family: "Source Serif 4 Variable", Georgia, serif; } .font-source .name { font-family: "Source Sans 3 Variable", sans-serif; }
 .font-newsreader .sample { font-family: "Newsreader Variable", Georgia, serif; } .font-newsreader .name { font-family: "Lexend Variable", sans-serif; }
+
+/* Font and text size, side by side under the page (they wrap onto two lines on the narrowest phones). */
+.readprefs { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 12px; }
+.sizes { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.sizes button { min-width: 44px; min-height: 40px; padding: 0 12px; border: 0; background: none; color: var(--ink); cursor: pointer; font-family: var(--read); line-height: 1; }
+.sizes button + button { border-left: 1px solid var(--line); }
+.sizes button[aria-pressed="true"] { background: var(--leaf); color: var(--leaf-ink); }
+.sizes .s { font-size: 0.85rem; } .sizes .m { font-size: 1.05rem; } .sizes .l { font-size: 1.3rem; }

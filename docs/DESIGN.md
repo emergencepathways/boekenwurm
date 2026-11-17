@@ -371,6 +371,9 @@ anywhere except `private/`.
 
 ## Decided
 
+- Text size next to the font under the page: Small, Medium (the original size, default) and Large. It scales the book
+  text and the word cards; Me → Reading has the same choice. 2026-11-17.
+
 - The reader shows only "x of y fouten" above the page: no pips, percentage, XP or rank while reading. Match my level
   is experimental and shown only to the owner's admin account (feature "admin", migration 0010). A Font button under
   the page picks one of three open-licence pairings (Literata + Atkinson Hyperlegible Next by default; Source Serif 4 +

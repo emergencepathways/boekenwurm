@@ -14,7 +14,7 @@ import { GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "..
 import { Sheet, toast } from "../ui.tsx";
 import { Patch, RankBar, RankShield } from "../badges.tsx";
 import { statsNow } from "../lib/play.ts";
-import { FONTS, fontOf } from "../lib/fonts.ts";
+import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
 export function Me() {
@@ -92,6 +92,12 @@ export function Me() {
           <span>Font</span>
           <select value={fontOf(profile.settings.font).id} onChange={(e) => setSettings({ font: e.target.value as Settings["font"] })}>
             {FONTS.map((f) => <option key={f.id} value={f.id}>{f.name} · {f.read} + {f.ui}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Text size</span>
+          <select value={sizeOf(profile.settings.textSize)} onChange={(e) => setSettings({ textSize: e.target.value as Settings["textSize"] })}>
+            {TEXT_SIZES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>
         <label className="field">

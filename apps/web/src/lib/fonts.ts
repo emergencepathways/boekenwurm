@@ -22,6 +22,20 @@ export const FONTS: readonly FontPairing[] = [
 export const DEFAULT_FONT: FontChoice = "literata";
 export const fontOf = (id: string | null | undefined): FontPairing => FONTS.find((f) => f.id === id) ?? FONTS[0];
 
+/** Text size for the book text and the word cards: Medium is the size the reader was built with. */
+export type TextSize = "small" | "medium" | "large";
+export const TEXT_SIZES: ReadonlyArray<{ id: TextSize; name: string }> = [
+  { id: "small", name: "Small" },
+  { id: "medium", name: "Medium" },
+  { id: "large", name: "Large" },
+];
+export const sizeOf = (id: string | null | undefined): TextSize => (id === "small" || id === "large" ? id : "medium");
+
+/** Apply a text size (styles.css scales the reading text by `data-size`). */
+export function applyTextSize(id: string | null | undefined): void {
+  document.documentElement.dataset.size = sizeOf(id);
+}
+
 /** Switch the whole app to a pairing (styles.css picks the fonts by `data-font`). */
 export function applyFont(id: string | null | undefined): void {
   document.documentElement.dataset.font = fontOf(id).id;
