@@ -993,7 +993,7 @@ export function Reader({ bookId }: { bookId: string }) {
             is always one tap away.
           </p>
         ) : (
-          <p className="muted" style={{ margin: 0 }}>Matching paragraphs to your level uses your own Claude key. Add it under Me → Claude.</p>
+          <p className="muted" style={{ margin: 0 }}>Matching paragraphs to your level uses your own Claude key. Add it under Account → Settings → Claude.</p>
         )}
         <div className="actions">
           {hasKey && mode !== "match" && <button className="btn primary" type="button" onClick={() => void setMode("match")}>Match my level</button>}

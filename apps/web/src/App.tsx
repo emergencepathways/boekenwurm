@@ -18,7 +18,7 @@ const TABS: Array<[Tab, string, () => React.JSX.Element]> = [
   ["home", "Home", Icon.home],
   ["study", "Study", Icon.study],
   ["words", "Words", Icon.words],
-  ["me", "Me", Icon.me],
+  ["me", "Account", Icon.me],
 ];
 
 export function App() {

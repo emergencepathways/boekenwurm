@@ -543,7 +543,8 @@ await page.evaluate(() => ["boekenwurm-study-sessions", "boekenwurm-reviewed-tod
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("colour-coded text: off by default; on, words revealed before are coloured");
-await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Reading" }).click();
 const colourBox = page.getByRole("checkbox", { name: "Colour-coded text" });
 check(!(await colourBox.isChecked()), "colour-coded text is off by default");
 await colourBox.check();
@@ -599,8 +600,10 @@ await page.getByRole("button", { name: "Home" }).first().click();
 await page.locator(".hello").waitFor();
 check(await page.getByRole("img", { name: /^Rank A1/ }).first().isVisible(), "the rank rose to A1 on its own");
 check(await page.getByText("Letterproever").first().isVisible(), "with its title");
-await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
-check((await page.locator(".patchcell").count()) === 11, "Me shows the 11 badges");
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+check(await page.getByRole("tab", { name: "Achievements" }).getAttribute("aria-selected") === "true", "Account opens on Achievements");
+check(!(await page.getByText("Fouten per paragraph").isVisible()) && !(await page.getByRole("heading", { name: "Connection check" }).isVisible()), "with Reading and Settings in their own categories");
+check((await page.locator(".patchcell").count()) === 11, "Achievements shows the 11 badges");
 check(await page.locator(".patchcell.got", { hasText: "Books finished" }).isVisible(), "Books finished is earned (Bronze)");
 check(await page.getByRole("img", { name: "Books finished: Bronze" }).isVisible(), "its patch wears the Bronze ribbon");
 check((await page.locator(".patchcell:not(.got)").count()) >= 5, "others are still locked");
@@ -646,7 +649,8 @@ await page.getByRole("button", { name: "Home" }).first().click();
 await page.locator(".hello").waitFor();
 
 step("Me: add a Claude key (mocked) and check the connection");
-await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Settings" }).click();
 await page.getByLabel("Claude API key").fill("sk-ant-test-key");
 await page.locator("#claude").getByRole("button", { name: "Save" }).click();
 check(await page.getByText(/saved/).first().isVisible(), "key saved on this device");
@@ -858,7 +862,8 @@ await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").le
 
 step("access code: Google page reading for one reader, then the device past today's 20");
 await page.getByRole("button", { name: /Done/ }).first().click();
-await page.locator(".tabbar").getByRole("button", { name: "Me", exact: true }).click();
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Settings" }).click();
 const codeBox = page.getByLabel("Access code");
 await codeBox.fill("BW-NOPE-NOPE");
 await page.getByRole("button", { name: "Use code" }).click();

@@ -1,5 +1,5 @@
 /**
- * Where the reader is: a tab (Home · Study · Words · Me) and, on top of it, at most one full screen (the reader, Add
+ * Where the reader is: a tab (Home · Study · Words · Account) and, on top of it, at most one full screen (the reader, Add
  * book, the camera flow). Full screens go into the browser history, so the phone's back gesture closes them.
  */
 import { useSyncExternalStore } from "react";
@@ -16,6 +16,8 @@ export type Screen =
 interface Nav {
   tab: Tab;
   screen: Screen | null;
+  /** An element on the tab to scroll to (Account uses it to open the category that holds it). */
+  section?: string;
 }
 
 let nav: Nav = { tab: "home", screen: null };
@@ -32,7 +34,7 @@ export function useNav(): Nav {
 /** Switch tab (closing any full screen). `section` scrolls to an element id on the new tab. */
 export function setTab(tab: Tab, section?: string): void {
   if (nav.screen && history.state?.bw) history.back();
-  nav = { tab, screen: null };
+  nav = { tab, screen: null, section };
   emit();
   window.scrollTo(0, 0);
   if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);

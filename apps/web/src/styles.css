@@ -436,3 +436,9 @@ button.chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--
 .sizes button + button { border-left: 1px solid var(--line); }
 .sizes button[aria-pressed="true"] { background: var(--leaf); color: var(--leaf-ink); }
 .sizes .s { font-size: 0.85rem; } .sizes .m { font-size: 1.05rem; } .sizes .l { font-size: 1.3rem; }
+
+/* ---------------------------------------------------------------- Account: categories */
+.subtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: var(--sheet); border: 1px solid var(--line); position: sticky; top: calc(var(--safe-top) + 6px); z-index: 10; }
+.subtabs button { min-height: 44px; border: 0; border-radius: 10px; background: none; color: var(--muted); font: 700 0.92rem var(--ui); cursor: pointer; padding: 0 6px; }
+.subtabs button[aria-selected="true"] { background: var(--leaf); color: var(--leaf-ink); }
+.panels { display: grid; gap: 16px; }

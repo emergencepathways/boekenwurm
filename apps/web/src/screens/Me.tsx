@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNav } from "../nav.ts";
 import * as E from "@boekenwurm/engine";
 import { getState, SAVED_SOURCES, updateProfile, useStore } from "../lib/store.ts";
 import { lookupsToday } from "../lib/translate.ts";
@@ -17,6 +18,13 @@ import { statsNow } from "../lib/play.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
+/** The Account tab's categories. New features go into one of these. */
+type View = "achievements" | "reading" | "settings";
+const VIEWS: ReadonlyArray<[View, string]> = [["achievements", "Achievements"], ["reading", "Reading"], ["settings", "Settings"]];
+/** A link to a section (setTab("me", "claude")) opens the category that holds it. */
+const viewFor = (section: string | undefined): View =>
+  section === "rank" || section === "badges" ? "achievements" : section === "reading" || section === "lookups" ? "reading" : section ? "settings" : "achievements";
+
 export function Me() {
   const profile = useStore((s) => s.profile);
   const p = profile.progress;
@@ -25,10 +33,23 @@ export function Me() {
   const stats = statsNow();
   const setSettings = (patch: Partial<Settings>) => void updateProfile((x) => ({ ...x, settings: { ...x.settings, ...patch } }));
 
+  const nav = useNav();
+  const [view, setView] = useState<View>(() => viewFor(nav.section));
+  useEffect(() => {
+    if (nav.section) setView(viewFor(nav.section));
+  }, [nav.section]);
+
   return (
     <main className="screen">
-      <div className="topbar"><h1>Me</h1></div>
+      <div className="topbar"><h1>Account</h1></div>
+      <div className="subtabs" role="tablist" aria-label="Account">
+        {VIEWS.map(([id, label]) => (
+          <button key={id} type="button" role="tab" id={`tab-${id}`} aria-selected={view === id} aria-controls={`view-${id}`} onClick={() => setView(id)}>{label}</button>
+        ))}
+      </div>
 
+      {view === "achievements" && (
+        <div className="panels" role="tabpanel" id="view-achievements" aria-labelledby="tab-achievements">
       <section className="panel" id="rank">
         <h2>Your rank</h2>
         <RankBar />
@@ -46,7 +67,6 @@ export function Me() {
         </div>
         <p className="small muted">Your rank rises by itself as you earn XP: 20 a paragraph (40 on a streak, × 1.5 in a book above your rank), 1,000 a book, and more for study and badges.</p>
       </section>
-
       <section className="panel" id="badges">
         <h2>Badges</h2>
         <div className="patches">
@@ -69,9 +89,11 @@ export function Me() {
             : "Earn any badge at Bronze to unlock unlimited lookup mode: no fouten, look up as much as you like."}
         </p>
       </section>
+        </div>
+      )}
 
-      <Account />
-
+      {view === "reading" && (
+        <div className="panels" role="tabpanel" id="view-reading" aria-labelledby="tab-reading">
       <section className="panel">
         <h2>Reading</h2>
         <label className="field">
@@ -135,6 +157,16 @@ export function Me() {
             <span className="w c-red" lang="nl">7 or more</span>. New words stay plain.
           </span>
         </div>
+      </section>
+          <LookupsSection />
+        </div>
+      )}
+
+      {view === "settings" && (
+        <div className="panels" role="tabpanel" id="view-settings" aria-labelledby="tab-settings">
+          <SignIn />
+          <section className="panel">
+            <h2>Your name</h2>
         <label className="field">
           <span>Name</span>
           <input
@@ -147,20 +179,15 @@ export function Me() {
             }}
           />
         </label>
-      </section>
-
-      <LookupsSection />
-      <AccessCodeSection />
-      <ClaudeSection />
-
+          </section>
+          <ClaudeSection />
+          <AccessCodeSection />
       <section className="panel">
         <h2>On your home screen</h2>
         <InstallRow />
       </section>
-
-      <ConnectionCheck />
-      <YourData />
-
+          <ConnectionCheck />
+          <YourData />
       <section className="panel">
         <h3>About</h3>
         <p className="small">Boekenwurm is a reading game for learners of Dutch. Your books stay private: on this device, and in your own account when you sign in.</p>
@@ -168,6 +195,8 @@ export function Me() {
         <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). </p>
         <VersionRow />
       </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -204,7 +233,7 @@ function DictionaryCredit() {
 
 // ---------------------------------------------------------------- account
 
-function Account() {
+function SignIn() {
   const user = useStore((s) => s.user);
   const sync = useStore((s) => s.sync);
   const [email, setEmail] = useState("");

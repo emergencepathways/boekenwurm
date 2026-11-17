@@ -103,7 +103,7 @@ block belongs to the page most of its words are on.
 
 ## Screens (mobile first)
 
-Bottom tab bar, like a native app: **Home · Study · Words · Me**. The reader opens full-screen over the tabs.
+Bottom tab bar, like a native app: **Home · Study · Words · Account**. The reader opens full-screen over the tabs.
 
 - **Home** — greeting with title badge and streak tokens; **Continue reading** card (last book, % done);
   **My books** as a grid of covers with a progress ring and level chip; a **+** card to add a book; a **Study words**
@@ -116,7 +116,9 @@ Bottom tab bar, like a native app: **Home · Study · Words · Me**. The reader 
 - **Study** — flashcards of revealed words in a review pool (Hard first, sets repeated until every word is Easy), "not sticking" list, export to Anki/CSV.
 - **Words** — the reader's word lists (the common 5,000 words in one tap, or lists they import) with progress, each word
   shown as not seen yet, seen, tapped (coloured) or learned (DESIGN.md "Word lists").
-- **Me** — rank, badges, Claude key and models, account, export and delete my data.
+- **Account** — three categories (new features join one of them): **Achievements** (rank and badges, earned and in
+  progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, name, Claude key, access
+  code, install, connection check, export and delete my data, about and updates).
 
 ## Photographing a book you own
 

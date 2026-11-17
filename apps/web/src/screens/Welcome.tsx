@@ -16,7 +16,7 @@ export function Welcome() {
       </p>
       <section className="panel">
         <h2>Where are you now?</h2>
-        <p>Choose your Dutch level. You can change it any time under Me.</p>
+        <p>Choose your Dutch level. You can change it any time under Account → Reading.</p>
         <LevelPicker value={level} onChange={setLevel} label="Your level" />
         <p className="small">
           You start as <b lang="nl">{BADGES[level].title}</b> ({BADGES[level].meaning.toLowerCase()}).
@@ -26,7 +26,7 @@ export function Welcome() {
         </button>
       </section>
       <p className="note">
-        Everything works on this device without an account. Sign in under Me to keep your books and progress on all your devices.
+        Everything works on this device without an account. Sign in under Account → Settings to keep your books and progress on all your devices.
       </p>
     </main>
   );
