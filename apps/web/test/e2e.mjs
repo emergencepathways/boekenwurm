@@ -603,6 +603,10 @@ check(await page.getByText("Letterproever").first().isVisible(), "with its title
 await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
 check(await page.getByRole("tab", { name: "Achievements" }).getAttribute("aria-selected") === "true", "Account opens on Achievements");
 check(!(await page.getByText("Fouten per paragraph").isVisible()) && !(await page.getByRole("heading", { name: "Connection check" }).isVisible()), "with Reading and Settings in their own categories");
+await page.setViewportSize({ width: 320, height: 844 });
+check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "Account fits a 320px screen");
+await page.setViewportSize({ width: 390, height: 844 });
+check(await page.evaluate(() => { const b = document.querySelector(".subtabs"); return b.scrollWidth <= b.clientWidth; }), "all four categories fit across a 390px screen");
 check((await page.locator(".patchcell").count()) === 11, "Achievements shows the 11 badges");
 check(await page.locator(".patchcell.got", { hasText: "Books finished" }).isVisible(), "Books finished is earned (Bronze)");
 check(await page.getByRole("img", { name: "Books finished: Bronze" }).isVisible(), "its patch wears the Bronze ribbon");
@@ -650,10 +654,12 @@ await page.locator(".hello").waitFor();
 
 step("Me: add a Claude key (mocked) and check the connection");
 await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
-await page.getByRole("tab", { name: "Settings" }).click();
+await page.getByRole("tab", { name: "Experimental" }).click();
 await page.getByLabel("Claude API key").fill("sk-ant-test-key");
 await page.locator("#claude").getByRole("button", { name: "Save" }).click();
 check(await page.getByText(/saved/).first().isVisible(), "key saved on this device");
+await page.getByRole("tab", { name: "Settings" }).click();
+check(!(await page.getByLabel("Claude API key").isVisible()), "Claude lives under Experimental, not Settings");
 await page.getByRole("button", { name: "Run check" }).click();
 await page.locator(".checklist, .verdict").first().waitFor({ timeout: 15000 });
 check(await page.getByText(/Not reachable|Sign-in service/).first().isVisible(), "connection check reports Supabase unreachable here");
@@ -863,7 +869,7 @@ await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").le
 step("access code: Google page reading for one reader, then the device past today's 20");
 await page.getByRole("button", { name: /Done/ }).first().click();
 await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
-await page.getByRole("tab", { name: "Settings" }).click();
+await page.getByRole("tab", { name: "Experimental" }).click();
 const codeBox = page.getByLabel("Access code");
 await codeBox.fill("BW-NOPE-NOPE");
 await page.getByRole("button", { name: "Use code" }).click();

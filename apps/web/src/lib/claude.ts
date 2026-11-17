@@ -40,7 +40,7 @@ type Content = string | VisionPrompt["content"];
 
 async function call(system: string, content: Content, maxTokens: number, model: string, signal?: AbortSignal): Promise<string> {
   const key = claudeKey();
-  if (!key) throw new AiError("Add your Claude API key under Account → Settings → Claude to use this.");
+  if (!key) throw new AiError("Add your Claude API key under Account → Experimental → Claude to use this.");
   let res: Response;
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -66,8 +66,8 @@ async function call(system: string, content: Content, maxTokens: number, model: 
     } catch {
       /* no body */
     }
-    if (res.status === 401 || res.status === 403) throw new AiError("Claude refused your API key. Check it under Account → Settings → Claude.");
-    if (res.status === 404) throw new AiError(`Claude doesn't know the model "${model}". Pick another under Account → Settings → Claude.`);
+    if (res.status === 401 || res.status === 403) throw new AiError("Claude refused your API key. Check it under Account → Experimental → Claude.");
+    if (res.status === 404) throw new AiError(`Claude doesn't know the model "${model}". Pick another under Account → Experimental → Claude.`);
     if (res.status === 429) throw new AiError("Too many requests, or your monthly spending limit was reached. Try again in a minute.");
     if (res.status === 413) throw new AiError("That photo is too large to send. Try again; it will be made smaller.");
     if (res.status >= 500) throw new AiError("Claude is busy. Try again in a moment.");

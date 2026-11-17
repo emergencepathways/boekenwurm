@@ -19,11 +19,14 @@ import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
 /** The Account tab's categories. New features go into one of these. */
-type View = "achievements" | "reading" | "settings";
-const VIEWS: ReadonlyArray<[View, string]> = [["achievements", "Achievements"], ["reading", "Reading"], ["settings", "Settings"]];
+type View = "achievements" | "reading" | "settings" | "experimental";
+const VIEWS: ReadonlyArray<[View, string]> = [["achievements", "Achievements"], ["reading", "Reading"], ["settings", "Settings"], ["experimental", "Experimental"]];
 /** A link to a section (setTab("me", "claude")) opens the category that holds it. */
 const viewFor = (section: string | undefined): View =>
-  section === "rank" || section === "badges" ? "achievements" : section === "reading" || section === "lookups" ? "reading" : section ? "settings" : "achievements";
+  section === "rank" || section === "badges" ? "achievements"
+  : section === "reading" || section === "lookups" ? "reading"
+  : section === "claude" || section === "access-code" ? "experimental"
+  : section ? "settings" : "achievements";
 
 export function Me() {
   const profile = useStore((s) => s.profile);
@@ -162,6 +165,14 @@ export function Me() {
         </div>
       )}
 
+      {view === "experimental" && (
+        <div className="panels" role="tabpanel" id="view-experimental" aria-labelledby="tab-experimental">
+          <p className="small muted">Features still being tried out. They may change or move.</p>
+          <ClaudeSection />
+          <AccessCodeSection />
+        </div>
+      )}
+
       {view === "settings" && (
         <div className="panels" role="tabpanel" id="view-settings" aria-labelledby="tab-settings">
           <SignIn />
@@ -180,8 +191,6 @@ export function Me() {
           />
         </label>
           </section>
-          <ClaudeSection />
-          <AccessCodeSection />
       <section className="panel">
         <h2>On your home screen</h2>
         <InstallRow />

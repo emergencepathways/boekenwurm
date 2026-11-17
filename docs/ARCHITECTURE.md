@@ -116,9 +116,9 @@ Bottom tab bar, like a native app: **Home · Study · Words · Account**. The re
 - **Study** — flashcards of revealed words in a review pool (Hard first, sets repeated until every word is Easy), "not sticking" list, export to Anki/CSV.
 - **Words** — the reader's word lists (the common 5,000 words in one tap, or lists they import) with progress, each word
   shown as not seen yet, seen, tapped (coloured) or learned (DESIGN.md "Word lists").
-- **Account** — three categories (new features join one of them): **Achievements** (rank and badges, earned and in
-  progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, name, Claude key, access
-  code, install, connection check, export and delete my data, about and updates).
+- **Account** — four categories (new features join one of them): **Achievements** (rank and badges, earned and in
+  progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, name, install,
+  connection check, export and delete my data, about and updates), **Experimental** (Claude key and models, access code).
 
 ## Photographing a book you own
 
