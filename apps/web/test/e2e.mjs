@@ -340,19 +340,24 @@ await page.locator(".strikes").waitFor();
 check((await page.locator(".folio .num").textContent()).startsWith("4 /"), "back on the paragraph the reader was at");
 check((await used()) === pipsBefore, "looking back cost no strike");
 
-step("reader: run out of strikes ends the session with a study list");
+step("reader: the fouten shown are free; one more reveal ends the session with a study list");
 const n = await page.locator(".strikes").evaluate((e) => Number(e.dataset.allowed));
-for (let i = 0; i < n; i++) {
+const tapNew = async (i) => {
   await tapWord(page.locator(".para .w:not(.name):not(.rev)").nth(0));
   // A word that has to be translated counts once its meaning arrives.
   await page.waitForFunction((k) => Number(document.querySelector(".strikes")?.dataset.used ?? 0) >= k, i + 1, { timeout: 10000 });
-}
+};
+for (let i = 0; i < n; i++) await tapNew(i);
+if (await page.locator(".wordpop").isVisible()) await page.locator(".wordpop .popclose").click();
+check(await page.getByRole("button", { name: "Next page →" }).isVisible() && (await page.getByText(/No fouten left: one more reveal ends the run/).isVisible()),
+  `all ${n} fouten used: the page still turns, with a warning that one more reveal ends the run`);
+await tapNew(n);
 if (await page.locator(".wordpop").isVisible()) await page.locator(".wordpop .popclose").click();
 check(await page.getByRole("button", { name: "Review fouten →" }).isVisible() && !(await page.getByRole("button", { name: "Next page →" }).isVisible()),
-  "at the fouten limit, Next page becomes Review fouten");
+  "one reveal past the fouten: Next page becomes Review fouten");
 const endedAt = Number((await page.locator(".folio .num").textContent()).match(/(\d+) \//)[1]);
 await page.getByRole("button", { name: "Review fouten →" }).click();
-await page.getByRole("heading", { name: /streak lasted|last fout|passed 1 paragraph|passed 3|lasted/ }).waitFor();
+await page.getByRole("heading", { name: /streak lasted|over your fouten|passed 1 paragraph|passed 3|lasted/ }).waitFor();
 check(await page.getByRole("button", { name: /Study these/ }).isVisible(), "summary offers to study the words");
 await shot("05-summary");
 
@@ -721,7 +726,7 @@ for (let i = 0; i < tapCount; i++) await tapWord(words.nth(i));
 check((await page.locator(".para .w.rev").count()) >= 1, "words are looked up freely");
 await page.getByRole("button", { name: "Next page →" }).click();
 await page.locator(".para .w").first().waitFor();
-check((await page.getByRole("heading", { name: /streak lasted|last fout/ }).count()) === 0, "looking up every word never ends the run");
+check((await page.getByRole("heading", { name: /streak lasted|over your fouten/ }).count()) === 0, "looking up every word never ends the run");
 const xpAfter = await totalXp();
 check(xpAfter - xpBefore <= 8 && xpAfter > xpBefore, `a paragraph earned a quarter of the XP (+${xpAfter - xpBefore})`);
 await shot("08-unlimited");

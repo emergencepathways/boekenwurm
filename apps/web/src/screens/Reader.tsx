@@ -591,7 +591,6 @@ export function Reader({ bookId }: { bookId: string }) {
   function renderPage() {
     const s = r.session!;
     const st = E.status(s);
-    const lastStrike = s.rules.failWhen === "reaches";
     const p = para();
     const revealed = new Set(s.current!.reveals.map((x) => x.lemma));
     const onStreak = E.inStreak(s.passesInARow, s.rules);
@@ -621,7 +620,7 @@ export function Reader({ bookId }: { bookId: string }) {
           <span className="grow" />
           {unlocked && <button className="btn small ghost" type="button" onClick={() => void setLookupMode(true)} title={tr("reader.unlimitedTitle")}>{tr("reader.unlimited")} ∞</button>}
         </section>
-        {st.strikesLeft === 0 && lastStrike && <div className="warnline">{tr("reader.noFoutenLeft")}</div>}
+        {st.strikesLeft === 0 && <div className="warnline">{tr("reader.noFoutenLeft")}</div>}
         {renderSheet(p, revealed, onStreak)}
         <p className="note" style={{ margin: 0 }}>{tr("reader.hint")}</p>
         {fontButton()}

@@ -15,11 +15,13 @@
  *     strike minimum by 1 down to `minStrikesFloor` (default 1).
  * A failed paragraph ends the session; the next session starts from the base.
  *
- * The allowance is a number of strikes, and the last strike ends the session:
- * with 3 strikes, the 3rd reveal fails the paragraph at the page turn ("three
- * strikes and you're out"); with the floor of 1, any reveal fails it. The
- * percentage works the same way: 10 strikes for 25% of 40 words.
- * `failWhen: "exceeds"` switches to "N mistakes allowed, N+1 fails".
+ * The allowance is the number of free reveals (fouten) in a paragraph, and the
+ * one after them ends the session at the page turn: with 3 fouten, the 4th
+ * reveal fails the paragraph; at the floor of 1, one reveal is always free and
+ * the 2nd fails it. The percentage works the same way: 10 fouten for 25% of
+ * 40 words, the 11th fails. The number the reader sees is always the number of
+ * free reveals (owner's decision, 2026-11-18).
+ * `failWhen: "reaches"` switches to "the last strike fails" (3 strikes: the 3rd fails).
  */
 
 export type Preset = "strict" | "standard" | "relaxed";
@@ -44,7 +46,7 @@ export interface CheckpointRules {
   minStrikes: number;
   /** The strike minimum never drops below this during a streak. */
   minStrikesFloor: number;
-  /** "reaches" (default): the last strike fails, reveals >= allowed. "exceeds": fail when reveals > allowed. */
+  /** "exceeds" (default): the allowance is free, fail when reveals > allowed. "reaches": the last strike fails, reveals >= allowed. */
   failWhen: "exceeds" | "reaches";
 }
 
@@ -55,7 +57,7 @@ export const DEFAULT_RULES: Readonly<CheckpointRules> = {
   floorPercent: 5,
   minStrikes: 3,
   minStrikesFloor: 1,
-  failWhen: "reaches",
+  failWhen: "exceeds",
 };
 
 export function rulesFor(preset: Preset, overrides: Partial<CheckpointRules> = {}): CheckpointRules {

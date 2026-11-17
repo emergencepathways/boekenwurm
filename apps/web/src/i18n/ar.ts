@@ -441,7 +441,7 @@ export const ar: Catalog = {
     other: "استمرت سلسلتك {n} فقرة.",
   },
   "summary.one": "اجتزت فقرة واحدة هذه المرة.",
-  "summary.lastFout": "استهلكت تلك الفقرة آخر fout لديك.",
+  "summary.lastFout": "تجاوزت في تلك الفقرة عدد fouten المتاح لك.",
   "summary.revealed": {
     zero: "لم تكشف أي كلمة.",
     one: "كشفت كلمة واحدة.",

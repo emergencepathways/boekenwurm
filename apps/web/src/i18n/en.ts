@@ -380,7 +380,7 @@ export const en = {
   "summary.end": { one: "You read to the end. {n} paragraph passed in a row.", other: "You read to the end. {n} paragraphs passed in a row." },
   "summary.streak": "Your streak lasted {n} paragraphs.",
   "summary.one": "You passed 1 paragraph this time.",
-  "summary.lastFout": "That paragraph used your last fout.",
+  "summary.lastFout": "That paragraph went over your fouten.",
   "summary.revealed": { one: "You revealed {n} word. The ones you've needed most often come first.", other: "You revealed {n} words. The ones you've needed most often come first." },
   "summary.none": "You didn't reveal a single word.",
   "summary.col.word": "Word",

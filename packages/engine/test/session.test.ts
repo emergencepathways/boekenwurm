@@ -15,18 +15,18 @@ function play(s: Session, id: string, lemmas: string[], revealLemmas: string[], 
 
 test("a streak builds, tightens, then the last strike ends the session with its length", () => {
   let s = startSession(rulesFor("standard"));
-  const lemmas = words(40); // 25% -> 10 strikes: the 10th reveal fails
-  let out = play(s, "p1", lemmas, words(9));
+  const lemmas = words(40); // 25% -> 10 fouten: the 11th reveal fails
+  let out = play(s, "p1", lemmas, words(10));
   assert.equal(out.kind, "continue");
   out = play(out.session, "p2", lemmas, words(2));
   assert.equal(out.kind, "continue");
 
   s = beginParagraph(out.session, "p3", lemmas);
-  assert.deepEqual(status(s), { allowed: 8, percent: 22, used: 0, strikesLeft: 7, streak: 2, tokenEarned: false });
-  out = play(out.session, "p3", lemmas, words(7));
+  assert.deepEqual(status(s), { allowed: 8, percent: 22, used: 0, strikesLeft: 8, streak: 2, tokenEarned: false });
+  out = play(out.session, "p3", lemmas, words(8));
   assert.equal(out.kind, "continue");
 
-  out = play(out.session, "p4", lemmas, words(7)); // 19% of 40 = 7 strikes: the 7th fails
+  out = play(out.session, "p4", lemmas, words(8)); // 19% of 40 = 7 fouten: the 8th fails
   assert.equal(out.kind, "ended");
   if (out.kind !== "ended") return;
   assert.equal(out.streakLength, 3);
@@ -64,16 +64,16 @@ test("the end-of-session study list puts the words revealed most over time first
   s = (play(s, "b", ["eigenlijk", "huis"], ["eigenlijk"]) as { session: Session }).session;
   book = applySession(book, s, 1);
 
-  // today: fail with 4 reveals in a short paragraph (3 strikes)
+  // today: fail with 4 reveals in a short paragraph (3 fouten: the 4th fails)
   const out = play(startSession(rules), "c", ["eigenlijk", "gezellig", "boodschappen", "zelfs", "huis"], [
-    "gezellig", "eigenlijk", "boodschappen",
+    "gezellig", "eigenlijk", "boodschappen", "zelfs",
   ]);
   assert.equal(out.kind, "ended");
   book = applySession(book, out.session, 2);
   const list = studyList(out.session, book);
   assert.equal(list[0].lemma, "eigenlijk");
   assert.equal(list[0].lifetimeReveals, 3);
-  assert.equal(list.length, 3);
+  assert.equal(list.length, 4);
 });
 
 test("not-sticking: often met and usually revealed", () => {

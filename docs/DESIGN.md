@@ -163,13 +163,14 @@ Measured on the owner's books with the textbook word list, the rules raise the s
 
 ### The checkpoint at every page turn
 
-Each paragraph has an allowance of **strikes**, and the last strike ends the session: with 3 strikes, the 3rd reveal
-fails the paragraph. The allowance is the larger of
+Each paragraph has an allowance of **fouten**: words the reader may reveal for free. The reveal after them ends the
+session at the page turn: with 3 fouten, the 4th reveal fails the paragraph. The number shown ("1 of 3 fouten") is
+always the number of free reveals. The allowance is the larger of
 
-- the **percentage allowance**: ⌊percent × countable words⌋ strikes (25% of 40 words: the 10th reveal fails), and
+- the **percentage allowance**: ⌊percent × countable words⌋ fouten (25% of 40 words: 10 free, the 11th reveal fails), and
 - the **strike minimum**: 3 strikes, so short paragraphs (where 25% of 8 words rounds to 2) stay fair.
 
-While reading, the reader sees how many strikes are left; at 0, the next reveal will end the run.
+While reading, the reader sees "x of y fouten"; once all are used, a warning says the next reveal will end the run.
 
 Presets, adjustable under advanced settings:
 
@@ -183,7 +184,7 @@ Presets, adjustable under advanced settings:
 paragraph tightens the allowance:
 
 - the percentage drops by 3 points per paragraph, to a floor of 5%;
-- the strike minimum drops by 1 per paragraph, long or short, to a floor of 1 (any reveal ends the run).
+- the strike minimum drops by 1 per paragraph, long or short, to a floor of 1 (one reveal is always free; the 2nd ends the run).
 
 | Paragraph | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9+ |
 |---|---|---|---|---|---|---|---|---|---|
@@ -193,9 +194,9 @@ paragraph tightens the allowance:
 
 Relaxed reaches 5% on paragraph 12.
 
-**Failure.** Using the last strike ends the session at the page turn: "Your streak lasted N paragraphs." The next
-session starts again from the base. (Advanced setting `failWhen: "exceeds"` turns the allowance into "N mistakes
-allowed, N+1 ends it".)
+**Failure.** A reveal beyond the allowance ends the session at the page turn: "Your streak lasted N paragraphs." The next
+session starts again from the base. (Advanced setting `failWhen: "reaches"` makes the last
+fout end it instead: 3 fouten, the 3rd reveal fails.)
 
 ### Streak tokens and moving up a level
 
@@ -414,6 +415,10 @@ anywhere except `private/`.
 
 ## Decided
 
+- The fouten shown are free reveals: "3 fouten" lets the reader reveal 3 words and the 4th ends the run; at the
+  streak floor of 1, one reveal per paragraph is always free and the 2nd ends it (`failWhen: "exceeds"`, now the
+  default). Replaces "the last strike ends the run" (2026-11-06). 2026-11-18.
+
 - Localization: one setting for the reader's language (English, Ukrainian, Arabic MSA), on the welcome screen and in
   Account → Settings → Localization. No translation budget: AI-drafted catalogs marked as drafts, native-speaker review
   invited (Weblate's free hosting for open source is the suggested way to collect it). Meanings stay English for now.
@@ -513,7 +518,7 @@ anywhere except `private/`.
 - AI never runs on Boekenwurm's budget: Claude features use the reader's own key. Without one, free mode reads page
   photos on the device and the reader sets book levels. 2026-11-09.
 
-- The last strike ends the run (3 strikes: the 3rd reveal fails). 2026-11-06.
+- ~~The last strike ends the run (3 strikes: the 3rd reveal fails).~~ 2026-11-06; replaced 2026-11-18 (above).
 - During a streak the strike minimum drops on every paragraph, long or short. 2026-11-06.
 - A 10-paragraph streak earns one token per session; three tokens from separate sessions offer the next level. 2026-11-06.
 - Every level reached earns its badge and title, starting level included. 2026-11-06.
