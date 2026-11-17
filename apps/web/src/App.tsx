@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useStore, dueToday } from "./lib/store.ts";
 import { applyFont, applyTextSize } from "./lib/fonts.ts";
+import { applyLanguage, useT, type Key } from "./lib/i18n.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
 import { Icon, Toaster } from "./ui.tsx";
 import { Home } from "./screens/Home.tsx";
@@ -14,11 +15,11 @@ import { PhotoBook } from "./screens/PhotoBook.tsx";
 import { InstallHelp } from "./screens/InstallHelp.tsx";
 import { Welcome } from "./screens/Welcome.tsx";
 
-const TABS: Array<[Tab, string, () => React.JSX.Element]> = [
-  ["home", "Home", Icon.home],
-  ["study", "Study", Icon.study],
-  ["words", "Words", Icon.words],
-  ["me", "Account", Icon.me],
+const TABS: Array<[Tab, Key, () => React.JSX.Element]> = [
+  ["home", "tab.home", Icon.home],
+  ["study", "tab.study", Icon.study],
+  ["words", "tab.words", Icon.words],
+  ["me", "tab.account", Icon.me],
 ];
 
 export function App() {
@@ -28,9 +29,11 @@ export function App() {
   const due = useStore((s) => (s.ready ? dueToday() : 0));
   const noList = useStore((s) => s.ready && !s.wordLists.length && !s.profile.settings.commonWords);
   const { tab, screen } = useNav();
+  const t = useT();
+  const language = useStore((s) => s.profile.settings.language);
+  useEffect(() => applyLanguage(language), [language]);
 
   useEffect(() => {
-    document.documentElement.lang = "en";
     // Opened from the weekly diary reminder (public/push-handler.js): straight to Study → Diary.
     const q = new URLSearchParams(location.search);
     if (q.get("open") === "diary") {
@@ -64,13 +67,13 @@ export function App() {
           {tab === "study" && <Study />}
           {tab === "words" && <Words />}
           {tab === "me" && <Me />}
-          <nav className="tabbar" aria-label="Main">
+          <nav className="tabbar" aria-label={t("tab.nav")}>
             {TABS.map(([id, label, Ico]) => (
               <button key={id} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                 <Ico />
-                {label}
+                {t(label)}
                 {id === "study" && due > 0 && <span className="dot">{due > 99 ? "99+" : due}</span>}
-                {id === "words" && noList && <span className="dot" aria-label="No word list yet">!</span>}
+                {id === "words" && noList && <span className="dot" aria-label={t("tab.noList")}>!</span>}
               </button>
             ))}
           </nav>

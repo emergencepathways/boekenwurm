@@ -16,6 +16,9 @@ import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
 import "@fontsource-variable/lexend/index.css";
 import "@fontsource-variable/jetbrains-mono/index.css";
+// Cyrillic and Arabic letters for the Ukrainian and Arabic translations (only the alphabets on screen are downloaded).
+import "@fontsource-variable/noto-sans/index.css";
+import "@fontsource-variable/noto-sans-arabic/index.css";
 import "./styles.css";
 
 void init().then(() => startAuth());

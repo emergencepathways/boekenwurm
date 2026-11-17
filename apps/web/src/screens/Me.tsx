@@ -16,13 +16,14 @@ import { Sheet, toast } from "../ui.tsx";
 import { Patch, RankBar, RankShield } from "../badges.tsx";
 import { statsNow } from "../lib/play.ts";
 import { loadEntries } from "../lib/diary.ts";
-import { consentText, LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
+import { LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
+import { LANGUAGES, languageOf, translate, useT, type Key, type Lang } from "../lib/i18n.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { Settings } from "../lib/types.ts";
 
 /** The Account tab's categories. New features go into one of these. */
 type View = "achievements" | "reading" | "settings" | "experimental";
-const VIEWS: ReadonlyArray<[View, string]> = [["achievements", "Achievements"], ["reading", "Reading"], ["settings", "Settings"], ["experimental", "Experimental"]];
+const VIEWS: ReadonlyArray<[View, Key]> = [["achievements", "account.achievements"], ["reading", "account.reading"], ["settings", "account.settings"], ["experimental", "account.experimental"]];
 /** A link to a section (setTab("me", "claude")) opens the category that holds it. */
 const viewFor = (section: string | undefined): View =>
   section === "rank" || section === "badges" ? "achievements"
@@ -31,6 +32,7 @@ const viewFor = (section: string | undefined): View =>
   : section ? "settings" : "achievements";
 
 export function Me() {
+  const t = useT();
   const profile = useStore((s) => s.profile);
   const p = profile.progress;
   const rank = E.rankOf(p.play);
@@ -46,17 +48,17 @@ export function Me() {
 
   return (
     <main className="screen">
-      <div className="topbar"><h1>Account</h1></div>
-      <div className="subtabs" role="tablist" aria-label="Account">
+      <div className="topbar"><h1>{t("account.title")}</h1></div>
+      <div className="subtabs" role="tablist" aria-label={t("account.title")}>
         {VIEWS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" id={`tab-${id}`} aria-selected={view === id} aria-controls={`view-${id}`} onClick={() => setView(id)}>{label}</button>
+          <button key={id} type="button" role="tab" id={`tab-${id}`} aria-selected={view === id} aria-controls={`view-${id}`} onClick={() => setView(id)}>{t(label)}</button>
         ))}
       </div>
 
       {view === "achievements" && (
         <div className="panels" role="tabpanel" id="view-achievements" aria-labelledby="tab-achievements">
       <section className="panel" id="rank">
-        <h2>Your rank</h2>
+        <h2>{t("account.rank")}</h2>
         <RankBar />
         <div className="shields">
           {E.LEVELS.map((l) => {
@@ -65,15 +67,15 @@ export function Me() {
               <div key={l} className={`shieldcell${reached ? " got" : ""}`}>
                 <RankShield rank={l} size={44} locked={!reached} />
                 <div className="t" lang="nl">{E.BADGES[l].title}</div>
-                <div className="m">{E.BADGES[l].meaning}</div>
+                <div className="m">{t(`badge.meaning.${l}`)}</div>
               </div>
             );
           })}
         </div>
-        <p className="small muted">Your rank rises by itself as you earn XP: 20 a paragraph (40 on a streak, × 1.5 in a book above your rank), 1,000 a book, and more for study and badges.</p>
+        <p className="small muted">{t("account.rankNote")}</p>
       </section>
       <section className="panel" id="badges">
-        <h2>Badges</h2>
+        <h2>{t("account.badges")}</h2>
         <div className="patches">
           {E.ACHIEVEMENTS.map((a) => {
             const tier = Math.max(play.tiers[a.key] ?? 0, 0);
@@ -81,17 +83,15 @@ export function Me() {
             return (
               <div key={a.key} className={`patchcell${tier ? " got" : ""}`}>
                 <Patch a={a} tier={tier} size={76} />
-                <div className="t">{a.name}</div>
-                <div className="m num">{goal ? `${goal.value.toLocaleString("en-US")} / ${a.goal(goal.target)}` : "Every tier earned"}</div>
+                <div className="t" lang="en">{a.name}</div>
+                <div className="m num">{goal ? `${t.num(goal.value)} / ${t.num(goal.target)}` : t("account.everyTier")}</div>
               </div>
             );
           })}
         </div>
         <p className="small muted">
-          Each badge tier you reach adds {E.XP.achievement} XP. Badge names are placeholders for now.{" "}
-          {E.lookupModeUnlocked(play.tiers)
-            ? "Unlimited lookup mode is unlocked: switch it on in the reader (Unlimited ∞)."
-            : "Earn any badge at Bronze to unlock unlimited lookup mode: no fouten, look up as much as you like."}
+          {t("account.badgesNote", { xp: E.XP.achievement })}{" "}
+          {E.lookupModeUnlocked(play.tiers) ? t("account.unlimitedOpen") : t("account.unlimitedHow")}
         </p>
       </section>
         </div>
@@ -100,66 +100,66 @@ export function Me() {
       {view === "reading" && (
         <div className="panels" role="tabpanel" id="view-reading" aria-labelledby="tab-reading">
       <section className="panel">
-        <h2>Reading</h2>
+        <h2>{t("account.readingTitle")}</h2>
         <label className="field">
-          <span>Reading level</span>
+          <span>{t("account.level")}</span>
           <select
             value={p.level}
             onChange={(e) => {
               const r = E.setLevel(getState().profile.progress, e.target.value as E.CefrLevel, Date.now());
               void updateProfile((x) => ({ ...x, progress: r.progress }));
-              if (r.newBadges.length) toast(`Badge: ${E.BADGES[r.newBadges[r.newBadges.length - 1].level].title} (placement)`);
+              if (r.newBadges.length) toast(t("account.placement", { title: E.BADGES[r.newBadges[r.newBadges.length - 1].level].title }));
             }}
           >
             {E.LEVELS.map((l) => <option key={l}>{l}</option>)}
           </select>
-          <span className="note">The level meanings are explained at. Your rank (above) rises with XP on its own.</span>
+          <span className="note">{t("account.levelNote")}</span>
         </label>
         <label className="field">
-          <span>Font</span>
+          <span>{t("account.font")}</span>
           <select value={fontOf(profile.settings.font).id} onChange={(e) => setSettings({ font: e.target.value as Settings["font"] })}>
-            {FONTS.map((f) => <option key={f.id} value={f.id}>{f.name} · {f.read} + {f.ui}</option>)}
+            {FONTS.map((f) => <option key={f.id} value={f.id}>{t(`font.${f.id}`)} · {f.read} + {f.ui}</option>)}
           </select>
         </label>
         <label className="field">
-          <span>Text size</span>
+          <span>{t("account.textSize")}</span>
           <select value={sizeOf(profile.settings.textSize)} onChange={(e) => setSettings({ textSize: e.target.value as Settings["textSize"] })}>
-            {TEXT_SIZES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {TEXT_SIZES.map((s) => <option key={s.id} value={s.id}>{t(`account.size.${s.id}`)}</option>)}
           </select>
         </label>
         <label className="field">
-          <span>Fouten per paragraph</span>
+          <span>{t("account.fouten")}</span>
           <select value={profile.settings.preset} onChange={(e) => setSettings({ preset: e.target.value as E.Preset })}>
             {(["strict", "standard", "relaxed"] as const).map((k) => (
-              <option key={k} value={k}>{k[0].toUpperCase() + k.slice(1)} · {E.PRESET_PERCENT[k]}%</option>
+              <option key={k} value={k}>{t(`account.preset.${k}`)} · {t.num(E.PRESET_PERCENT[k])}%</option>
             ))}
           </select>
-          <span className="note">Applies from your next session. Streaks tighten it as you go.</span>
+          <span className="note">{t("account.foutenNote")}</span>
         </label>
         <label className="field">
-          <span>Meanings below B1</span>
+          <span>{t("account.meanings")}</span>
           <select value={profile.settings.defPref} onChange={(e) => setSettings({ defPref: e.target.value as "en" | "nl" })}>
-            <option value="en">English</option>
-            <option value="nl">Dutch</option>
+            <option value="en">{t("account.meaningsMine")}</option>
+            <option value="nl">{t("account.meaningsDutch")}</option>
           </select>
-          <span className="note">From B1, and during a streak, meanings are always in Dutch.</span>
+          <span className="note">{t("account.meaningsNote")}</span>
         </label>
         <label className="field">
-          <span>Flashcards per review set</span>
+          <span>{t("account.setSize")}</span>
           <select value={E.clampSetSize(profile.settings.reviewSetSize)} onChange={(e) => setSettings({ reviewSetSize: Number(e.target.value) })}>
             {[20, 25, 30, 35, 40, 45, 50].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
-          <span className="note">A set repeats each word until you rate it Easy. Finishing one earns the day's review reward.</span>
+          <span className="note">{t("account.setSizeNote")}</span>
         </label>
         <div className="field">
           <label className="row">
             <input type="checkbox" checked={profile.settings.colorText === true} onChange={(e) => setSettings({ colorText: e.target.checked })} />
-            <span>Colour-coded text</span>
+            <span>{t("account.colour")}</span>
           </label>
           <span className="note">
-            Words you've revealed before are coloured by how often you needed them in the last 14 days:{" "}
-            <span className="w c-green" lang="nl">1–3 times</span>, <span className="w c-yellow" lang="nl">4–6 times</span>,{" "}
-            <span className="w c-red" lang="nl">7 or more</span>. New words stay plain.
+            {t("account.colourNote")}{" "}
+            <span className="w c-green">{t("account.colour1")}</span>, <span className="w c-yellow">{t("account.colour2")}</span>,{" "}
+            <span className="w c-red">{t("account.colour3")}</span>. {t("account.colourEnd")}
           </span>
         </div>
       </section>
@@ -169,7 +169,7 @@ export function Me() {
 
       {view === "experimental" && (
         <div className="panels" role="tabpanel" id="view-experimental" aria-labelledby="tab-experimental">
-          <p className="small muted">Features still being tried out. They may change or move.</p>
+          <p className="small muted">{t("account.experimentalNote")}</p>
           <ClaudeSection />
           <AccessCodeSection />
         </div>
@@ -178,14 +178,15 @@ export function Me() {
       {view === "settings" && (
         <div className="panels" role="tabpanel" id="view-settings" aria-labelledby="tab-settings">
           <SignIn />
+          <Localization />
           <section className="panel">
-            <h2>Your name</h2>
+            <h2>{t("account.name")}</h2>
         <label className="field">
-          <span>Name</span>
+          <span>{t("account.nameLabel")}</span>
           <input
             defaultValue={profile.displayName ?? ""}
             maxLength={80}
-            placeholder="What Home calls you"
+            placeholder={t("account.namePlaceholder")}
             onBlur={(e) => {
               const v = e.target.value.trim() || null;
               if (v !== profile.displayName) void updateProfile((x) => ({ ...x, displayName: v }));
@@ -194,16 +195,16 @@ export function Me() {
         </label>
           </section>
       <section className="panel">
-        <h2>On your home screen</h2>
+        <h2>{t("account.homeScreen")}</h2>
         <InstallRow />
       </section>
           <ConnectionCheck />
           <YourData />
       <section className="panel">
-        <h3>About</h3>
-        <p className="small">Boekenwurm is a reading game for learners of Dutch. Your books stay private: on this device, and in your own account when you sign in.</p>
+        <h3>{t("account.about")}</h3>
+        <p className="small">{t("account.aboutText")}</p>
         <DictionaryCredit />
-        <p className="small">On-device page reading by Tesseract.js and its Dutch model (Apache-2.0). </p>
+        <p className="small">{t("account.tesseract")}</p>
         <Privacy />
         <VersionRow />
       </section>
@@ -217,61 +218,98 @@ export function Me() {
 export const PRIVACY_CONTACT = "contact@emergencepathways.org";
 
 /**
+ * Account → Settings → Localization: the language of everything around the Dutch (lib/i18n.ts). Books, Dutch words
+ * and the diary prompts stay Dutch whatever is chosen.
+ */
+function Localization() {
+  const t = useT();
+  const { id: lang, draft } = languageOf(useStore((s) => s.profile.settings.language));
+  return (
+    <section className="panel" id="localization">
+      <h2>{t("loc.title")}</h2>
+      <label className="field">
+        <span>{t("loc.language")}</span>
+        <select
+          value={lang}
+          onChange={(e) => {
+            const id = e.target.value as Lang;
+            void updateProfile((x) => ({ ...x, settings: { ...x.settings, language: id } }));
+            toast(translate(id, "loc.changed", { name: languageOf(id).native }));
+          }}
+        >
+          {LANGUAGES.map((l) => <option key={l.id} value={l.id} lang={l.id}>{l.native}</option>)}
+        </select>
+        <span className="note">{t("loc.lead")}</span>
+      </label>
+      {lang !== "en" && (
+        <>
+          <p className="small">{t("loc.meanings")} {t("loc.partial")}</p>
+          {draft && <p className="small muted">{t.rich("loc.draft", { email: PRIVACY_CONTACT })}</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
  * The privacy notice, in plain words: what goes where, and the LanguageTool choice (lib/consent.ts). The full text
  * is docs/PRIVACY.md; keep both in step.
  */
 function Privacy() {
+  const t = useT();
   const lt = useStore((s) => s.profile.settings.languageTool);
-  const t = consentText();
+  const state = t(lt == null ? "privacy.ltNotAsked" : lt.allowed ? "privacy.ltOn" : "privacy.ltOff");
   return (
     <details className="privacypanel" id="privacy">
-      <summary><b>Privacy</b>: what Boekenwurm keeps, and where</summary>
+      <summary>{t.rich("privacy.summary")}</summary>
       <ul className="small">
-        <li><b>On this device:</b> your books, reading progress, words, flashcards and settings. Your <b>diary</b> stays only here: Boekenwurm never receives or stores it.</li>
-        <li><b>In your account</b> (if you sign in; Supabase, servers in the EU): your books, progress, words and settings, so they sync between your devices. Never your diary.</li>
-        <li><b>LanguageTool</b> (LanguageTool GmbH, Germany, EU): only if you agree, and only when you tap “Check my writing”, that diary entry is sent from your device to be checked. <a href={LANGUAGETOOL_PRIVACY} target="_blank" rel="noopener noreferrer">LanguageTool's privacy policy</a>.</li>
-        <li><b>Google Translate</b>: only the single word you tapped, when the dictionary doesn't know it (signed-in readers).</li>
-        <li><b>Google Cloud Vision</b>: page photos, only for access-code holders who choose Google page reading.</li>
-        <li><b>Anthropic (Claude)</b>: only if you add your own Claude key (Experimental), the text a feature needs.</li>
-        <li><b>Weekly reminder</b>: if you turn it on, this phone's notification address and your time zone, nothing you write.</li>
-        <li><b>Fonts</b> are part of the app: opening it sends nothing to a font service.</li>
+        <li>{t.rich("privacy.device")}</li>
+        <li>{t.rich("privacy.account")}</li>
+        <li>{t.rich("privacy.languagetool")} <a href={LANGUAGETOOL_PRIVACY} target="_blank" rel="noopener noreferrer">{t("consent.link")}</a>.</li>
+        <li>{t.rich("privacy.translate")}</li>
+        <li>{t.rich("privacy.vision")}</li>
+        <li>{t.rich("privacy.claude")}</li>
+        <li>{t.rich("privacy.reminder")}</li>
+        <li>{t.rich("privacy.fonts")}</li>
       </ul>
       <div className="row">
-        <span className="small grow">LanguageTool for your diary: <b>{lt == null ? "not asked yet" : lt.allowed ? "on" : "off"}</b>{lt ? ` (since ${new Date(lt.at).toLocaleDateString("en-GB")})` : ""}</span>
-        {lt?.allowed !== true && <button className="btn small" type="button" onClick={() => void setLanguageTool(true).then(() => toast("LanguageTool on for your diary."))}>{t.yes}</button>}
-        {lt?.allowed !== false && <button className="btn small ghost" type="button" onClick={() => void setLanguageTool(false).then(() => toast("LanguageTool off: nothing you write is sent anywhere."))}>Turn off</button>}
+        <span className="small grow">{t.rich("privacy.ltState", { state })}{lt ? t("privacy.ltSince", { date: t.date(lt.at) }) : ""}</span>
+        {lt?.allowed !== true && <button className="btn small" type="button" onClick={() => void setLanguageTool(true).then(() => toast(t("privacy.toastOn")))}>{t("consent.yes")}</button>}
+        {lt?.allowed !== false && <button className="btn small ghost" type="button" onClick={() => void setLanguageTool(false).then(() => toast(t("privacy.toastOff")))}>{t("privacy.turnOff")}</button>}
       </div>
-      <p className="small">You can export or erase your data under Your data. Questions or requests about your data: <a href={`mailto:${PRIVACY_CONTACT}`}>{PRIVACY_CONTACT}</a> (Emergence Pathways, Den Haag).</p>
+      <p className="small">{t("privacy.contact", { email: PRIVACY_CONTACT })}</p>
     </details>
   );
 }
 
 /** Which version is running, and a way to switch to the newest one without reinstalling. */
 function VersionRow() {
+  const t = useT();
   const [state, setState] = useState<"idle" | "checking" | "current" | "offline">("idle");
   return (
     <div className="row">
-      <span className="small grow">Version <span className="num">{__BUILD_ID__.slice(0, 7)}</span></span>
+      <span className="small grow num">{t("account.version", { id: __BUILD_ID__.slice(0, 7) })}</span>
       <button className="btn small ghost" type="button" disabled={state === "checking"} onClick={async () => {
         setState("checking");
         setState(await updateNow());
       }}>
-        {state === "checking" ? "Checking…" : state === "current" ? "Up to date ✓" : state === "offline" ? "Offline: try later" : "Check for updates"}
+        {t(state === "checking" ? "account.checking" : state === "current" ? "account.upToDate" : state === "offline" ? "account.offline" : "account.checkUpdates")}
       </button>
     </div>
   );
 }
 
 function DictionaryCredit() {
+  const t = useT();
   const d = useStore((s) => s.dictionary);
-  if (d === undefined) return <p className="small">Loading the dictionary…</p>;
-  if (!d) return <p className="small">This build has no dictionary, so words show meanings only from your word list or Claude.</p>;
+  if (d === undefined) return <p className="small">{t("account.dictLoading")}</p>;
+  if (!d) return <p className="small">{t("account.dictNone")}</p>;
   return (
     <p className="small">
-      Dictionary: {d.words.toLocaleString()} Dutch words and {d.forms.toLocaleString()} word forms, built {d.built}. Meanings and word forms from{" "}
-      <a href="https://en.wiktionary.org" style={{ color: "var(--leaf)" }}>Wiktionary</a> via{" "}
-      <a href="https://kaikki.org" style={{ color: "var(--leaf)" }}>wiktextract</a>; word frequencies from{" "}
-      <a href="https://github.com/rspeer/wordfreq" style={{ color: "var(--leaf)" }}>wordfreq</a>. Both CC BY-SA 4.0; the dictionary is shared under the same licence.
+      {t("account.dictCredit", { words: d.words, forms: d.forms, built: d.built })}{" "}
+      <a href="https://en.wiktionary.org" style={{ color: "var(--leaf)" }}>Wiktionary</a> ·{" "}
+      <a href="https://kaikki.org" style={{ color: "var(--leaf)" }}>wiktextract</a> ·{" "}
+      <a href="https://github.com/rspeer/wordfreq" style={{ color: "var(--leaf)" }}>wordfreq</a>
     </p>
   );
 }
@@ -279,6 +317,7 @@ function DictionaryCredit() {
 // ---------------------------------------------------------------- account
 
 function SignIn() {
+  const t = useT();
   const user = useStore((s) => s.user);
   const sync = useStore((s) => s.sync);
   const [email, setEmail] = useState("");
@@ -291,33 +330,33 @@ function SignIn() {
   if (!supabase)
     return (
       <section className="panel">
-        <h2>Account</h2>
-        <p>Sign-in isn't set up in this build, so your books and progress stay on this device.</p>
+        <h2>{t("signin.title")}</h2>
+        <p>{t("signin.notSetUp")}</p>
       </section>
     );
 
   if (user)
     return (
       <section className="panel">
-        <h2>Account</h2>
+        <h2>{t("signin.title")}</h2>
         <dl className="kv">
-          <dt>Signed in</dt><dd>{user.email}</dd>
-          <dt>Sync</dt>
+          <dt>{t("signin.signedIn")}</dt><dd lang="en">{user.email}</dd>
+          <dt>{t("signin.sync")}</dt>
           <dd>
-            {sync.status === "syncing" ? "Syncing…" : sync.status === "offline" ? "Offline: changes wait on this device" : sync.status === "error" ? <span className="error">{sync.error}</span> : sync.lastAt ? `Up to date (${new Date(sync.lastAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "Not synced yet"}
+            {sync.status === "syncing" ? t("signin.syncing") : sync.status === "offline" ? t("signin.offline") : sync.status === "error" ? <span className="error">{sync.error}</span> : sync.lastAt ? t("signin.upToDate", { time: new Date(sync.lastAt).toLocaleTimeString(languageOf(t.lang).locale, { hour: "2-digit", minute: "2-digit" }) }) : t("signin.notSynced")}
           </dd>
         </dl>
         <div className="actions">
-          <button className="btn small" type="button" onClick={() => void syncNow()} disabled={sync.status === "syncing"}>Sync now</button>
-          <button className="btn small ghost" type="button" onClick={() => setOut(true)}>Sign out</button>
+          <button className="btn small" type="button" onClick={() => void syncNow()} disabled={sync.status === "syncing"}>{t("signin.syncNow")}</button>
+          <button className="btn small ghost" type="button" onClick={() => setOut(true)}>{t("signin.signOut")}</button>
         </div>
         {out && (
-          <Sheet label="Sign out" onClose={() => setOut(false)}>
-            <h2 className="big" style={{ fontSize: "1.3rem" }}>Sign out?</h2>
-            <p className="muted" style={{ margin: 0 }}>Your books and progress stay safe in your account.</p>
-            <button className="btn" type="button" onClick={() => void signOut(false).then(() => setOut(false))}>Sign out, keep books on this device</button>
-            <button className="btn danger" type="button" onClick={() => void signOut(true).then(() => setOut(false))}>Sign out and remove them from this device</button>
-            <button className="btn ghost" type="button" onClick={() => setOut(false)}>Cancel</button>
+          <Sheet label={t("signin.signOut")} onClose={() => setOut(false)}>
+            <h2 className="big" style={{ fontSize: "1.3rem" }}>{t("signin.signOutAsk")}</h2>
+            <p className="muted" style={{ margin: 0 }}>{t("signin.signOutSafe")}</p>
+            <button className="btn" type="button" onClick={() => void signOut(false).then(() => setOut(false))}>{t("signin.signOutKeep")}</button>
+            <button className="btn danger" type="button" onClick={() => void signOut(true).then(() => setOut(false))}>{t("signin.signOutRemove")}</button>
+            <button className="btn ghost" type="button" onClick={() => setOut(false)}>{t("common.cancel")}</button>
           </Sheet>
         )}
       </section>
@@ -339,35 +378,35 @@ function SignIn() {
     setErr(null);
     try {
       await verifyCode(sent!, code);
-      toast("Signed in. Syncing your books…");
+      toast(t("signin.toast"));
     } catch (e) {
-      setErr(/expired|invalid/i.test((e as Error).message) ? "That code didn't work. Check it, or send a new email." : (e as Error).message);
+      setErr(/expired|invalid/i.test((e as Error).message) ? t("signin.badCode") : (e as Error).message);
     }
     setBusy(false);
   };
 
   return (
     <section className="panel" id="account">
-      <h2>Keep your progress everywhere</h2>
-      <p>Sign in to keep your books, words and badges on all your devices. No password: we email you a link and a code.</p>
+      <h2>{t("signin.keepTitle")}</h2>
+      <p>{t("signin.keepLead")}</p>
       {!sent ? (
         <form className="stack" onSubmit={(e) => (e.preventDefault(), void send())}>
           <label className="field">
-            <span>Email</span>
-            <input type="email" autoComplete="email" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <span>{t("signin.email")}</span>
+            <input type="email" dir="ltr" autoComplete="email" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <button className="btn primary" type="submit" disabled={busy || !/\S+@\S+\.\S+/.test(email)}>{busy ? "Sending…" : "Email me a sign-in link"}</button>
+          <button className="btn primary" type="submit" disabled={busy || !/\S+@\S+\.\S+/.test(email)}>{busy ? t("signin.sending") : t("signin.send")}</button>
         </form>
       ) : (
         <form className="stack" onSubmit={(e) => (e.preventDefault(), void verify())}>
-          <p>We sent an email to <b>{sent}</b>. Tap the link in it, or type the 6-digit code here (best for the Home Screen app on iPhone).</p>
+          <p>{t.rich("signin.sent", { email: sent })}</p>
           <label className="field">
-            <span>Code</span>
-            <input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={10} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+            <span>{t("signin.code")}</span>
+            <input dir="ltr" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={10} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
           </label>
           <div className="actions">
-            <button className="btn primary" type="submit" disabled={busy || code.length < 6}>{busy ? "Checking…" : "Sign in"}</button>
-            <button className="btn ghost" type="button" onClick={() => (setSent(null), setCode(""))}>Use another email</button>
+            <button className="btn primary" type="submit" disabled={busy || code.length < 6}>{busy ? t("account.checking") : t("reminder.signIn")}</button>
+            <button className="btn ghost" type="button" onClick={() => (setSent(null), setCode(""))}>{t("signin.another")}</button>
           </div>
         </form>
       )}

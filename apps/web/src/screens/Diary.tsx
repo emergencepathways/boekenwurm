@@ -12,13 +12,16 @@ import { applyFix, checkDutch, type Mistake } from "../lib/grammar.ts";
 import { applySuggestion, buildSuggester, wordAtCaret, type Suggestion } from "../lib/suggest.ts";
 import { dictionaryData } from "../lib/words.ts";
 import { Reminders } from "./Reminders.tsx";
-import { consentText, LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
-import { plural } from "../ui.tsx";
+import { LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
+import { useT, type Key } from "../lib/i18n.ts";
 
 const promptById = (id: number | null) => E.DIARY_PROMPTS.find((p) => p.id === id) ?? null;
-const dateOf = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const DATE: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", year: "numeric" };
+/** A prompt's question in the reader's language (src/i18n), for "Show in English" and its translations. */
+const promptKey = (id: number) => `diary.p${id}` as Key;
 
 export function Diary() {
+  const t = useT();
   useStore((s) => s.profile.progress.play); // the record changes when an entry counts
   const record = diaryRecord();
   const freeOpen = E.freeWritingOpen(record);
@@ -31,30 +34,27 @@ export function Diary() {
   return (
     <>
       <section className="panel">
-        <h2>Diary</h2>
+        <h2>{t("diary.title")}</h2>
         <p>
-          {freeOpen
-            ? "All 20 prompts written: free writing is open. Write anything you like, or answer a prompt again."
-            : "Write a few sentences in Dutch about a prompt. Write all 20 for a 2,000 XP bonus."}{" "}
-          {thisWeek ? `This week's ${E.DIARY.weekXp} XP is earned; each further entry this week adds ${E.DIARY.extraXp}.` : `Your first entry this week earns ${E.DIARY.weekXp} XP; each one after that, ${E.DIARY.extraXp}.`}
+          {freeOpen ? t("diary.leadFree") : t("diary.leadPrompts")}{" "}
+          {t(thisWeek ? "diary.weekEarned" : "diary.weekWaiting", { week: E.DIARY.weekXp, extra: E.DIARY.extraXp })}
         </p>
-        <div className="xpbar" role="progressbar" aria-label="Diary prompts written" aria-valuemin={0} aria-valuemax={20} aria-valuenow={record.done.length}>
+        <div className="xpbar" role="progressbar" aria-label={t("diary.progressAria")} aria-valuemin={0} aria-valuemax={20} aria-valuenow={record.done.length}>
           <i style={{ width: `${(record.done.length / 20) * 100}%` }} />
         </div>
-        <p className="small muted num">{record.done.length} / 20 prompts written</p>
+        <p className="small muted num">{t("diary.progress", { n: record.done.length })}</p>
         <p className="small privacy">
-          🔒 Your diary is saved only on this phone. Boekenwurm never sees or stores it.{" "}
-          {allowed ? "“Check my writing” sends an entry to LanguageTool (EU) to find mistakes, only when you tap it." : allowed === false ? "LanguageTool is off: nothing you write is sent anywhere." : ""}
+          {t("diary.privacy")} {allowed ? t("diary.privacyOn") : allowed === false ? t("diary.privacyOff") : ""}
         </p>
       </section>
 
       {saved ? (
         <section className="panel">
-          <h2>Saved</h2>
+          <h2>{t("diary.saved")}</h2>
           {promptById(saved.promptId) && <p lang="nl"><b>{promptById(saved.promptId)!.nl}</b></p>}
           <p className="entrytext" lang="nl">{saved.text}</p>
-          <p className="small muted">Saved on this phone. Want to keep it somewhere else too? Copy it into your own notes.</p>
-          <button className="btn" type="button" onClick={() => setSaved(null)}>Done</button>
+          <p className="small muted">{t("diary.savedNote")}</p>
+          <button className="btn" type="button" onClick={() => setSaved(null)}>{t("common.done")}</button>
         </section>
       ) : (
         <Composer
@@ -82,30 +82,26 @@ export function Diary() {
  * easy, and the diary works either way (lib/consent.ts).
  */
 function ConsentPrompt() {
-  const t = consentText();
+  const t = useT();
   return (
     <div className="consent" role="dialog" aria-modal="false" aria-labelledby="consent-title">
-      <h2 id="consent-title">{t.title}</h2>
-      <p>{t.intro}</p>
-      <ul>{t.points.map((x) => <li key={x}>{x}</li>)}</ul>
-      <p className="small"><a href={LANGUAGETOOL_PRIVACY} target="_blank" rel="noopener noreferrer">{t.privacyLink}</a></p>
+      <h2 id="consent-title">{t("consent.title")}</h2>
+      <p>{t("consent.intro")}</p>
+      <ul>{(["consent.p1", "consent.p2", "consent.p3", "consent.p4"] as const).map((k) => <li key={k}>{t(k)}</li>)}</ul>
+      <p className="small"><a href={LANGUAGETOOL_PRIVACY} target="_blank" rel="noopener noreferrer">{t("consent.link")}</a></p>
       <div className="choices">
-        <button className="btn" type="button" onClick={() => void setLanguageTool(true)}>{t.yes}</button>
-        <button className="btn" type="button" onClick={() => void setLanguageTool(false)}>{t.no}</button>
+        <button className="btn" type="button" onClick={() => void setLanguageTool(true)}>{t("consent.yes")}</button>
+        <button className="btn" type="button" onClick={() => void setLanguageTool(false)}>{t("consent.no")}</button>
       </div>
     </div>
   );
 }
 
 /** Things to look for when checking an entry yourself (LanguageTool off). */
-const SELF_CHECK = [
-  "The verb comes second in a sentence: “Vandaag ga ik…”, not “Vandaag ik ga…”.",
-  "de or het? Tap a suggested word to see its article.",
-  "Verb endings: ik werk, jij werkt, wij werken.",
-  "A capital letter at the start of each sentence, and a full stop at the end.",
-];
+const SELF_CHECK = ["diary.self1", "diary.self2", "diary.self3", "diary.self4"] as const;
 
 function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: boolean; onSaved: (e: DiaryEntry) => void }) {
+  const t = useT();
   const [skipped, setSkipped] = useState<number[]>([]);
   // Before all 20: a random open prompt. After: free writing unless the reader picks a prompt.
   const [promptId, setPromptId] = useState<number | null>(() => (freeOpen ? null : E.nextPrompt(diaryRecord(), Math.random()).id));
@@ -168,7 +164,7 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
     if (r.ok) setMistakes(r.mistakes);
     else
       setProblem(
-        r.reason === "offline" ? "You're offline. Check again when you're back online." : r.reason === "busy" ? "The checker is busy. Try again in a minute." : "The checker couldn't be reached. Try again later; your text is still here.",
+        r.reason === "offline" ? t("diary.offline") : r.reason === "busy" ? t("diary.busy") : t("diary.unavailable"),
       );
   };
 
@@ -184,21 +180,21 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
     <section className="panel diary">
       {freeOpen && (
         <label className="field">
-          <span>Write about</span>
+          <span>{t("diary.writeAbout")}</span>
           <select value={promptId ?? ""} onChange={(e) => (setPromptId(e.target.value ? Number(e.target.value) : null), setEnglish(false))}>
-            <option value="">Anything you like (free writing)</option>
+            <option value="">{t("diary.anything")}</option>
             {E.DIARY_PROMPTS.map((p) => <option key={p.id} value={p.id}>{p.id}. {p.nl}</option>)}
           </select>
         </label>
       )}
       {prompt && (
         <div className="diaryprompt">
-          <span className="label">{freeOpen ? `Prompt ${prompt.id}` : "This week's prompt"}</span>
+          <span className="label">{freeOpen ? t("diary.promptN", { n: prompt.id }) : t("diary.thisWeek")}</span>
           <p className="q" lang="nl">{prompt.nl}</p>
-          {english && <p className="small muted">{prompt.en}</p>}
+          {english && <p className="small muted">{t(promptKey(prompt.id))}</p>}
           <div className="actions">
-            <button className="btn small ghost" type="button" aria-pressed={english} onClick={() => setEnglish(!english)}>{english ? "Hide English" : "Show in English"}</button>
-            {!freeOpen && <button className="btn small ghost" type="button" onClick={skip}>Skip: another prompt</button>}
+            <button className="btn small ghost" type="button" aria-pressed={english} onClick={() => setEnglish(!english)}>{english ? t("diary.hideTranslation") : t("diary.showTranslation")}</button>
+            {!freeOpen && <button className="btn small ghost" type="button" onClick={skip}>{t("diary.skip")}</button>}
           </div>
         </div>
       )}
@@ -211,8 +207,9 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
           spellCheck
           autoCorrect="off"
           autoCapitalize="sentences"
-          placeholder="Schrijf hier…"
-          aria-label="Your entry, in Dutch"
+          dir="ltr"
+          placeholder={t("diary.placeholder")}
+          aria-label={t("diary.entry")}
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -223,7 +220,7 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
         />
       </label>
       {suggestions.length > 0 && (
-        <div className="suggestions" role="group" aria-label="Word suggestions">
+        <div className="suggestions" role="group" aria-label={t("diary.suggestions")}>
           {suggestions.map((s) => (
             <button key={s.word} type="button" lang="nl" onMouseDown={(e) => e.preventDefault()} onClick={() => {
               const r = applySuggestion(text, caret, s.word);
@@ -235,20 +232,20 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
         </div>
       )}
       <p className="small muted num" aria-live="polite">
-        {plural(words, "word")}{words < min ? ` · ${min - words} more to save` : ""}
+        {t("common.words", { n: words })}{words < min ? ` · ${t("diary.moreToSave", { n: min - words })}` : ""}
       </p>
 
       {mistakes && (
         <div className="mistakes" aria-live="polite">
           {mistakes.length === 0 ? (
-            <p><b>No mistakes found.</b> Goed gedaan!</p>
+            <p>{t.rich("diary.noMistakes")}</p>
           ) : (
             <>
               <p className="marked" lang="nl">{marked(text, mistakes)}</p>
               <ol>
                 {mistakes.map((m, i) => (
                   <li key={`${m.offset}-${i}`} className={`k-${m.kind}`}>
-                    <span className="chip">{m.kind}</span> <s lang="nl">{m.text}</s>
+                    <span className="chip">{t(`diary.kind.${m.kind}`)}</span> <s lang="nl">{m.text}</s>
                     <div className="small">{m.message}</div>
                     <div className="actions">
                       {m.fixes.map((f) => (
@@ -258,7 +255,7 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
                           setMistakes(r.mistakes);
                         }}>{f}</button>
                       ))}
-                      <button className="btn small ghost" type="button" onClick={() => setMistakes(mistakes.filter((_, j) => j !== i))}>Keep mine</button>
+                      <button className="btn small ghost" type="button" onClick={() => setMistakes(mistakes.filter((_, j) => j !== i))}>{t("diary.keepMine")}</button>
                     </div>
                   </li>
                 ))}
@@ -270,13 +267,13 @@ function Composer({ freeOpen, checker, onSaved }: { freeOpen: boolean; checker: 
       {problem && <p className="error" role="alert">{problem}</p>}
 
       <div className="actions">
-        {checker && <button className="btn" type="button" disabled={!words || checking} onClick={() => void check()}>{checking ? "Checking…" : mistakes ? "Check again" : "Check my writing"}</button>}
-        <button className="btn primary" type="button" disabled={busy || words < min} onClick={() => void save()}>Save entry</button>
+        {checker && <button className="btn" type="button" disabled={!words || checking} onClick={() => void check()}>{checking ? t("diary.checking") : mistakes ? t("diary.checkAgain") : t("diary.check")}</button>}
+        <button className="btn primary" type="button" disabled={busy || words < min} onClick={() => void save()}>{t("diary.save")}</button>
       </div>
       {!checker && (
         <details className="selfcheck">
-          <summary className="small">Check it yourself: what to look for</summary>
-          <ul className="small">{SELF_CHECK.map((x) => <li key={x}>{x}</li>)}</ul>
+          <summary className="small">{t("diary.selfCheck")}</summary>
+          <ul className="small">{SELF_CHECK.map((k) => <li key={k}>{t(k)}</li>)}</ul>
         </details>
       )}
     </section>
@@ -298,25 +295,26 @@ function marked(text: string, mistakes: readonly Mistake[]) {
 }
 
 function PastEntries({ entries, onDelete }: { entries: DiaryEntry[] | null; onDelete: (id: string) => void }) {
+  const t = useT();
   const [sure, setSure] = useState<string | null>(null);
   if (!entries?.length) return null;
   return (
     <section className="panel">
-      <h2>On this phone</h2>
-      <p className="small muted">Your entries, newest first. Only here: not in your account, not on your other devices.</p>
+      <h2>{t("diary.onPhone")}</h2>
+      <p className="small muted">{t("diary.onPhoneLead")}</p>
       {entries.map((e) => (
         <details key={e.id} className="entry">
           <summary>
-            <span className="num small">{dateOf(e.at)}</span> <span lang="nl">{promptById(e.promptId)?.nl ?? "Free writing"}</span>
+            <span className="num small">{t.date(e.at, DATE)}</span> {promptById(e.promptId) ? <span lang="nl">{promptById(e.promptId)!.nl}</span> : <span>{t("diary.free")}</span>}
           </summary>
           <p className="entrytext" lang="nl">{e.text}</p>
           {sure === e.id ? (
             <div className="actions">
-              <button className="btn small danger" type="button" onClick={() => (setSure(null), onDelete(e.id))}>Delete for good</button>
-              <button className="btn small ghost" type="button" onClick={() => setSure(null)}>Keep it</button>
+              <button className="btn small danger" type="button" onClick={() => (setSure(null), onDelete(e.id))}>{t("diary.deleteForGood")}</button>
+              <button className="btn small ghost" type="button" onClick={() => setSure(null)}>{t("diary.keepIt")}</button>
             </div>
           ) : (
-            <button className="btn small ghost" type="button" onClick={() => setSure(e.id)}>Delete…</button>
+            <button className="btn small ghost" type="button" onClick={() => setSure(e.id)}>{t("diary.delete")}</button>
           )}
         </details>
       ))}

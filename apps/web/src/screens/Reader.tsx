@@ -24,7 +24,8 @@ import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
 import { close, open, setTab } from "../nav.ts";
 import { SECTION_SIZE } from "../lib/pages.ts";
 import type { Book, BookText, Meaning, Paragraph } from "../lib/types.ts";
-import { Icon, plural, Sheet, toast } from "../ui.tsx";
+import { Icon, Sheet, toast } from "../ui.tsx";
+import { t as tt, useT } from "../lib/i18n.ts";
 
 type Matched =
   | { status: "pending" }
@@ -65,6 +66,7 @@ interface RS {
 }
 
 export function Reader({ bookId }: { bookId: string }) {
+  const tr = useT();
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const progress = useStore((s) => s.profile.progress);
   const settings = useStore((s) => s.profile.settings);
@@ -351,7 +353,7 @@ export function Reader({ bookId }: { bookId: string }) {
     await leave();
     await updateProfile((p) => ({ ...p, settings: { ...p.settings, unlimitedMode: on } }));
     startNewSession();
-    toast(on ? "Unlimited lookup mode: look up as much as you like." : "Back to fouten.");
+    toast(tt(on ? "reader.unlimitedOn" : "reader.unlimitedOff"));
     bump();
   }
 
@@ -491,7 +493,7 @@ export function Reader({ bookId }: { bookId: string }) {
         <TopBar title={book?.title ?? "Book"} />
         <section className="panel">
           <p>{r.loadError}</p>
-          {book?.source === "photo" && <button className="btn primary" type="button" onClick={() => open({ name: "photo", bookId })}>Add pages</button>}
+          {book?.source === "photo" && <button className="btn primary" type="button" onClick={() => open({ name: "photo", bookId })}>{tr("reader.addPages")}</button>}
         </section>
       </main>
     );
@@ -505,8 +507,8 @@ export function Reader({ bookId }: { bookId: string }) {
       <TopBar
         title={book.title}
         center={
-          <button className="btn small ghost" type="button" onClick={() => ((r.modal = { kind: "goto" }), bump())} aria-label="Go to a page">
-            {hasPages() ? `p. ${pageAt(r.pos) ?? "?"}` : "Go to"}
+          <button className="btn small ghost" type="button" onClick={() => ((r.modal = { kind: "goto" }), bump())} aria-label={tr("reader.goto")}>
+            {hasPages() ? tr("reader.page", { n: pageAt(r.pos) ?? "?" }) : tr("reader.gotoShort")}
           </button>
         }
         right={
@@ -537,19 +539,19 @@ export function Reader({ bookId }: { bookId: string }) {
       {r.modal?.kind === "match" && renderMatch()}
       {r.modal?.kind === "goto" && renderGoto()}
       {r.modal?.kind === "font" && (
-        <Sheet label="Font" onClose={() => ((r.modal = null), bump())}>
-          <h2>Font</h2>
-          <div className="fontpick" role="radiogroup" aria-label="Font">
+        <Sheet label={tr("reader.fontTitle")} onClose={() => ((r.modal = null), bump())}>
+          <h2>{tr("reader.fontTitle")}</h2>
+          <div className="fontpick" role="radiogroup" aria-label={tr("reader.fontTitle")}>
             {FONTS.map((f) => (
               <button key={f.id} type="button" role="radio" aria-checked={fontOf(font).id === f.id} className={`fontopt font-${f.id}`}
                 onClick={() => void updateProfile((x) => ({ ...x, settings: { ...x.settings, font: f.id } }))}>
-                <span className="sample" lang="nl">Elke woensdag fietst Ahmed naar de markt.</span>
-                <span className="name"><b>{f.name}</b> · {f.read} + {f.ui}</span>
-                <span className="small muted">{f.about}</span>
+                <span className="sample" lang="nl" dir="ltr">Elke woensdag fietst Ahmed naar de markt.</span>
+                <span className="name"><b>{tr(`font.${f.id}`)}</b> · <bdi>{f.read} + {f.ui}</bdi></span>
+                <span className="small muted">{tr(`font.${f.id}.about`)}</span>
               </button>
             ))}
           </div>
-          <button className="btn primary" type="button" onClick={() => ((r.modal = null), bump())}>Done</button>
+          <button className="btn primary" type="button" onClick={() => ((r.modal = null), bump())}>{tr("common.done")}</button>
         </Sheet>
       )}
     </main>
@@ -597,31 +599,31 @@ export function Reader({ bookId }: { bookId: string }) {
     if (r.lookupMode)
       return (
         <>
-          <section className="strip nopenalty unlimited" role="status" aria-label="Unlimited lookup mode">
-            <span className="mode">Unlimited</span>
-            <b>No fouten.</b>
-            <span>Look up as much as you like.</span>
+          <section className="strip nopenalty unlimited" role="status" aria-label={tr("reader.unlimitedTitle")}>
+            <span className="mode">{tr("reader.unlimited")}</span>
+            <b>{tr("reader.unlimitedNone")}</b>
+            <span>{tr("reader.unlimitedHint")}</span>
           </section>
           {renderSheet(p, revealed, onStreak)}
           <div className="actions">
-            <button className="btn small" type="button" onClick={() => void endLookupSession()}>End and study these words</button>
-            <button className="btn small ghost" type="button" onClick={() => void setLookupMode(false)}>Back to fouten</button>
+            <button className="btn small" type="button" onClick={() => void endLookupSession()}>{tr("reader.endStudy")}</button>
+            <button className="btn small ghost" type="button" onClick={() => void setLookupMode(false)}>{tr("reader.backToFouten")}</button>
           </div>
         </>
       );
     return (
       <>
-        <section className="strip" aria-label="Checkpoint">
+        <section className="strip" aria-label={tr("reader.checkpoint")}>
           {/* Just the count: words looked up on this page out of those allowed (a fout is a word you had to look up). */}
           <span className="strikes num" data-used={st.used} data-allowed={st.allowed} role="status">
-            {st.used} of {st.allowed} {st.allowed === 1 ? "fout" : "fouten"}
+            {tr("reader.fouten", { n: st.used, total: st.allowed })}
           </span>
           <span className="grow" />
-          {unlocked && <button className="btn small ghost" type="button" onClick={() => void setLookupMode(true)} title="Unlimited lookup mode: no fouten, a quarter of the XP">Unlimited ∞</button>}
+          {unlocked && <button className="btn small ghost" type="button" onClick={() => void setLookupMode(true)} title={tr("reader.unlimitedTitle")}>{tr("reader.unlimited")} ∞</button>}
         </section>
-        {st.strikesLeft === 0 && lastStrike && <div className="warnline">No fouten left: one more reveal ends the run at the page turn.</div>}
+        {st.strikesLeft === 0 && lastStrike && <div className="warnline">{tr("reader.noFoutenLeft")}</div>}
         {renderSheet(p, revealed, onStreak)}
-        <p className="note" style={{ margin: 0 }}>Tap a word to see its meaning. Swipe left or press → to turn the page; Previous looks back without penalty.</p>
+        <p className="note" style={{ margin: 0 }}>{tr("reader.hint")}</p>
         {fontButton()}
       </>
     );
@@ -649,11 +651,11 @@ export function Reader({ bookId }: { bookId: string }) {
       >
         <div className="folio">
           <span>{book!.title}</span>
-          <span className="num">{pageAt(r.pos) != null ? `p. ${pageAt(r.pos)} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
+          <span className="num">{pageAt(r.pos) != null ? `${tr("reader.page", { n: pageAt(r.pos)! })} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
         </div>
         {mode === "match" && renderMatchedLine(p.matched)}
         <div className="parawrap" ref={paraRef}>
-        <p className="para" lang="nl">
+        <p className="para" lang="nl" dir="ltr">
           {p.tokens.map((t, i) =>
             t.k === "punct" || t.k === "number" ? (
               <span key={i}>{t.t}</span>
@@ -674,13 +676,13 @@ export function Reader({ bookId }: { bookId: string }) {
         {r.sel != null && <WordPopover wrap={paraRef} index={r.sel} onClose={closeWord}>{renderDefinition(onStreak)}</WordPopover>}
         </div>
         {r.showOriginal && p.matched && (
-          <div className="original"><span className="label">Original</span><p lang="nl">{original().text}</p></div>
+          <div className="original"><span className="label">{tr("reader.original")}</span><p lang="nl" dir="ltr">{original().text}</p></div>
         )}
         <div className="defhint" aria-hidden={r.sel != null} style={{ visibility: r.sel == null ? "visible" : "hidden" }}>{renderDefinition(onStreak, true)}</div>
         <div className="actions turnrow">
-          <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>← Previous</button>
+          <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>{tr("reader.previous")}</button>
           {/* Out of fouten: this page ends the run, so the button says where it leads (the session's words to review). */}
-          <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>{outOfFouten() ? "Review fouten →" : "Next page →"}</button>
+          <button className="btn primary nextbtn" type="button" onClick={() => void turn()}>{tr(outOfFouten() ? "reader.reviewFouten" : "reader.next")}</button>
         </div>
       </article>
     );
@@ -693,22 +695,22 @@ export function Reader({ bookId }: { bookId: string }) {
   function renderLook() {
     const l = r.look!;
     const p = para();
-    const back = l.kind === "reread" ? "Back to the summary" : "Continue →";
+    const back = tr(l.kind === "reread" ? "reader.backToSummary" : "reader.continue");
     return (
       <>
-        <section className="strip nopenalty" role="status" aria-label="No penalty">
-          <span className="mode">{l.kind === "reread" ? "Practice" : "Looking back"}</span>
-          <b>No fouten here.</b>
-          <span>Tap any word for its meaning: nothing counts against you.</span>
+        <section className="strip nopenalty" role="status" aria-label={tr("reader.noPenalty")}>
+          <span className="mode">{tr(l.kind === "reread" ? "reader.practice" : "reader.lookingBack")}</span>
+          <b>{tr("reader.noFoutenHere")}</b>
+          <span>{tr("reader.lookHint")}</span>
         </section>
         <article className="sheet calm">
           <div className="folio">
             <span>{book!.title}</span>
-            <span className="num">{pageAt(l.ord) != null ? `p. ${pageAt(l.ord)} · ` : ""}{l.ord + 1} / {r.text!.paragraphs.length}</span>
+            <span className="num">{pageAt(l.ord) != null ? `${tr("reader.page", { n: pageAt(l.ord)! })} · ` : ""}{l.ord + 1} / {r.text!.paragraphs.length}</span>
           </div>
           {mode === "match" && renderMatchedLine(p.matched)}
           <div className="parawrap" ref={paraRef}>
-          <p className="para" lang="nl">
+          <p className="para" lang="nl" dir="ltr">
             {p.tokens.map((t, i) =>
               t.k === "punct" || t.k === "number" ? (
                 <span key={i}>{t.t}</span>
@@ -724,7 +726,7 @@ export function Reader({ bookId }: { bookId: string }) {
           <div className="defhint" aria-hidden={r.sel != null} style={{ visibility: r.sel == null ? "visible" : "hidden" }}>{renderDefinition(false, true)}</div>
           <div className="actions turnrow">
             {l.kind === "previous" && (
-              <button className="btn ghost prevbtn" type="button" disabled={l.ord === 0} onClick={() => lookBack("previous", l.ord - 1)}>← Previous</button>
+              <button className="btn ghost prevbtn" type="button" disabled={l.ord === 0} onClick={() => lookBack("previous", l.ord - 1)}>{tr("reader.previous")}</button>
             )}
             <button className="btn primary nextbtn" type="button" onClick={endLook}>{back}</button>
           </div>
@@ -739,11 +741,11 @@ export function Reader({ bookId }: { bookId: string }) {
     return (
       <div className="readprefs">
         <button className="btn small ghost fontbtn" type="button" onClick={() => ((r.modal = { kind: "font" }), bump())}>
-          <span aria-hidden="true" className="aa">Aa</span> Font: {fontOf(font).name}
+          <span aria-hidden="true" className="aa">Aa</span> {tr("reader.font", { name: tr(`font.${fontOf(font).id}`) })}
         </button>
-        <span className="sizes" role="group" aria-label="Text size">
+        <span className="sizes" role="group" aria-label={tr("reader.textSize")}>
           {TEXT_SIZES.map((t) => (
-            <button key={t.id} type="button" className={t.id[0]} aria-pressed={size === t.id} aria-label={`${t.name} text`} title={`${t.name} text`}
+            <button key={t.id} type="button" className={t.id[0]} aria-pressed={size === t.id} aria-label={tr(`reader.size.${t.id}`)} title={tr(`reader.size.${t.id}`)}
               onClick={() => void updateProfile((x) => ({ ...x, settings: { ...x.settings, textSize: t.id } }))}>
               A
             </button>
@@ -771,13 +773,13 @@ export function Reader({ bookId }: { bookId: string }) {
   }
 
   function renderDefinition(onStreak: boolean, hint = false) {
-    if (hint || r.sel == null) return <span className="note">Tap any word you don't know. Names and numbers never count.</span>;
+    if (hint || r.sel == null) return <span className="note">{tr("reader.tapHint")}</span>;
     const tok = para().tokens[r.sel];
     if (tok.k === "name")
       return (
         <>
-          <div className="head"><span className="word">{tok.t}</span><span className="lemma">name</span></div>
-          <span className="note">A name stays as it is. It doesn't count as a fout.</span>
+          <div className="head"><span className="word" lang="nl" dir="ltr">{tok.t}</span><span className="lemma">{tr("reader.name")}</span></div>
+          <span className="note">{tr("reader.nameNote")}</span>
         </>
       );
     const d = look(tok.t);
@@ -786,37 +788,37 @@ export function Reader({ bookId }: { bookId: string }) {
     const canUndo = rev && Date.now() - rev.at <= r.session!.undoWindowMs;
     const m = d.meaning;
     const lifetime = wordbook[d.lemma]?.reveals ?? 0;
-    const why = lang === "nl" ? (onStreak ? "Dutch explanation: you're on a streak." : "Dutch explanation from B1.") : "";
+    const why = lang === "nl" ? tr(onStreak ? "reader.dutchStreak" : "reader.dutchB1") : "";
     const k = `${at()}|${r.sel}|${para().matched ? "m" : "o"}`;
     const x = r.explained.get(k);
     const lookup = r.lookups.get(d.lemma);
     return (
       <>
         <div className="head">
-          <span className="word" lang="nl">{tok.t}</span>
-          {d.lemma !== tok.t.toLowerCase() ? <span className="lemma">{m?.article ? `${m.article} ` : ""}{d.lemma}</span> : m?.article ? <span className="lemma">{m.article}</span> : null}
-          {lifetime > 0 && <span className="lemma">revealed {lifetime}× before</span>}
-          {canUndo && <button className="btn small ghost undo" type="button" onClick={undo}>Undo tap</button>}
+          <span className="word" lang="nl" dir="ltr">{tok.t}</span>
+          {d.lemma !== tok.t.toLowerCase() ? <span className="lemma" lang="nl" dir="ltr">{m?.article ? `${m.article} ` : ""}{d.lemma}</span> : m?.article ? <span className="lemma" lang="nl" dir="ltr">{m.article}</span> : null}
+          {lifetime > 0 && <span className="lemma">{tr("reader.revealedBefore", { n: lifetime })}</span>}
+          {canUndo && <button className="btn small ghost undo" type="button" onClick={undo}>{tr("reader.undo")}</button>}
         </div>
         {m && m.from !== "claude" ? (
-          lang === "nl" && m.nl ? <div className="meaning nl" lang="nl">{m.nl}</div> : m.en ? (
+          lang === "nl" && m.nl ? <div className="meaning nl" lang="nl" dir="ltr">{m.nl}</div> : m.en ? (
             <>
-              <div className="meaning">{m.en}</div>
+              <div className="meaning" lang="en" dir="ltr">{m.en}</div>
               {m.from === "translation" && (
                 <>
-                  <span className="note">Not in the dictionary: translated by Google Translate{m.shared ? ", shared by Boekenwurm readers" : ""}.</span>
+                  <span className="note">{tr(m.shared ? "reader.translatedShared" : "reader.translated")}</span>
                   <ReportTranslation key={d.lemma} word={m.word ?? tok.t} onReported={(text) => void reported(d.lemma, tok.t, text)} />
                 </>
               )}
-              {m.from === "compound" && <span className="note">Not in the dictionary as one word: its two parts.</span>}
-              {m.from === "manual" && <span className="note">Your own meaning.</span>}
-              {lang === "nl" && <span className="note">No Dutch explanation for this word yet, so here is the English.</span>}
+              {m.from === "compound" && <span className="note">{tr("reader.compound")}</span>}
+              {m.from === "manual" && <span className="note">{tr("reader.manual")}</span>}
+              {lang === "nl" && <span className="note">{tr("reader.noDutch")}</span>}
             </>
           ) : null
         ) : lookup === "pending" ? (
-          <span className="note" aria-live="polite">Not in the dictionary. Looking it up…</span>
+          <span className="note" aria-live="polite">{tr("reader.lookingUp")}</span>
         ) : lookup === "offline" ? (
-          <span className="note">You're offline, so this word couldn't be looked up. This tap doesn't count; tap it again when you're back online.</span>
+          <span className="note">{tr("reader.offlineTap")}</span>
         ) : lookup === "limit" || lookup === "signin" ? (
           <LimitPrompt
             why={lookup}
@@ -828,16 +830,16 @@ export function Reader({ bookId }: { bookId: string }) {
           />
         ) : lookup === "none" && x?.status !== "done" ? (
           <>
-            <span className="note">No meaning found for this word, so this tap doesn't count: no fout, and nothing to study.</span>
+            <span className="note">{tr("reader.noMeaning")}</span>
             <TypeMeaning word={tok.t} onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)} />
           </>
         ) : null}
         {why && <span className="note">{why}</span>}
-        {x?.status === "pending" && <span className="note">Checking this sentence…</span>}
+        {x?.status === "pending" && <span className="note">{tr("reader.checkingSentence")}</span>}
         {x?.status === "error" && <span className="note">{x.error}</span>}
         {x?.status === "done" && (
           <div className="ctx">
-            <span className="label">In this sentence</span>
+            <span className="label">{tr("reader.inSentence")}</span>
             <div className={`meaning ${lang === "nl" && x.data.meaningNl ? "nl" : ""}`}>
               {x.data.lemma && <b lang="nl">{x.data.lemma}: </b>}
               {lang === "nl" && x.data.meaningNl ? <span lang="nl">{x.data.meaningNl}</span> : x.data.meaningEn || x.data.meaningNl}
@@ -856,23 +858,23 @@ export function Reader({ bookId }: { bookId: string }) {
       <section className="panel">
         <h2 className="big">
           {s.kind === "lookup"
-            ? `You read ${plural(s.paragraphs, "paragraph")} in unlimited lookup mode.`
+            ? tr("summary.lookup", { n: s.paragraphs })
             : s.kind === "complete"
-            ? atBookEnd ? (nextUnphotographed() == null ? "You've read the whole book. Gefeliciteerd!" : "You've read every page photographed so far.") : `You read to the end. ${plural(s.streakLength, "paragraph")} passed in a row.`
-            : s.streakLength >= 2 ? `Your streak lasted ${s.streakLength} paragraphs.` : s.streakLength === 1 ? "You passed 1 paragraph this time." : "That paragraph used your last fout."}
+            ? atBookEnd ? tr(nextUnphotographed() == null ? "summary.wholeBook" : "summary.photographed") : tr("summary.end", { n: s.streakLength })
+            : s.streakLength >= 2 ? tr("summary.streak", { n: s.streakLength }) : s.streakLength === 1 ? tr("summary.one") : tr("summary.lastFout")}
         </h2>
-        <p>{s.list.length ? `You revealed ${plural(s.list.length, "word")}. The ones you've needed most often come first.` : "You didn't reveal a single word."}</p>
+        <p>{s.list.length ? tr("summary.revealed", { n: s.list.length }) : tr("summary.none")}</p>
         {s.list.length > 0 && (
           <div className="tablewrap">
             <table>
-              <thead><tr><th>Word</th><th>Meaning</th><th>Today</th><th>All time</th></tr></thead>
+              <thead><tr><th>{tr("summary.col.word")}</th><th>{tr("summary.col.meaning")}</th><th>{tr("summary.col.today")}</th><th>{tr("summary.col.all")}</th></tr></thead>
               <tbody>
                 {s.list.map((w) => {
                   const m = lookup(w.forms[0], { meanings }).meaning;
                   return (
                     <tr key={w.lemma}>
-                      <td><b lang="nl">{w.lemma}</b><div className="forms">{w.forms.join(", ")}</div></td>
-                      <td>{m?.en ?? m?.nl ?? "—"}</td>
+                      <td lang="nl" dir="ltr"><b>{w.lemma}</b><div className="forms">{w.forms.join(", ")}</div></td>
+                      <td lang={m?.en ? "en" : "nl"} dir="ltr">{m?.en ?? m?.nl ?? "—"}</td>
                       <td className="n">{w.sessionReveals}</td>
                       <td className="n">{w.lifetimeReveals}</td>
                     </tr>
@@ -885,33 +887,33 @@ export function Reader({ bookId }: { bookId: string }) {
         <div className="actions">
           {s.list.length > 0 && (
             <button className="btn primary" type="button" onClick={() => open({ name: "study-session", lemmas: s.list.map((w) => w.lemma), afterLookupMode: s.kind === "lookup", bookId })}>
-              Study these {plural(s.list.length, "word")}
+              {tr("summary.study", { n: s.list.length })}
             </button>
           )}
           {atBookEnd ? (
             nextUnphotographed() != null && (
               <button className="btn" type="button" onClick={() => open({ name: "photo", bookId })}>
-                Photograph the next pages
+                {tr("summary.photoNext")}
               </button>
             )
           ) : (
-            <button className="btn" type="button" onClick={() => (startNewSession(), bump())}>Keep reading</button>
+            <button className="btn" type="button" onClick={() => (startNewSession(), bump())}>{tr("summary.keepReading")}</button>
           )}
           {r.lastRead != null && (
-            <button className="btn ghost" type="button" onClick={() => lookBack("reread", r.lastRead!)}>Re-read the last paragraph</button>
+            <button className="btn ghost" type="button" onClick={() => lookBack("reread", r.lastRead!)}>{tr("summary.reread")}</button>
           )}
         </div>
         {atBookEnd && nextUnphotographed() != null && (
           <div className="verdict">
-            <b>Next section: up to {SECTION_SIZE} pages, from page {nextUnphotographed()}</b>
-            <span className="small">Photograph them in order; each one slots into its place in the book.</span>
+            <b>{tr("summary.nextSection", { n: SECTION_SIZE, page: nextUnphotographed()! })}</b>
+            <span className="small">{tr("summary.nextSectionNote")}</span>
           </div>
         )}
         {canPrompt() && !isStandalone() && (
           <div className="verdict">
-            <b>Keep Boekenwurm on your home screen</b>
-            <span className="small">It opens like an app and works offline.</span>
-            <button className="btn small" type="button" onClick={() => void promptInstall()}>Install</button>
+            <b>{tr("summary.install")}</b>
+            <span className="small">{tr("summary.installNote")}</span>
+            <button className="btn small" type="button" onClick={() => void promptInstall()}>{tr("summary.installGo")}</button>
           </div>
         )}
       </section>
@@ -1141,10 +1143,11 @@ function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, 
 
 /** The reader's header: Home on the left, the page (Go to) in the middle of the screen, anything else on the right. */
 function TopBar({ title, center, right }: { title: string; center?: React.ReactNode; right?: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="topbar readerbar">
-      <button className="back" type="button" onClick={close} aria-label="Back to Home">
-        <span style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> Home
+      <button className="back" type="button" onClick={close} aria-label={t("reader.backHome")}>
+        <span className="backicon" style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> {t("reader.home")}
       </button>
       <span className="centre">
         <span className="sr-only">{title}</span>
@@ -1212,11 +1215,11 @@ function WordPopover({ wrap, index, onClose, children }: { wrap: RefObject<HTMLD
       ref={ref}
       className={`wordpop def${pos?.above ? " above" : ""}`}
       role="dialog"
-      aria-label="Meaning"
+      aria-label={tt("reader.meaning")}
       aria-live="polite"
       style={pos ? { left: pos.left, top: pos.top, ["--arrow" as string]: `${pos.arrow}px` } : { visibility: "hidden", left: 0, top: 0 }}
     >
-      <button className="popclose" type="button" aria-label="Close" onClick={onClose}>×</button>
+      <button className="popclose" type="button" aria-label={tt("common.close")} onClick={onClose}>×</button>
       {children}
     </div>
   );

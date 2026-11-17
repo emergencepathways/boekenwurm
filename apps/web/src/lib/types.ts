@@ -69,6 +69,8 @@ export interface Settings {
   unlimitedMode?: boolean;
   /** The 5,000 most common Dutch words are on the reader's word lists (Words tab). */
   commonWords?: boolean;
+  /** The reader's language for the app and for meanings (lib/i18n.ts); English by default. */
+  language?: "en" | "uk" | "ar";
   /** Font pairing (lib/fonts.ts); Literata + Atkinson Hyperlegible Next by default. */
   font?: "literata" | "source" | "newsreader";
   /** The reader's answer to using LanguageTool in the diary, and when (lib/consent.ts). Absent: not asked yet. */

@@ -10,18 +10,18 @@ import { addToReview, dueCards, getState, onWordList, removeWordList, unskipCard
 import { commonWords, meaningOf, wordLists } from "../lib/words.ts";
 import { checkAchievements } from "../lib/play.ts";
 import { open } from "../nav.ts";
-import { plural, Sheet, toast } from "../ui.tsx";
+import { Sheet, toast } from "../ui.tsx";
+import { t, useT } from "../lib/i18n.ts";
 
 type Filter = "all" | "work" | "unseen" | "seen" | "learned";
-const FILTERS: Array<[Filter, string]> = [["all", "All"], ["work", "Needs work"], ["seen", "Seen, never tapped"], ["unseen", "Not seen yet"], ["learned", "Learned"]];
+const FILTERS: readonly Filter[] = ["all", "work", "seen", "unseen", "learned"];
 const PAGE = 300;
-const SOURCE: Record<WordListInfo["source"], string> = { textbook: "Textbook", paste: "Pasted", text: "Text file", csv: "CSV", excel: "Excel", anki: "Anki deck" };
-const fmt = (n: number) => n.toLocaleString("en-US");
 
 /** A list picked in the tab: one of the common-words sizes, or an imported list. */
 type Pick = { kind: "common"; size: number } | { kind: "list"; id: string };
 
 export function Words() {
+  const t = useT();
   const common = useStore((s) => s.profile.settings.commonWords === true);
   const lists = useStore((s) => s.wordLists);
   const dictionary = useStore((s) => s.dictionary);
@@ -62,7 +62,7 @@ export function Words() {
 
   return (
     <main className="screen words">
-      <div className="topbar"><h1>Words</h1></div>
+      <div className="topbar"><h1>{t("tab.words")}</h1></div>
 
       {empty ? (
         <EmptyLists />
@@ -72,8 +72,8 @@ export function Words() {
             <button className="studycard" type="button" onClick={() => open({ name: "study-session" })}>
               <span className="big">{listDue}</span>
               <span className="grow">
-                <b>Review your list words</b>
-                <span className="small muted">{plural(listDue, "word")} from your lists rated Hard or Medium. They come first in every review.</span>
+                <b>{t("words.listDue")}</b>
+                <span className="small muted">{t("words.listDueText", { n: listDue })}</span>
               </span>
             </button>
           )}
@@ -81,28 +81,28 @@ export function Words() {
           {common && (
             <section className="panel">
               <div className="listhead">
-                <h2>Common Dutch words</h2>
-                <button className="btn small ghost" type="button" onClick={() => void setCommon(false)}>Remove</button>
+                <h2>{t("words.common")}</h2>
+                <button className="btn small ghost" type="button" onClick={() => void setCommon(false)}>{t("common.remove")}</button>
               </div>
               {commonList.length ? (
                 <div className="tiers tiles">
                   {sizes.map((n) => (
-                    <ListRow key={n} tile title={`Top ${fmt(n)}`} words={commonList.slice(0, n)} status={status}
+                    <ListRow key={n} tile title={t("words.top", { n })} words={commonList.slice(0, n)} status={status}
                       selected={current?.kind === "common" && current.size === n} onClick={() => choose({ kind: "common", size: n })} />
                   ))}
                 </div>
               ) : (
-                <p>{dictionary === undefined ? "Loading the dictionary…" : "The dictionary isn't available in this build, so the common words can't be shown."}</p>
+                <p>{dictionary === undefined ? t("words.loadingDict") : t("words.noDict")}</p>
               )}
             </section>
           )}
 
           {lists.length > 0 && (
             <section className="panel">
-              <h2>My lists</h2>
+              <h2>{t("words.myLists")}</h2>
               <div className="tiers">
                 {lists.map((l) => (
-                  <ListRow key={l.id} title={l.name} detail={`${SOURCE[l.source]} · ${fmt(l.size)} words`} words={words({ kind: "list", id: l.id })} status={status}
+                  <ListRow key={l.id} title={l.name} detail={t("words.listDetail", { source: t(`words.source.${l.source}`), n: l.size })} words={words({ kind: "list", id: l.id })} status={status}
                     selected={current?.kind === "list" && current.id === l.id} onClick={() => choose({ kind: "list", id: l.id })} />
                 ))}
               </div>
@@ -110,29 +110,26 @@ export function Words() {
           )}
 
           <div className="actions">
-            <button className="btn" type="button" onClick={() => open({ name: "import-list" })}>Import a list…</button>
-            {!common && <button className="btn ghost" type="button" disabled={!dictionary} onClick={() => void setCommon(true)}>Add the 5,000 most common words</button>}
+            <button className="btn" type="button" onClick={() => open({ name: "import-list" })}>{t("words.import")}</button>
+            {!common && <button className="btn ghost" type="button" disabled={!dictionary} onClick={() => void setCommon(true)}>{t("words.addCommon")}</button>}
           </div>
 
           {current && (
-            <WordGrid key={JSON.stringify(current)} title={current.kind === "common" ? `The ${fmt(current.size)} most common words` : (lists.find((l) => l.id === current.id)?.name ?? "")}
+            <WordGrid key={JSON.stringify(current)} title={current.kind === "common" ? t("words.mostCommon", { n: current.size }) : (lists.find((l) => l.id === current.id)?.name ?? "")}
               words={words(current)} status={status} expanded={expanded} onToggle={() => setExpanded(!expanded)} onRemove={current.kind === "list" ? () => setRemove(lists.find((l) => l.id === current.id) ?? null) : undefined} />
           )}
         </>
       )}
 
-      <p className="note">
-        Common words: ranked by how often they appear in real Dutch text (wordfreq, by Robyn Speer and contributors), with meanings from
-        Wiktionary; both CC BY-SA 4.0. Lists you import stay on this device and are never shared.
-      </p>
+      <p className="note">{t("words.credit")}</p>
 
       {remove && (
-        <Sheet label="Remove list" onClose={() => setRemove(null)}>
-          <h2>Remove “{remove.name}”?</h2>
-          <p className="muted">The list goes from this device. Your flashcards and reading history stay; import the file again to bring the list back.</p>
+        <Sheet label={t("words.removeList")} onClose={() => setRemove(null)}>
+          <h2>{t("words.removeAsk", { name: remove.name })}</h2>
+          <p className="muted">{t("words.removeText")}</p>
           <div className="actions">
-            <button className="btn primary" type="button" onClick={() => void removeWordList(remove.id).then(() => (setRemove(null), setPick(null), toast("List removed.")))}>Remove</button>
-            <button className="btn ghost" type="button" onClick={() => setRemove(null)}>Keep it</button>
+            <button className="btn primary" type="button" onClick={() => void removeWordList(remove.id).then(() => (setRemove(null), setPick(null), toast(t("words.removed"))))}>{t("common.remove")}</button>
+            <button className="btn ghost" type="button" onClick={() => setRemove(null)}>{t("book.keep")}</button>
           </div>
         </Sheet>
       )}
@@ -142,23 +139,21 @@ export function Words() {
 
 async function setCommon(on: boolean): Promise<void> {
   await updateProfile((p) => ({ ...p, settings: { ...p.settings, commonWords: on } }));
-  toast(on ? "Added the 5,000 most common Dutch words." : "Removed the common words list.");
+  toast(on ? t("words.commonAdded") : t("words.commonRemoved"));
   if (on) void checkAchievements();
 }
 
 function EmptyLists() {
+  const t = useT();
   const dictionary = useStore((s) => s.dictionary);
   return (
     <section className="panel firstbook">
-      <h2>Add a word list</h2>
-      <p>
-        Pick the words you want to learn, and Boekenwurm follows them as you read: which ones you've seen, which you tap, and which
-        you've learned. Words from your lists that you rate Hard or Medium come first in every review.
-      </p>
-      <button className="btn primary" type="button" disabled={!dictionary} onClick={() => void setCommon(true)}>Add the 5,000 most common Dutch words</button>
-      <p className="small">One tap. You'll see your progress through the 500, 1,000, 2,000 and 5,000 most common words, with a badge for each.</p>
-      <button className="btn" type="button" onClick={() => open({ name: "import-list" })}>Import your own list…</button>
-      <p className="small">From your course or teacher: paste it, or use a text, CSV or Excel file, or an Anki deck.</p>
+      <h2>{t("words.emptyTitle")}</h2>
+      <p>{t("words.emptyLead")}</p>
+      <button className="btn primary" type="button" disabled={!dictionary} onClick={() => void setCommon(true)}>{t("words.addCommonFull")}</button>
+      <p className="small">{t("words.addCommonNote")}</p>
+      <button className="btn" type="button" onClick={() => open({ name: "import-list" })}>{t("words.importOwn")}</button>
+      <p className="small">{t("words.importOwnNote")}</p>
     </section>
   );
 }
@@ -170,6 +165,7 @@ function counts(words: readonly string[], status: (w: string) => E.ListWordStatu
 
 /** A list's progress: a full-width row for an imported list, or a compact tile for each common-words size. */
 function ListRow(props: { title: string; detail?: string; tile?: boolean; words: readonly string[]; status: (w: string) => E.ListWordStatus; selected: boolean; onClick: () => void }) {
+  const t = useT();
   const c = counts(props.words, props.status);
   const pct = (n: number) => `${c.total ? (n / c.total) * 100 : 0}%`;
   return (
@@ -177,14 +173,14 @@ function ListRow(props: { title: string; detail?: string; tile?: boolean; words:
       <button type="button" className="pick" onClick={props.onClick}>
         <span className="name">
           <b>{props.title}</b>
-          <span className="num small">{fmt(c.learned)} / {fmt(c.total)} learned{c.learned === c.total && c.total ? " ✓" : ""}</span>
+          <span className="num small">{t("words.learnedOf", { n: c.learned, total: c.total })}{c.learned === c.total && c.total ? " ✓" : ""}</span>
         </span>
-        <span className="stack3" role="img" aria-label={`${c.learned} learned, ${c.met} seen and still learning, ${c.unseen} not seen yet`}>
+        <span className="stack3" role="img" aria-label={t("words.barAria", { learned: c.learned, met: c.met, unseen: c.unseen })}>
           <i className="l" style={{ width: pct(c.learned) }} />
           <i className="m" style={{ width: pct(c.met) }} />
         </span>
         <span className="small muted">
-          {props.tile ? `${fmt(c.learned + c.met)} seen` : `${props.detail ? `${props.detail} · ` : ""}${fmt(c.learned + c.met)} seen · ${fmt(c.unseen)} not seen yet`}
+          {props.tile ? t("words.seenCount", { n: c.learned + c.met }) : `${props.detail ? `${props.detail} · ` : ""}${t("words.rowDetail", { seen: c.learned + c.met, unseen: c.unseen })}`}
         </span>
       </button>
     </div>
@@ -194,6 +190,7 @@ function ListRow(props: { title: string; detail?: string; tile?: boolean; words:
 function WordGrid({ title, words, status, expanded, onToggle, onRemove }: {
   title: string; words: readonly string[]; status: (w: string) => E.ListWordStatus; expanded: boolean; onToggle: () => void; onRemove?: () => void;
 }) {
+  const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
   const [shown, setShown] = useState(PAGE);
   const [word, setWord] = useState<string | null>(null);
@@ -212,34 +209,34 @@ function WordGrid({ title, words, status, expanded, onToggle, onRemove }: {
       <section className="panel" id="wordgrid">
         <div className="listhead">
           <h2>{title}</h2>
-          {onRemove && <button className="btn small ghost" type="button" onClick={onRemove}>Remove list</button>}
+          {onRemove && <button className="btn small ghost" type="button" onClick={onRemove}>{t("words.removeList")}</button>}
         </div>
-        <p className="small">{fmt(c.learned)} learned · {fmt(work)} need work · {fmt(c.met - work)} seen · {fmt(c.unseen)} not seen yet</p>
-        <button className="btn block" type="button" aria-expanded="false" aria-controls="wordgrid" onClick={onToggle}>Show all {fmt(words.length)} words</button>
+        <p className="small">{t("words.summary", { learned: c.learned, work, seen: c.met - work, unseen: c.unseen })}</p>
+        <button className="btn block" type="button" aria-expanded="false" aria-controls="wordgrid" onClick={onToggle}>{t("words.showAll", { n: words.length })}</button>
       </section>
     );
   return (
     <section className="panel" id="wordgrid">
       <div className="listhead">
         <h2>{title}</h2>
-        {onRemove && <button className="btn small ghost" type="button" onClick={onRemove}>Remove list</button>}
+        {onRemove && <button className="btn small ghost" type="button" onClick={onRemove}>{t("words.removeList")}</button>}
       </div>
-      <button className="btn small ghost" type="button" aria-expanded="true" aria-controls="wordgrid" onClick={onToggle}>Hide words</button>
-      <div className="chips" role="group" aria-label="Show">
-        {FILTERS.map(([f, label]) => (
-          <button key={f} type="button" className="chip" aria-pressed={filter === f} onClick={() => (setFilter(f), setShown(PAGE))}>{label}</button>
+      <button className="btn small ghost" type="button" aria-expanded="true" aria-controls="wordgrid" onClick={onToggle}>{t("words.hide")}</button>
+      <div className="chips" role="group" aria-label={t("words.show")}>
+        {FILTERS.map((f) => (
+          <button key={f} type="button" className="chip" aria-pressed={filter === f} onClick={() => (setFilter(f), setShown(PAGE))}>{t(`words.filter.${f}`)}</button>
         ))}
       </div>
       <div className="legend small" aria-hidden="true">
-        <span className="wchip s-unseen">not seen</span>
-        <span className="wchip s-seen">seen</span>
-        <span className="wchip s-tapped c-green">easy</span>
-        <span className="wchip s-tapped c-yellow">medium</span>
-        <span className="wchip s-tapped c-red">hard</span>
-        <span className="wchip learned">learned</span>
+        <span className="wchip s-unseen">{t("words.legend.unseen")}</span>
+        <span className="wchip s-seen">{t("words.legend.seen")}</span>
+        <span className="wchip s-tapped c-green">{t("words.legend.easy")}</span>
+        <span className="wchip s-tapped c-yellow">{t("words.legend.medium")}</span>
+        <span className="wchip s-tapped c-red">{t("words.legend.hard")}</span>
+        <span className="wchip learned">{t("words.legend.learned")}</span>
       </div>
       {list.length ? (
-        <div className="wgrid" lang="nl">
+        <div className="wgrid" lang="nl" dir="ltr">
           {list.slice(0, shown).map((w) => {
             const s = status(w);
             const cls = ["wchip", `s-${s.state}`, s.colour ? `c-${s.colour}` : "", s.learned ? "learned" : "", s.skipped ? "skipped" : ""].filter(Boolean).join(" ");
@@ -247,18 +244,16 @@ function WordGrid({ title, words, status, expanded, onToggle, onRemove }: {
           })}
         </div>
       ) : (
-        <p>No words here yet.</p>
+        <p>{t("words.noneHere")}</p>
       )}
-      {list.length > shown && <button className="btn small ghost" type="button" onClick={() => setShown(shown + PAGE)}>Show more ({fmt(list.length - shown)} left)</button>}
+      {list.length > shown && <button className="btn small ghost" type="button" onClick={() => setShown(shown + PAGE)}>{t("words.showMore", { n: list.length - shown })}</button>}
       {word && <WordDetails lemma={word} status={status(word)} onClose={() => setWord(null)} />}
     </section>
   );
 }
 
-const POOL_NAME: Record<E.Pool, string> = { hard: "Hard", medium: "Medium", easy: "Easy", skipped: "Skipped" };
-const day = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-
 function WordDetails({ lemma, status, onClose }: { lemma: string; status: E.ListWordStatus; onClose: () => void }) {
+  const t = useT();
   const s = getState();
   const w = s.wordbook[lemma];
   const card = s.cards[lemma];
@@ -272,19 +267,27 @@ function WordDetails({ lemma, status, onClose }: { lemma: string; status: E.List
       <h2 lang="nl">{m?.article ? `${m.article} ` : ""}{lemma}{status.learned ? " ✓" : ""}</h2>
       {m?.en && <p>{m.en}</p>}
       <ul className="facts small">
-        <li>{w?.encounters ? `Seen in ${plural(w.encounters, "paragraph")}` : "Not seen in your reading yet"}{w?.reveals ? ` · tapped ${plural(w.reveals, "time")}${recent ? ` (${recent} in the last 2 weeks)` : ""}` : w?.encounters ? " · never tapped" : ""}</li>
-        <li>Read without tapping: {untapped} of {E.LEARNED_UNTAPPED_READS}{w && (w.untapped ?? 0) > untapped ? "+" : ""}</li>
-        {card && <li>Flashcard: {POOL_NAME[card.pool]}{card.pool === "easy" && card.easySince ? ` since ${day(card.easySince)} (${plural(easyDays, "day")} of ${E.LEARNED_EASY_DAYS})` : ""}</li>}
+        <li>
+          {w?.encounters ? t("words.seenIn", { n: w.encounters }) : t("words.notSeen")}
+          {w?.reveals ? `${t("words.tapped", { n: w.reveals })}${recent ? t("words.recent", { n: recent }) : ""}` : w?.encounters ? t("words.neverTapped") : ""}
+        </li>
+        <li>{t("words.untapped", { n: untapped, max: E.LEARNED_UNTAPPED_READS })}{w && (w.untapped ?? 0) > untapped ? "+" : ""}</li>
+        {card && (
+          <li>
+            {t("words.card", { pool: t(`words.pool.${card.pool}`) })}
+            {card.pool === "easy" && card.easySince ? t("words.easySince", { date: t.date(card.easySince, { day: "numeric", month: "short" }), days: t("common.days", { n: easyDays }), max: E.LEARNED_EASY_DAYS }) : ""}
+          </li>
+        )}
       </ul>
       <p className="small">
         {status.learned
-          ? "Learned: read often without a tap" + (tapped ? ", and Easy in review for 2 weeks." : ".")
-          : `Learned once you've read it in ${E.LEARNED_UNTAPPED_READS} paragraphs without tapping (unlimited lookup mode doesn't count)${tapped ? ` and its flashcard has stayed Easy for ${E.LEARNED_EASY_DAYS} days` : ""}.`}
+          ? t(tapped ? "words.isLearnedTapped" : "words.isLearned")
+          : t(tapped ? "words.howLearnedTapped" : "words.howLearned", { n: E.LEARNED_UNTAPPED_READS, days: E.LEARNED_EASY_DAYS })}
       </p>
       <div className="actions">
-        {!card && <button className="btn" type="button" onClick={() => void addToReview(lemma).then(() => (toast("Added to your reviews."), onClose()))}>Add to my reviews</button>}
-        {card?.pool === "skipped" && <button className="btn" type="button" onClick={() => void unskipCard(lemma).then(() => (toast("Back in your reviews."), onClose()))}>Bring back</button>}
-        <button className="btn ghost" type="button" onClick={onClose}>Close</button>
+        {!card && <button className="btn" type="button" onClick={() => void addToReview(lemma).then(() => (toast(t("words.addedReview")), onClose()))}>{t("words.addReview")}</button>}
+        {card?.pool === "skipped" && <button className="btn" type="button" onClick={() => void unskipCard(lemma).then(() => (toast(t("words.broughtBack")), onClose()))}>{t("words.bringBack")}</button>}
+        <button className="btn ghost" type="button" onClick={onClose}>{t("common.close")}</button>
       </div>
     </Sheet>
   );

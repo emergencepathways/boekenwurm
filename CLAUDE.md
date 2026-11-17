@@ -46,6 +46,8 @@ owner asks, and update the design doc and the tests together.
   LanguageTool from the reader's device; `src/lib/push.ts` and `supabase/functions/diary-reminder/` send the weekly
   reminder (Web Push).
   Nothing is preloaded except the open dictionary (`public/dict/nl.json`, built at deploy time, not committed).
+  The app's text is in `src/i18n/` (English source, Ukrainian, Arabic); new UI text goes into `en.ts` and every
+  catalog in the same change (docs/TRANSLATING.md). Dutch stays Dutch in every language.
 - `apps/playtest/` — the first reader, built into one page; kept for reference, no longer hosted.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
   `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `dictionary.py` (the open

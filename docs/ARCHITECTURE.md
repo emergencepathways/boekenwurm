@@ -119,8 +119,16 @@ Bottom tab bar, like a native app: **Home · Study · Words · Account**. The re
 - **Study** — two categories: **Review** (flashcards, the Daily Challenge, words revealed) and **Diary** (prompts,
   free writing, entries on this device, the weekly reminder).
 - **Account** — four categories (new features join one of them): **Achievements** (rank and badges, earned and in
-  progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, name, install,
-  connection check, export and delete my data, about and updates), **Experimental** (Claude key and models, access code).
+  progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, localization, name,
+  install, connection check, export and delete my data, about and updates), **Experimental** (Claude key and models,
+  access code).
+
+**Languages.** The app's own text lives in message catalogs (`apps/web/src/i18n/en.ts` is the source; `uk.ts`, `ar.ts`
+translate it; a missing key falls back to English). `lib/i18n.ts` fills in `{placeholders}`, picks plural forms with
+`Intl.PluralRules` (Ukrainian has 4, Arabic 6), formats numbers and dates for the language, and sets `<html lang dir>`.
+Layout uses logical CSS properties so Arabic mirrors; Dutch elements carry `lang="nl"` and stay left-to-right. Noto Sans
+and Noto Sans Arabic are bundled, split by alphabet, for the letters the reading fonts don't have.
+`test/i18n.test.ts` checks every catalog has every key, every plural form and the same placeholders.
 
 ## Photographing a book you own
 

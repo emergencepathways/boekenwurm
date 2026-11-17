@@ -5,6 +5,7 @@
  */
 import * as E from "@boekenwurm/engine";
 import type { CardState } from "./types.ts";
+import { t } from "./i18n.ts";
 
 export const newCard = (lemma: string, at: number): CardState => ({ ...E.newReviewCard(lemma, at), updatedAt: at, dirty: true });
 
@@ -66,8 +67,8 @@ export function toRow(c: CardState, userId: string, cols: CardColumns = 2) {
 /** "in 3 days", for the Study tab. */
 export function inWords(ms: number): string {
   const d = Math.round(ms / 86400000);
-  if (d <= 0) return "today";
-  if (d === 1) return "tomorrow";
-  if (d < 31) return `in ${d} days`;
-  return `in ${Math.round(d / 30)} ${Math.round(d / 30) === 1 ? "month" : "months"}`;
+  if (d <= 0) return t("common.today");
+  if (d === 1) return t("common.tomorrow");
+  if (d < 31) return t("common.inDays", { n: d });
+  return t("common.inMonths", { n: Math.round(d / 30) });
 }

@@ -6,12 +6,14 @@ import { checkDailyChallenge, studyFinished } from "../lib/play.ts";
 import { inWords } from "../lib/cards.ts";
 import { close, open, useNav } from "../nav.ts";
 import { Diary } from "./Diary.tsx";
-import { Icon, plural } from "../ui.tsx";
+import { Icon } from "../ui.tsx";
+import { useT, type Key } from "../lib/i18n.ts";
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** The Study tab: two categories, Review (flashcards) and Diary. Links can open one (setTab("study", "diary")). */
 export function Study() {
+  const t = useT();
   const nav = useNav();
   const [view, setView] = useState<"review" | "diary">(nav.section === "diary" ? "diary" : "review");
   useEffect(() => {
@@ -19,11 +21,11 @@ export function Study() {
   }, [nav.section]);
   return (
     <main className="screen">
-      <div className="topbar"><h1>Study</h1></div>
-      <div className="subtabs" role="tablist" aria-label="Study">
+      <div className="topbar"><h1>{t("tab.study")}</h1></div>
+      <div className="subtabs" role="tablist" aria-label={t("tab.study")}>
         {(["review", "diary"] as const).map((v) => (
           <button key={v} type="button" role="tab" id={`tab-${v}`} aria-selected={view === v} aria-controls={`view-${v}`} onClick={() => setView(v)}>
-            {v === "review" ? "Review" : "Diary"}
+            {v === "review" ? t("study.review") : t("study.diary")}
           </button>
         ))}
       </div>
@@ -35,6 +37,7 @@ export function Study() {
 }
 
 function ReviewView() {
+  const t = useT();
   const cards = useStore((s) => s.cards);
   const wordbook = useStore((s) => s.wordbook);
   const meanings = useStore((s) => s.meanings);
@@ -64,43 +67,43 @@ function ReviewView() {
     <>
 
       <section className="panel">
-        <h2>Daily Challenge: Study {E.REVIEW_DAY.maxDue} words</h2>
-        <p>Studying up to {E.REVIEW_DAY.maxDue} words a day will help you improve your vocabulary. Earn extra XP if you complete it today!</p>
-        <div className="xpbar" role="progressbar" aria-label="Words reviewed today" aria-valuemin={0} aria-valuemax={E.REVIEW_DAY.maxDue} aria-valuenow={reviewed}>
+        <h2>{t("challenge.title", { n: E.REVIEW_DAY.maxDue })}</h2>
+        <p>{t("challenge.lead", { n: E.REVIEW_DAY.maxDue })}</p>
+        <div className="xpbar" role="progressbar" aria-label={t("challenge.aria")} aria-valuemin={0} aria-valuemax={E.REVIEW_DAY.maxDue} aria-valuenow={reviewed}>
           <i style={{ width: `${Math.round((reviewed / E.REVIEW_DAY.maxDue) * 100)}%` }} />
         </div>
-        <p className="small num">{reviewed} / {E.REVIEW_DAY.maxDue} words reviewed{reviewed >= E.REVIEW_DAY.maxDue ? ` · done! +${E.XP.fullDayReview} XP` : ""}</p>
+        <p className="small num">{reviewed >= E.REVIEW_DAY.maxDue ? t("challenge.progressDone", { n: reviewed, max: E.REVIEW_DAY.maxDue, xp: E.XP.fullDayReview }) : t("challenge.progress", { n: reviewed, max: E.REVIEW_DAY.maxDue })}</p>
         {plan.lemmas.length > 0 ? (
           <button className="btn primary block" type="button" onClick={() => open({ name: "study-session" })}>
-            Review {plural(plan.lemmas.length, "word")}
+            {t("review.go", { n: plan.lemmas.length })}
           </button>
         ) : reviewed < E.REVIEW_DAY.maxDue && (
-          <p className="small muted">{all.length ? "No words to review right now." : "Tap words while reading: each one becomes a flashcard here."}</p>
+          <p className="small muted">{all.length ? t("review.none") : t("review.noneYet")}</p>
         )}
       </section>
 
       <section className="panel">
-        <h2>Not sticking yet</h2>
-        <p>Words you've met at least 3 times and still revealed in half of them or more.</p>
+        <h2>{t("review.stuckTitle")}</h2>
+        <p>{t("review.stuckLead")}</p>
         {stuck.length ? (
           <>
             <WordTable words={stuck} />
             <button className="btn" type="button" onClick={() => open({ name: "study-session", lemmas: stuck.map((w) => w.lemma) })}>
-              Review these {plural(stuck.length, "word")}
+              {t("review.stuckGo", { n: stuck.length })}
             </button>
           </>
         ) : (
-          <p className="empty">Nothing yet. Words appear here once they keep coming back.</p>
+          <p className="empty">{t("review.stuckNone")}</p>
         )}
       </section>
 
       {skipped.length > 0 && (
         <section className="panel">
-          <h2>Skipped words</h2>
-          <p>Words you skipped as not worth learning. They never come up in reviews; bring one back if you change your mind.</p>
+          <h2>{t("review.skippedTitle")}</h2>
+          <p>{t("review.skippedLead")}</p>
           <div className="chips">
             {skipped.map((c) => (
-              <button key={c.lemma} className="btn small ghost" type="button" lang="nl" onClick={() => void unskipCard(c.lemma)} aria-label={`Bring back ${c.lemma}`}>
+              <button key={c.lemma} className="btn small ghost" type="button" lang="nl" onClick={() => void unskipCard(c.lemma)} aria-label={t("review.bringBack", { word: c.lemma })}>
                 {c.lemma} ↺
               </button>
             ))}
@@ -109,14 +112,14 @@ function ReviewView() {
       )}
 
       <section className="panel">
-        <h2>Every word you've revealed</h2>
+        <h2>{t("review.revealedTitle")}</h2>
         {revealed.length > 0 && (
           <div className="actions">
-            <button className="btn small" type="button" onClick={exportCsv}>Export CSV</button>
-            <span className="note">Opens in Anki, Quizlet, Mochi, RemNote and spreadsheets.</span>
+            <button className="btn small" type="button" onClick={exportCsv}>{t("review.export")}</button>
+            <span className="note">{t("review.exportNote")}</span>
           </div>
         )}
-        {revealed.length ? <RevealedWords words={revealed} plan={plan.lemmas} /> : <p className="empty">Read a page and tap a word to start your list.</p>}
+        {revealed.length ? <RevealedWords words={revealed} plan={plan.lemmas} /> : <p className="empty">{t("review.revealedNone")}</p>}
       </section>
     </>
   );
@@ -127,6 +130,7 @@ function ReviewView() {
  * order, then Easy words by their check-back date, then words with no card and skipped words.
  */
 function RevealedWords({ words, plan }: { words: E.WordStats[]; plan: string[] }) {
+  const t = useT();
   const cards = useStore((s) => s.cards);
   const meanings = useStore((s) => s.meanings);
   const [q, setQ] = useState("");
@@ -149,23 +153,23 @@ function RevealedWords({ words, plan }: { words: E.WordStats[]; plan: string[] }
   const inPlan = new Set(plan);
   const next = (l: string): string => {
     const c = cards[l];
-    if (inPlan.has(l)) return "Next set";
-    if (!c) return "No card";
-    if (c.pool === "skipped") return "Skipped";
-    if (c.pool === "hard") return "Hard";
-    if (c.pool === "medium") return "Medium";
-    return c.due <= now ? "Check due" : `Check ${inWords(c.due - now)}`;
+    if (inPlan.has(l)) return t("review.next.set");
+    if (!c) return t("review.next.noCard");
+    if (c.pool === "skipped") return t("review.next.skipped");
+    if (c.pool === "hard") return t("review.next.hard");
+    if (c.pool === "medium") return t("review.next.medium");
+    return c.due <= now ? t("review.next.checkDue") : t("review.next.check", { when: inWords(c.due - now) });
   };
   return (
     <>
-      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your words or their meanings" aria-label="Search your words" />
+      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("review.search")} aria-label={t("review.searchLabel")} />
       <p className="small muted">
-        {query ? `${plural(found.length, "word")} found. ` : ""}Sorted by what you'll study next: your next review set first, then the rest of your pool.
+        {query ? `${t("review.found", { n: found.length })} ` : ""}{t("review.sorted")}
       </p>
-      {found.length ? <WordTable words={found} next={next} limit={all ? found.length : FIRST_WORDS} /> : <p className="empty">No word matches “{q.trim()}”.</p>}
+      {found.length ? <WordTable words={found} next={next} limit={all ? found.length : FIRST_WORDS} /> : <p className="empty">{t("review.noMatch", { q: q.trim() })}</p>}
       {found.length > FIRST_WORDS && (
         <button className="btn small ghost" type="button" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? `Show the first ${FIRST_WORDS} only` : `Show all ${found.length.toLocaleString()} words`}
+          {all ? t("review.showFirst", { n: FIRST_WORDS }) : t("review.showAll", { n: found.length })}
         </button>
       )}
     </>
@@ -176,10 +180,11 @@ function RevealedWords({ words, plan }: { words: E.WordStats[]; plan: string[] }
 const FIRST_WORDS = 40;
 
 function WordTable({ words, next, limit = 200 }: { words: E.WordStats[]; next?: (lemma: string) => string; limit?: number }) {
+  const t = useT();
   return (
     <div className="tablewrap">
       <table>
-        <thead><tr><th>Word</th>{next && <th>Next</th>}<th>Revealed</th><th>Met</th><th>Reveal rate</th></tr></thead>
+        <thead><tr><th>{t("review.col.word")}</th>{next && <th>{t("review.col.next")}</th>}<th>{t("review.col.revealed")}</th><th>{t("review.col.met")}</th><th>{t("review.col.rate")}</th></tr></thead>
         <tbody>
           {words.slice(0, limit).map((w) => {
             const rate = E.revealRate(w);
@@ -189,7 +194,7 @@ function WordTable({ words, next, limit = 200 }: { words: E.WordStats[]; next?: 
                 {next && <td className="small">{next(w.lemma)}</td>}
                 <td className="n">{w.reveals}</td>
                 <td className="n">{w.encounters}</td>
-                <td><div className="rate" title={`${Math.round(rate * 100)}% of encounters revealed`}><i style={{ width: `${Math.round(rate * 100)}%` }} /></div></td>
+                <td><div className="rate" title={t("review.rateTitle", { n: Math.round(rate * 100) })}><i style={{ width: `${Math.round(rate * 100)}%` }} /></div></td>
               </tr>
             );
           })}
@@ -199,10 +204,10 @@ function WordTable({ words, next, limit = 200 }: { words: E.WordStats[]; next?: 
   );
 }
 
-const ANSWERS: Array<{ a: E.Answer; label: string; cls: string }> = [
-  { a: "hard", label: "Hard", cls: "g-hard" },
-  { a: "medium", label: "Medium", cls: "g-medium" },
-  { a: "easy", label: "Easy", cls: "g-easy" },
+const ANSWERS: Array<{ a: E.Answer; label: Key; cls: string }> = [
+  { a: "hard", label: "cards.hard", cls: "g-hard" },
+  { a: "medium", label: "cards.medium", cls: "g-medium" },
+  { a: "easy", label: "cards.easy", cls: "g-easy" },
 ];
 
 /**
@@ -213,6 +218,7 @@ const ANSWERS: Array<{ a: E.Answer; label: string; cls: string }> = [
  * Skip drops a word that isn't worth learning; it can be brought back from Study.
  */
 export function StudySession({ lemmas, afterLookupMode = false, bookId }: { lemmas?: string[]; afterLookupMode?: boolean; bookId?: string }) {
+  const t = useT();
   // Studying a reading session's words: leaving goes back to the book, which opens at the page after the session.
   const book = useStore((s) => (bookId ? s.books.find((b) => b.id === bookId) : undefined));
   const leave = () => (book ? open({ name: "reader", bookId: book.id }) : close());
@@ -265,38 +271,38 @@ export function StudySession({ lemmas, afterLookupMode = false, bookId }: { lemm
   return (
     <main className="screen full">
       <div className="topbar">
-        <button className="back" type="button" onClick={leave}><span style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> {book ? "Back to the book" : "Back"}</button>
+        <button className="back" type="button" onClick={leave}><span style={{ width: 22, height: 22, display: "inline-block" }}><Icon.back /></span> {book ? t("cards.backToBook") : t("common.back")}</button>
         <span className="grow" />
-        {lemma && <span className="num muted">{recap ? `${settled + 1} of ${initial.length}` : `${settled} of ${initial.length} learned`}</span>}
+        {lemma && <span className="num muted">{recap ? t("cards.ofTotal", { n: settled + 1, total: initial.length }) : t("cards.learned", { n: settled, total: initial.length })}</span>}
       </div>
       {!recap && initial.length > 0 && (
-        <div className="xpbar" role="progressbar" aria-label="Cards rated Easy" aria-valuemin={0} aria-valuemax={initial.length} aria-valuenow={settled}>
+        <div className="xpbar" role="progressbar" aria-label={t("cards.easyAria")} aria-valuemin={0} aria-valuemax={initial.length} aria-valuenow={settled}>
           <i style={{ width: `${Math.round((settled / initial.length) * 100)}%` }} />
         </div>
       )}
       {!card ? (
         <section className="panel">
           <h2 className="big">
-            {!initial.length ? "Nothing to review right now." : recap ? `Done: ${plural(settled, "word")} rated.` : `Set done: all ${plural(initial.length, "word")} rated Easy.`}
+            {!initial.length ? t("cards.nothing") : recap ? t("cards.recapDone", { n: settled }) : t("cards.setDone", { n: initial.length })}
           </h2>
           <p>
             {recap
-              ? "Hard and Medium words wait in your review pool, Hard first. Easy ones come back for a quick check in 3 days."
-              : "Easy words come back for a quick check after 3 days, then 1 week, 3 weeks and every 2 months."}
+              ? t("cards.recapAfter")
+              : t("cards.setAfter")}
           </p>
           {book ? (
             <div className="actions">
-              <button className="btn primary" type="button" onClick={leave}>Keep reading</button>
-              <button className="btn ghost" type="button" onClick={close}>Home</button>
+              <button className="btn primary" type="button" onClick={leave}>{t("cards.keepReading")}</button>
+              <button className="btn ghost" type="button" onClick={close}>{t("tab.home")}</button>
             </div>
           ) : (
-            <button className="btn primary" type="button" onClick={close}>Back</button>
+            <button className="btn primary" type="button" onClick={close}>{t("common.back")}</button>
           )}
         </section>
       ) : (
         <>
           <div className="flash">
-            {isNew && <span className="chip" style={{ justifySelf: "center" }}>New word</span>}
+            {isNew && <span className="chip" style={{ justifySelf: "center" }}>{t("cards.new")}</span>}
             <div className="front" lang="nl">{lemma}</div>
             {examples[lemma] && (
               <div
@@ -310,7 +316,7 @@ export function StudySession({ lemmas, afterLookupMode = false, bookId }: { lemm
               <div className="answer">
                 {(() => {
                   const m = meaningOf(lemma, meanings);
-                  if (!m) return <span className="muted">Not in the dictionary. With your Claude key, tapping this word while reading saves its meaning in that sentence.</span>;
+                  if (!m) return <span className="muted">{t("cards.noMeaning")}</span>;
                   return (
                     <>
                       {m.article && <span className="muted">{m.article} </span>}
@@ -326,18 +332,18 @@ export function StudySession({ lemmas, afterLookupMode = false, bookId }: { lemm
             <>
               <div className="grades three">
                 {ANSWERS.map(({ a, label, cls }) => (
-                  <button key={a} className={`btn ${cls}`} type="button" onClick={() => answer(a)}>{label}</button>
+                  <button key={a} className={`btn ${cls}`} type="button" onClick={() => answer(a)}>{t(label)}</button>
                 ))}
               </div>
               <button className="btn small ghost" type="button" style={{ justifySelf: "center" }} onClick={() => answer("skip")}>
-                Skip: not worth learning
+                {t("cards.skip")}
               </button>
               <p className="note" style={{ margin: 0, textAlign: "center" }}>
-                {recap ? "Hard and Medium go to your review pool." : "Hard and Medium come round again in this set, until you know it: Easy."}
+                {recap ? t("cards.recapNote") : t("cards.setNote")}
               </p>
             </>
           ) : (
-            <button className="btn primary block" type="button" onClick={() => setFlipped(true)}>Show meaning</button>
+            <button className="btn primary block" type="button" onClick={() => setFlipped(true)}>{t("cards.show")}</button>
           )}
         </>
       )}

@@ -8,6 +8,7 @@ import { getState, reviewedTodayCount, updateProfile } from "./store.ts";
 import { localDay } from "./usage.ts";
 import { commonWords } from "./words.ts";
 import { toast } from "../ui.tsx";
+import { t as tr } from "./i18n.ts";
 import type { Book } from "./types.ts";
 
 const DEVICE = "boekenwurm-device";
@@ -52,7 +53,7 @@ async function commit(next: E.PlayState, gained: number): Promise<void> {
   const play = E.addXp(next, deviceId(), gained);
   await updateProfile((p) => ({ ...p, progress: { ...p.progress, play } }));
   const after = rankNow();
-  if (after.rank !== before.rank) toast(`New rank: ${after.rank} · ${rankTitle(after.rank)}!`, 5000);
+  if (after.rank !== before.rank) toast(tr("xp.newRank", { rank: after.rank, title: rankTitle(after.rank) }), 5000);
   await checkAchievements();
 }
 
@@ -75,7 +76,8 @@ export async function checkAchievements(): Promise<void> {
   for (const u of fresh) tiers[u.key] = Math.max(tiers[u.key] ?? 0, u.tier);
   const last = fresh[fresh.length - 1];
   const a = E.ACHIEVEMENTS.find((x) => x.key === last.key)!;
-  toast(`Badge: ${a.name} · ${E.tierName(a, last.tier)} (+${E.XP.achievement * fresh.length} XP)${fresh.length > 1 ? ` and ${fresh.length - 1} more` : ""}`, 5000);
+  const badge = { name: a.name, tier: E.tierName(a, last.tier), xp: E.XP.achievement * fresh.length, more: fresh.length - 1 };
+  toast(tr(fresh.length > 1 ? "xp.badgeMore" : "xp.badge", badge), 5000);
   await commit({ ...play, tiers }, E.XP.achievement * fresh.length);
 }
 
@@ -114,7 +116,7 @@ export async function paragraphRead(p: ParagraphRead): Promise<number> {
 /** A run of 10 paragraphs or more in a session: once per session, never in unlimited lookup mode. */
 export async function streakBonus(o: { lookupMode?: boolean } = {}): Promise<number> {
   if (o.lookupMode) return 0;
-  toast(`10 paragraphs in a row: +${E.XP.streakBonus} XP!`, 4000);
+  toast(tr("xp.streak", { xp: E.XP.streakBonus }), 4000);
   await commit(playOf(), E.XP.streakBonus);
   return E.XP.streakBonus;
 }
@@ -125,7 +127,7 @@ export async function bookFinished(book: Book): Promise<number> {
   const times = play.finished[book.id] ?? 0;
   const xp = E.bookXp(times);
   const above = E.isAboveRank(book.level as E.CefrLevel | null, rankNow().rank);
-  toast(times ? `Finished again: +${xp} XP` : `Book finished: +${xp} XP!`, 5000);
+  toast(tr(times ? "xp.bookAgain" : "xp.book", { xp }), 5000);
   await commit({ ...play, finished: { ...play.finished, [book.id]: times + 1 }, finishedAboveRank: play.finishedAboveRank || above }, xp);
   return xp;
 }
@@ -144,7 +146,7 @@ export async function studyFinished(o: { cards: number; dueAtStart: number; comp
   const daily = o.completedSet && !play.studyDays.includes(t) ? E.XP.dailyReview : 0;
   const gained = session + daily;
   if (!gained) return 0;
-  toast(`Study: +${gained} XP${daily ? " (review set finished)" : ""}`, 4000);
+  toast(tr(daily ? "xp.studySet" : "xp.study", { xp: gained }), 4000);
   await commit({ ...play, studyDays: daily ? [...play.studyDays, t] : play.studyDays }, gained);
   return gained;
 }
@@ -161,7 +163,7 @@ export async function checkDailyChallenge(): Promise<number> {
   if (reviewedTodayCount() < E.REVIEW_DAY.maxDue || fullDays.includes(t)) return 0;
   await commit({ ...play, fullReviewDays: [...fullDays, t] }, E.XP.fullDayReview);
   // After the commit, so a badge or rank it brings doesn't hide the challenge's own message.
-  toast(`Daily Challenge completed: ${E.REVIEW_DAY.maxDue} words! +${E.XP.fullDayReview} XP`, 5000);
+  toast(tr("xp.challenge", { n: E.REVIEW_DAY.maxDue, xp: E.XP.fullDayReview }), 5000);
   return E.XP.fullDayReview;
 }
 
@@ -180,13 +182,6 @@ export async function diaryEntrySaved(e: { promptId: number | null; words: numbe
   const r = E.saveEntry(diaryRecord(), { ...e, today: today() });
   if (!r.counted) return r;
   await commit({ ...play, diaryDone: [...r.record.done], diaryDays: [...r.record.days] }, r.xp);
-  toast(
-    r.allPrompts
-      ? `All 20 diary prompts written! +${r.xp} XP`
-      : r.firstThisWeek
-        ? `This week's diary entry: +${r.xp} XP!`
-        : `Diary entry saved: +${r.xp} XP`,
-    5000,
-  );
+  toast(tr(r.allPrompts ? "diary.toastAll" : r.firstThisWeek ? "diary.toastWeek" : "diary.toastEntry", { xp: r.xp }), 5000);
   return r;
 }

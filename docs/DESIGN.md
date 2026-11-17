@@ -238,6 +238,23 @@ Sources: the open dictionary built from English Wiktionary and wordfreq (English
 app; Dutch definitions come from Claude for now) and, privately, the
 reader's own textbook word list.
 
+### The reader's language (localization)
+
+Many readers are newcomers to the Netherlands learning Dutch through a language other than English. **One setting**,
+chosen on the welcome screen or in **Account → Settings → Localization**, sets the language of everything *around*
+the Dutch: buttons, explanations, messages, the English glosses of the diary prompts and badge titles. Books, Dutch
+words, the Dutch badge titles and the diary prompts themselves stay Dutch, and Dutch text stays left-to-right inside an
+Arabic page.
+
+- **English**, **Ukrainian** and **Arabic** (Modern Standard, right-to-left, Western digits as on the Dutch pages).
+- Ukrainian and Arabic were drafted with AI and are marked as drafts in the app until a native speaker reviews them
+  (docs/TRANSLATING.md); readers are invited to report anything unclear.
+- Word **meanings are English for now** in every language, and the app says so. Meanings in the reader's language are
+  the next stage: Wiktionary's translation tables pivoted through English at deploy time (free), then a tapped word's
+  Google translation in the reader's language within the existing daily allowance.
+- The first wave covers the screens a reader uses every day. Less-used screens (adding a book, photographing pages,
+  importing a list, Claude, access codes, connection check, data export) are still English, and the app says so.
+
 ## 3. After the session
 
 ### Word statistics
@@ -323,8 +340,8 @@ Writing is helped, not done for the reader: the phone's autocorrect is off and i
 suggestions** come from the open dictionary on the device (the reader's own words first, de/het for nouns).
 **Check my writing** sends the entry from the reader's device to **LanguageTool** (EU), and only then: mistakes are
 marked in the text with an explanation and tap-to-fix suggestions, or kept as written. It needs the reader's
-**consent**, asked on the first visit like a cookie notice, in the language Boekenwurm explains Dutch in (English for
-now; `lib/consent.ts`). Declining keeps the diary fully usable with no outside service: a short self-check guide
+**consent**, asked on the first visit like a cookie notice, in the reader's language (the consent text is in the message catalogs; the choice is kept by
+`lib/consent.ts`). Declining keeps the diary fully usable with no outside service: a short self-check guide
 replaces the button. The choice can be changed in Account → Settings → About → Privacy (docs/PRIVACY.md).
 
 **Diary entries are saved only on the reader's device** and never on Boekenwurm's servers: a diary can hold the most
@@ -396,6 +413,11 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- Localization: one setting for the reader's language (English, Ukrainian, Arabic MSA), on the welcome screen and in
+  Account → Settings → Localization. No translation budget: AI-drafted catalogs marked as drafts, native-speaker review
+  invited (Weblate's free hosting for open source is the suggested way to collect it). Meanings stay English for now.
+  2026-11-17.
 
 - Diary: 20 Dutch prompts (gentle #13 and #15, Skip); the week's first entry 600 XP, further entries 30 XP each (any
   number a day, all counting towards the 20); all 20 a one-time 2,000 XP; then free writing on the same weekly rewards.

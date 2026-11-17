@@ -674,6 +674,35 @@ check(await page.locator(".patchcell.got", { hasText: "Books finished" }).isVisi
 check(await page.getByRole("img", { name: "Books finished: Bronze" }).isVisible(), "its patch wears the Bronze ribbon");
 check((await page.locator(".patchcell:not(.got)").count()) >= 5, "others are still locked");
 await shot("07-badges");
+
+step("localization: Account → Settings → Localization switches to Ukrainian or Arabic; Dutch stays Dutch and left-to-right");
+await page.getByRole("tab", { name: "Settings" }).click();
+await page.getByRole("heading", { name: "Localization" }).waitFor();
+await page.getByLabel("Your language").selectOption("uk");
+await page.locator(".tabbar").getByRole("button", { name: "Головна", exact: true }).waitFor();
+check(await page.evaluate(() => document.documentElement.lang === "uk" && document.documentElement.dir === "ltr"), "Ukrainian: <html lang=uk dir=ltr>");
+check(await page.getByRole("heading", { name: "Мова інтерфейсу" }).isVisible(), "the settings are in Ukrainian");
+check(await page.getByText(/підготовлено за допомогою ШІ/).isVisible(), "with the note that the translation is an AI draft awaiting review");
+await page.getByLabel("Ваша мова").selectOption("ar");
+await page.locator(".tabbar").getByRole("button", { name: "الرئيسية", exact: true }).waitFor();
+check(await page.evaluate(() => document.documentElement.lang === "ar" && document.documentElement.dir === "rtl"), "Arabic: <html lang=ar dir=rtl>");
+await page.setViewportSize({ width: 320, height: 844 });
+check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "Arabic Account fits a 320px screen");
+await shot("07b-arabic-settings");
+await page.setViewportSize({ width: 390, height: 844 });
+await page.locator(".tabbar").getByRole("button", { name: "الرئيسية", exact: true }).click();
+await page.locator(".continue").click();
+await page.locator(".para").first().waitFor();
+check(await page.evaluate(() => getComputedStyle(document.querySelector(".para")).direction === "ltr"), "the Dutch page reads left to right inside the Arabic app");
+check(await page.getByRole("button", { name: /الصفحة التالية/ }).isVisible(), "while the buttons around it are Arabic");
+check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "the Arabic reader has no sideways scrolling");
+await shot("07c-arabic-reader");
+await page.getByRole("button", { name: "العودة إلى الرئيسية" }).click();
+await page.locator(".tabbar").getByRole("button", { name: "الحساب", exact: true }).click();
+await page.getByRole("tab", { name: "الإعدادات" }).click();
+await page.getByLabel("لغتك").selectOption("en");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).waitFor();
+check(await page.evaluate(() => document.documentElement.lang === "en" && document.documentElement.dir === "ltr"), "back to English");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("unlimited lookup mode: unlocked by a Bronze badge; no fouten, a quarter of the XP, double flashcard XP after");
