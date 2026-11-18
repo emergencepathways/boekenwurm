@@ -3,7 +3,7 @@ import { useStore, dueToday } from "./lib/store.ts";
 import { applyFont, applyTextSize } from "./lib/fonts.ts";
 import { applyLanguage, useT, type Key } from "./lib/i18n.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
-import { Icon, Toaster } from "./ui.tsx";
+import { Icon, Toaster, Unlocker } from "./ui.tsx";
 import { Home } from "./screens/Home.tsx";
 import { Study, StudySession } from "./screens/Study.tsx";
 import { Me } from "./screens/Me.tsx";
@@ -81,6 +81,7 @@ export function App() {
         </>
       )}
       <Toaster />
+      <Unlocker />
     </div>
   );
 }

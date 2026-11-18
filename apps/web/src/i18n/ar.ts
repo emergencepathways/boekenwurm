@@ -593,4 +593,6 @@ export const ar: Catalog = {
   "xp.streak": "10 فقرات متتالية: +{xp} XP!",
   "xp.book": "اكتمل الكتاب: +{xp} XP!",
   "xp.bookAgain": "اكتمل مرة أخرى: +{xp} XP",
+  "milestone.title": { zero: "قُرئت {n} صفحة", one: "قُرئت صفحة واحدة", two: "قُرئت صفحتان", few: "قُرئت {n} صفحات", many: "قُرئت {n} صفحة", other: "قُرئت {n} صفحة" },
+  "milestone.detail": "{book} · +{xp} XP",
 };

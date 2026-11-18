@@ -170,4 +170,42 @@ export function Toaster() {
   );
 }
 
+/**
+ * A milestone unlocked (every 20 new pages of a book): a banner at the top of the screen, like an achievement
+ * unlocking in a game. A gold disc pops in, a ring draws round it, the banner opens out of the disc with the title and
+ * the XP, a glint passes over it, and it folds back into the disc. It isn't an achievement and isn't listed with the
+ * badges; only this moment marks it.
+ */
+interface UnlockState { id: number; title: string; detail: string }
+let unlockSet: ((u: UnlockState | null) => void) | null = null;
+let unlockTimer: ReturnType<typeof setTimeout> | undefined;
+export function unlock(title: string, detail: string, ms = 5200): void {
+  clearTimeout(unlockTimer);
+  unlockSet?.({ id: ++toastId, title, detail });
+  unlockTimer = setTimeout(() => unlockSet?.(null), ms);
+}
+export function Unlocker() {
+  const [u, setU] = useState<UnlockState | null>(null);
+  useEffect(() => {
+    unlockSet = setU;
+    return () => void (unlockSet = null);
+  }, []);
+  if (!u) return null;
+  return (
+    <div key={u.id} className="unlock" role="status">
+      <span className="disc" aria-hidden="true">
+        <svg className="ring" viewBox="0 0 60 60"><circle cx="30" cy="30" r="27" /></svg>
+        <svg className="icon" viewBox="0 0 24 24">
+          <path d="M3 5.5c3-1 6-.6 9 1.4 3-2 6-2.4 9-1.4v13c-3-1-6-.6-9 1.4-3-2-6-2.4-9-1.4z" />
+          <path className="hi" d="M12 6.9v13.4" />
+        </svg>
+      </span>
+      <span className="band">
+        <b>{u.title}</b>
+        <span>{u.detail}</span>
+      </span>
+    </div>
+  );
+}
+
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

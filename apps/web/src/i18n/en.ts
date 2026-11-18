@@ -525,6 +525,8 @@ export const en = {
   "xp.streak": "10 paragraphs in a row: +{xp} XP!",
   "xp.book": "Book finished: +{xp} XP!",
   "xp.bookAgain": "Finished again: +{xp} XP",
+  "milestone.title": { one: "{n} page read", other: "{n} pages read" },
+  "milestone.detail": "{book} · +{xp} XP",
 } as const;
 
 export type Key = keyof typeof en;

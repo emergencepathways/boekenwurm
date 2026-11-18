@@ -578,4 +578,6 @@ export const uk: Catalog = {
   "xp.streak": "10 абзаців поспіль: +{xp} XP!",
   "xp.book": "Книжку дочитано: +{xp} XP!",
   "xp.bookAgain": "Дочитано ще раз: +{xp} XP",
+  "milestone.title": { one: "Прочитано {n} сторінку", few: "Прочитано {n} сторінки", many: "Прочитано {n} сторінок", other: "Прочитано {n} сторінки" },
+  "milestone.detail": "{book} · +{xp} XP",
 };

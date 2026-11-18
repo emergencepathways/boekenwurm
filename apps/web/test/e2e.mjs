@@ -1019,6 +1019,50 @@ await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para").first().waitFor();
 check((await page.locator(".para").first().textContent()).startsWith("1 De bus naar het strand"), "the chapter number is read together with its first paragraph");
 
+step("20 pages read: a milestone unlocks with 100 XP (books without page numbers: 250 words a page)");
+{
+  // Invented Dutch text: 21 paragraphs of 250 words each, so the 20th page turn finishes page 20.
+  const zinnen = [
+    "Op zaterdag loopt Sanne met haar hond langs het water van de gracht.",
+    "De bakker op de hoek verkoopt elke ochtend warm brood en zoete broodjes.",
+    "In de bibliotheek leest een oude man de krant bij het grote raam.",
+    "Na de les drinken de studenten samen thee in een klein café.",
+    "Het regent zacht, maar de kinderen spelen toch buiten op het plein.",
+    "Mijn buurvrouw fietst elke dag naar haar werk in het centrum van de stad.",
+    "Op de markt kiest Ahmed rode appels en een bos verse bloemen.",
+    "In de trein naar huis schrijft Lotte een lange brief aan haar oma.",
+  ];
+  const words = zinnen.join(" ").split(" ");
+  const para = (k) => Array.from({ length: 250 }, (_, i) => words[(i + k * 7) % words.length]).join(" ").replace(/\.?$/, ".");
+  const longPath = await epub("Lange dagen", "Test Auteur", Array.from({ length: 21 }, (_, k) => para(k)), "bw-e2e-lange-dagen.epub");
+  await page.getByRole("button", { name: "Back to Home" }).click();
+  await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+  await page.getByRole("button", { name: "Add a book" }).first().click();
+  await page.locator('input[type=file][accept*="epub"]').setInputFiles(longPath);
+  await page.getByText("Ready to read").waitFor({ timeout: 30000 });
+  await page.getByRole("group", { name: "Book level" }).getByRole("button", { name: "A2" }).click();
+  await page.getByRole("button", { name: "Add to my books" }).click();
+  await page.locator(".para .w").first().waitFor();
+  for (let i = 0; i < 19; i++) {
+    await page.getByRole("button", { name: "Next page →" }).click();
+    await page.waitForFunction((n) => document.querySelector(".folio .num")?.textContent?.startsWith(`${n} /`), i + 2, { timeout: 5000 });
+  }
+  check(!(await page.locator(".unlock").isVisible()), "19 pages: nothing yet");
+  await page.getByRole("button", { name: "Next page →" }).click();
+  const banner = page.locator(".unlock");
+  check(await banner.waitFor({ timeout: 5000 }).then(() => true, () => false), "the 20th page unlocks a milestone at the top of the screen");
+  check((await banner.textContent()).includes("20 pages read") && (await banner.textContent()).includes("Lange dagen · +100 XP"), "\"20 pages read\", the book and +100 XP");
+  await page.waitForTimeout(1900);
+  await shot("21-milestone");
+  await banner.waitFor({ state: "detached", timeout: 8000 });
+  await page.getByRole("button", { name: "Next page →" }).click();
+  await page.waitForTimeout(400);
+  check(!(await page.locator(".unlock").isVisible()), "page 21 earns nothing more");
+  await page.getByRole("button", { name: "Back to Home" }).click();
+  await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+  check((await page.locator(".patchcell").count()) === 12, "it isn't an achievement: still the same 12 badges");
+}
+
 check(fontRequests.length === 0, `no request to a font service (GDPR)${fontRequests.length ? ": " + fontRequests[0] : ""}`);
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.join(" | ") : ""}`);
 await browser.close();

@@ -7,7 +7,7 @@ import * as E from "@boekenwurm/engine";
 import { getState, reviewedTodayCount, updateProfile } from "./store.ts";
 import { localDay } from "./usage.ts";
 import { commonWords } from "./words.ts";
-import { celebrate } from "../ui.tsx";
+import { celebrate, unlock } from "../ui.tsx";
 import { t as tr } from "./i18n.ts";
 import type { Book } from "./types.ts";
 
@@ -110,6 +110,21 @@ export async function paragraphRead(p: ParagraphRead): Promise<number> {
     kindsRead: p.book.source !== "sample" && !play.kindsRead.includes(p.book.source) ? [...play.kindsRead, p.book.source] : play.kindsRead,
   };
   await commit(next, xp);
+  return xp;
+}
+
+/**
+ * Pages of a book read so far, before and after a page turn: printed page numbers where the book has them (photos,
+ * most PDFs), otherwise 250 words a page. Every 20 new pages in a book earn XP.pageMilestone with its own unlock
+ * moment; it isn't an achievement, so it isn't listed with the badges. Lookup mode earns it in full.
+ */
+export async function pagesRead(book: Book, pagesBefore: number, pagesAfter: number): Promise<number> {
+  const play = playOf();
+  const r = E.pageMilestones(play, book.id, pagesBefore, pagesAfter);
+  if (r.play === play) return 0;
+  const xp = r.reached.length * E.XP.pageMilestone;
+  if (r.reached.length) unlock(tr("milestone.title", { n: r.reached[r.reached.length - 1] }), tr("milestone.detail", { book: book.title, xp }));
+  await commit(r.play, xp);
   return xp;
 }
 

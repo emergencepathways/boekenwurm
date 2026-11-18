@@ -30,6 +30,8 @@ export const XP = {
   /** All of the day's 90 cards reviewed (REVIEW_DAY.maxDue): double the daily review reward, on top of it, once a day. */
   fullDayReview: 600,
   achievement: 80,
+  /** Every 20 new pages of a book read (play.ts pageMilestones): a milestone, not an achievement. Full XP in lookup mode too. */
+  pageMilestone: 100,
   /** A run of 10 paragraphs or more in a session (the old streak token), once per session; not in lookup mode. */
   streakBonus: 200,
   /** A flashcard session earns XP from this many cards (or every card due, if fewer). */

@@ -30,6 +30,8 @@ export interface PlayState {
   finishedAboveRank: boolean;
   /** Achievement key → tier held (1 = Bronze …). */
   tiers: Record<string, number>;
+  /** Book id → 20-page milestones already rewarded in that book (pageMilestones). */
+  pageMilestones?: Record<string, number>;
 }
 
 export const WORDS_PER_PAGE = 250;
@@ -66,7 +68,33 @@ export function mergePlay(a: PlayState | undefined, b: PlayState | undefined): P
     finished: maxBy(x.finished, y.finished),
     finishedAboveRank: x.finishedAboveRank || y.finishedAboveRank,
     tiers: maxBy(x.tiers, y.tiers),
+    pageMilestones: maxBy(x.pageMilestones ?? {}, y.pageMilestones ?? {}),
   };
+}
+
+/** Pages in a milestone: every 20 new pages of a book read earn XP.pageMilestone. */
+export const PAGE_MILESTONE = 20;
+
+/** Pages read in a book without printed page numbers (EPUB, some PDFs): 250 words make a page. */
+export const pagesByWords = (words: number): number => Math.floor(Math.max(0, words) / WORDS_PER_PAGE);
+
+/**
+ * The 20-page milestones a page turn reaches in one book: pages 20, 40, 60… Each is rewarded once per book, so
+ * re-reading pages earns nothing again. Pages read before milestones existed set the starting point without paying,
+ * and a leap of more than 20 pages at once (pages skipped with "Go to" counting at the next turn) moves the count on
+ * without paying. Returns the record with the milestones marked, and the page counts reached ([] when none).
+ */
+export function pageMilestones(p: PlayState, bookId: string, pagesBefore: number, pagesAfter: number): { play: PlayState; reached: number[] } {
+  const known = p.pageMilestones?.[bookId];
+  const paid = known ?? Math.floor(pagesBefore / PAGE_MILESTONE);
+  const now = Math.floor(pagesAfter / PAGE_MILESTONE);
+  if (now <= paid) {
+    if (known != null || paid === 0) return { play: p, reached: [] };
+    return { play: { ...p, pageMilestones: { ...p.pageMilestones, [bookId]: paid } }, reached: [] };
+  }
+  const play = { ...p, pageMilestones: { ...p.pageMilestones, [bookId]: now } };
+  if (pagesAfter - pagesBefore > PAGE_MILESTONE) return { play, reached: [] };
+  return { play, reached: Array.from({ length: now - paid }, (_, i) => (paid + i + 1) * PAGE_MILESTONE) };
 }
 
 /** Add XP earned on this device. */

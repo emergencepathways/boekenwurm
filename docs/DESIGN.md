@@ -367,7 +367,8 @@ Two accents with two jobs: **lavender is reading and navigation**, **gold is the
 Daily Challenge, whose cards carry a gold bookmark ribbon). Motion follows the same split. Reading moves calmly: a
 meaning grows out of the tapped word, sheets slide up, a revealed word inks in. Only rewards bounce: XP, a badge or a
 new rank arrive as a gold bookplate that springs up, stamps its "+N XP" and spills a few Dutch letters (ij, é, oe…);
-the XP bar glints once as it fills. With reduced motion, everything simply fades.
+the XP bar glints once as it fills. Every 20 new pages read in a book unlock a milestone: a gold disc pops in at the
+top of the screen, a ring draws round it, and a banner opens out of it with the page count, the book and the XP. With reduced motion, everything simply fades.
 
 ## 4. Architecture
 
@@ -428,6 +429,12 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- 20-page milestones: every 20 new pages read in a book earn 100 XP, in every kind of book (printed page numbers
+  for photographed books and PDFs that have them; 250 words a page otherwise), in unlimited lookup mode too. Each
+  milestone pays once per book; pages read before this existed, and leaps of more than 20 pages (Go to), move the
+  count on without paying. It is not an achievement: it has its own unlock banner at the top of the screen and isn't
+  listed with the badges. 2026-11-18.
 
 - The fouten shown are free reveals: "3 fouten" lets the reader reveal 3 words and the 4th ends the run; at the
   streak floor of 1, one reveal per paragraph is always free and the 2nd ends it (`failWhen: "exceeds"`, now the

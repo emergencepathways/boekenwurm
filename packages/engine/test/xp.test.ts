@@ -127,3 +127,42 @@ test("all of the day's 90 cards reviewed: double the review reward (600 XP), onc
   assert.deepEqual(mergePlay(phone, laptop).fullReviewDays, ["2026-11-15", "2026-11-16"]);
   assert.deepEqual(mergePlay(phone, emptyPlay()).fullReviewDays, ["2026-11-16"], "an older record without the field");
 });
+
+// ---------------------------------------------------------------- 20-page milestones (owner, 2026-11-18)
+import { pageMilestones, pagesByWords, PAGE_MILESTONE } from "../src/play.ts";
+
+test("every 20 new pages of a book earn 100 XP, once per book", () => {
+  assert.equal(PAGE_MILESTONE, 20);
+  assert.equal(XP.pageMilestone, 100);
+  let p = emptyPlay();
+  let r = pageMilestones(p, "book", 18, 19);
+  assert.deepEqual(r.reached, []);
+  r = pageMilestones(r.play, "book", 19, 20);
+  assert.deepEqual(r.reached, [20]);
+  p = r.play;
+  assert.deepEqual(pageMilestones(p, "book", 20, 21).reached, [], "page 21 earns nothing more");
+  assert.deepEqual(pageMilestones(p, "book", 5, 20).reached, [], "reading pages 1–20 again earns nothing");
+  assert.deepEqual(pageMilestones(p, "book", 39, 40).reached, [40], "page 40 is the next");
+  assert.deepEqual(pageMilestones(p, "other", 19, 20).reached, [20], "each book has its own milestones");
+});
+
+test("pages read before milestones existed don't pay; a leap of more than 20 pages doesn't either", () => {
+  const before = pageMilestones(emptyPlay(), "old", 47, 48);
+  assert.deepEqual(before.reached, []);
+  assert.equal(before.play.pageMilestones!.old, 2, "pages 20 and 40 count as done");
+  assert.deepEqual(pageMilestones(before.play, "old", 59, 60).reached, [60]);
+  const jump = pageMilestones(emptyPlay(), "jumped", 0, 100);
+  assert.deepEqual(jump.reached, [], "skipping 100 pages with Go to pays nothing");
+  assert.deepEqual(pageMilestones(jump.play, "jumped", 119, 120).reached, [120], "reading on from there does");
+});
+
+test("books without page numbers: 250 words make a page, so 5,000 words reach 20 pages", () => {
+  assert.equal(pagesByWords(4_999), 19);
+  assert.equal(pagesByWords(5_000), 20);
+  assert.equal(pagesByWords(-3), 0);
+});
+
+test("milestones sync: the higher count wins, so two devices don't pay twice after merging", () => {
+  const a = { ...emptyPlay(), pageMilestones: { b: 2 } }, b = { ...emptyPlay(), pageMilestones: { b: 1, c: 3 } };
+  assert.deepEqual(mergePlay(a, b).pageMilestones, { b: 2, c: 3 });
+});

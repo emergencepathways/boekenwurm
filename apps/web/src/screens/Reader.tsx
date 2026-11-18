@@ -14,7 +14,7 @@ import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
-import { bookFinished, checkAchievements, paragraphRead, streakBonus } from "../lib/play.ts";
+import { bookFinished, checkAchievements, pagesRead as pagesReadMilestone, paragraphRead, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { ADMIN } from "../lib/features.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
@@ -297,6 +297,16 @@ export function Reader({ bookId }: { bookId: string }) {
         ? [...new Set([...b.pagesRead, ...pagesFinished(r.text.paragraphs.map((p) => ({ text: p.text, pageNumber: p.pageNumber, seqs: [] })), ord - 1)])].sort((x, y) => x - y)
         : b.pagesRead;
     r.book = await saveBook({ ...b, position: { ...b.position, ord, at: Date.now() }, pagesRead });
+    // Every 20 new pages: printed pages where the book has numbers, otherwise 250 words a page.
+    const before = hasPages() ? b.pagesRead.length : E.pagesByWords(wordsBefore(b.position.ord));
+    const after = hasPages() ? pagesRead.length : E.pagesByWords(wordsBefore(ord));
+    await pagesReadMilestone(b, before, after);
+  }
+  /** Words in the paragraphs before `ord` (books without page numbers count pages by words). */
+  function wordsBefore(ord: number): number {
+    let n = 0;
+    for (const p of r.text!.paragraphs.slice(0, ord)) n += p.text.split(/\s+/).filter(Boolean).length;
+    return n;
   }
 
   async function turn() {
