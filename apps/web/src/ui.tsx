@@ -110,20 +110,64 @@ export function Sheet({ children, onClose, label }: { children: ReactNode; onClo
   );
 }
 
-let toastSet: ((m: string | null) => void) | null = null;
+/**
+ * Toasts. A plain toast says what happened. A reward (XP, a badge, a new rank) is the game talking: a gold bookplate
+ * springs up, its "+N XP" lands like a stamp, and a few Dutch letters spill out of the book. Only rewards move like
+ * this, so the motion keeps its meaning; with reduced motion they simply fade in.
+ */
+export type RewardKind = "xp" | "badge" | "rank";
+interface ToastState { id: number; text: string; reward?: RewardKind }
+
+let toastSet: ((m: ToastState | null) => void) | null = null;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function toast(message: string, ms = 3400): void {
+let toastId = 0;
+function show(t: Omit<ToastState, "id">, ms: number): void {
   clearTimeout(toastTimer);
-  toastSet?.(message);
+  toastSet?.({ ...t, id: ++toastId });
   toastTimer = setTimeout(() => toastSet?.(null), ms);
 }
+export function toast(message: string, ms = 3400): void {
+  show({ text: message }, ms);
+}
+/** A game reward: XP earned, a badge tier or a new rank. */
+export function celebrate(message: string, reward: RewardKind = "xp", ms = 4600): void {
+  show({ text: message, reward }, ms);
+}
+
+/** Letters that spill out of the book: the ones that make Dutch look Dutch. Fixed, so every reward looks the same. */
+const SPILL = ["ij", "é", "a", "ë", "oe", "w", "ui", "k"];
+
+/** The "+N XP" in a message (any language: the number is formatted, "XP" stays). */
+const GAIN = /([+＋]\s?[\d\s.,\u00a0\u202f]*\d\s?XP)/;
+
+function RewardIcon({ kind }: { kind: RewardKind }) {
+  if (kind === "rank")
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4.5 5.5v6c0 4.6 3.1 8.4 7.5 10 4.4-1.6 7.5-5.4 7.5-10v-6z" /><path className="hi" d="m8.5 12.2 2.4 2.4 4.6-5" /></svg>;
+  if (kind === "badge")
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="6" /><path className="line" d="m8.5 13.8-2 7.2 5.5-2.6 5.5 2.6-2-7.2" /><circle className="hi" cx="12" cy="9" r="2.2" /></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5c3-1 6-.6 9 1.4 3-2 6-2.4 9-1.4v13c-3-1-6-.6-9 1.4-3-2-6-2.4-9-1.4z" /><path className="hi" d="M12 6.9v13.4" /></svg>;
+}
+
 export function Toaster() {
-  const [m, setM] = useState<string | null>(null);
+  const [m, setM] = useState<ToastState | null>(null);
   useEffect(() => {
     toastSet = setM;
     return () => void (toastSet = null);
   }, []);
-  return m ? <div className="toast" role="status">{m}</div> : null;
+  if (!m) return null;
+  if (!m.reward) return <div key={m.id} className="toast" role="status">{m.text}</div>;
+  const parts = m.text.split(GAIN);
+  return (
+    <div key={m.id} className={`toast reward r-${m.reward}`} role="status">
+      <span className="plate" aria-hidden="true">
+        <RewardIcon kind={m.reward} />
+        <span className="spill">
+          {SPILL.map((l, i) => <i key={i} lang="nl" style={{ ["--i" as string]: i }}>{l}</i>)}
+        </span>
+      </span>
+      <span className="msg">{parts.map((p, i) => (i % 2 ? <b key={i} className="gain">{p}</b> : p))}</span>
+    </div>
+  );
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

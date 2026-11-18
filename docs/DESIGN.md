@@ -355,6 +355,20 @@ Export, for readers who keep their cards elsewhere:
 - **Other apps**: CSV / tab-separated export (Quizlet, Mochi, RemNote and most others import it).
 - The Kobo version will write Anki-ready files that sync the same way.
 
+### Look and feel
+
+An e-reader at night with a bookworm living in it. The reading parts look like a book: headings in the reading
+face, the page square at the spine with the next pages showing under it, a running head in small capitals and the
+page count in old-style figures, covers with a page block along the fore-edge on a shelf. Settings are flat sections
+divided by rules, like a reader's menus, not a stack of cards; only what to act on today (the book in hand, the Daily
+Challenge, the weekly diary) is raised.
+
+Two accents with two jobs: **lavender is reading and navigation**, **gold is the game** (XP, streaks, badges, the
+Daily Challenge, whose cards carry a gold bookmark ribbon). Motion follows the same split. Reading moves calmly: a
+meaning grows out of the tapped word, sheets slide up, a revealed word inks in. Only rewards bounce: XP, a badge or a
+new rank arrive as a gold bookplate that springs up, stamps its "+N XP" and spills a few Dutch letters (ij, é, oe…);
+the XP bar glints once as it fills. With reduced motion, everything simply fades.
+
 ## 4. Architecture
 
 ```

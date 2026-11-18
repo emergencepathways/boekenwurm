@@ -596,6 +596,10 @@ await shot("06h-diary");
 await page.getByRole("button", { name: "Save entry" }).click();
 await page.getByRole("heading", { name: "Saved" }).waitFor();
 check(await page.getByText(/This week's diary entry: \+600 XP!/).isVisible(), "the week's first entry earns 600 XP");
+check(await page.locator(".toast.reward").isVisible(), "a reward shows as a gold bookplate, not a plain toast");
+check((await page.locator(".toast.reward .gain").textContent()) === "+600 XP", "with its +XP set apart");
+await page.waitForTimeout(1200);
+await shot("06h-reward");
 await page.getByRole("button", { name: "Done" }).click();
 check(await page.getByRole("textbox", { name: "Your entry, in Dutch" }).isVisible() && /adds 30/.test(await page.locator(".panel").first().textContent()), "more entries are welcome: 30 XP each this week");
 check(/1 \/ 20 prompts written/.test(await page.locator(".panel").first().textContent()), "1 of 20 prompts");
@@ -605,6 +609,7 @@ check(!posted.some((q) => !q.url.includes("api.languagetool.org") && q.body.incl
 await page.reload();
 await page.locator(".tabbar").getByRole("button", { name: /^Study/ }).click();
 await page.getByRole("tab", { name: "Diary" }).click();
+await page.locator("details.entry").first().waitFor({ timeout: 5000 }).catch(() => {});
 check(await page.locator("details.entry").count() === 1, "still there after a reload");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 check(!(await page.getByRole("heading", { name: "Weekly diary challenge" }).isVisible()), "Home's weekly card is gone for this week");
