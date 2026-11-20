@@ -5,7 +5,7 @@
  */
 import { pageFromVision, type VisionPage } from "@boekenwurm/books";
 import { supabase } from "./supabase.ts";
-import { getState, setState } from "./store.ts";
+import { getState, setState, useStore } from "./store.ts";
 import { toBase64 } from "./images.ts";
 import { localDay } from "./usage.ts";
 
@@ -15,6 +15,15 @@ export const ADMIN = "admin";
 export const PAGE_READS_PER_DAY = 20;
 
 export const hasFeature = (f: string): boolean => getState().features.includes(f);
+
+/**
+ * Photographing a book is for access-code holders only (owner's decision, 2026-11-20): page reading on the device
+ * (Tesseract) isn't good enough to offer readers, so photos are read by Google for those with the code. Books already
+ * photographed stay readable for everyone; only adding pages needs the code. Scanned PDFs are read page by page like
+ * photos, so they follow the same rule.
+ */
+export const PHOTO_PAGES = GOOGLE_PAGES;
+export const usePhotoPages = (): boolean => useStore((s) => s.features.includes(PHOTO_PAGES));
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 /** The signed-in reader's features, from their account. Signed out: none. */

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useStore, dueToday } from "./lib/store.ts";
 import { applyFont, applyTextSize } from "./lib/fonts.ts";
+import { usePhotoPages } from "./lib/features.ts";
 import { applyLanguage, useT, type Key } from "./lib/i18n.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
 import { Icon, Toaster, Unlocker } from "./ui.tsx";
@@ -31,6 +32,7 @@ export function App() {
   const { tab, screen } = useNav();
   const t = useT();
   const language = useStore((s) => s.profile.settings.language);
+  const photoPages = usePhotoPages();
   useEffect(() => applyLanguage(language), [language]);
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export function App() {
         <Reader key={screen.bookId} bookId={screen.bookId} />
       ) : screen?.name === "add" ? (
         <AddBook />
-      ) : screen?.name === "photo" ? (
+      ) : screen?.name === "photo" && photoPages ? (
         <PhotoBook bookId={screen.bookId} />
       ) : screen?.name === "import-list" ? (
         <ImportList />

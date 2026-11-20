@@ -141,9 +141,10 @@ await ctx.route("**/rest/v1/rpc/report_shared_word", async (r) => {
   await r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: "false" });
 });
 
-// Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works;
-// Google reads one page, then today's allowance is used up.
-const vision = { calls: 0, limitAfter: 1, redeemed: false, refuse: null, admin: false };
+// Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works.
+// Photographing a book needs the code. Each page photo the test draws queues what Google "sees" on it (`pages`), in
+// the order taken; with nothing queued, Google sees the Sem aan zee page. Past `limitAfter`, today's 20 are used up.
+const vision = { calls: 0, limitAfter: Infinity, redeemed: false, refuse: null, admin: false, pages: [], queue: true };
 await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
   const { p_code } = JSON.parse(r.request().postData() || "{}");
   const ok = p_code.replace(/[\s-]/g, "").toUpperCase() === "BWE2ETESTCODE";
@@ -162,6 +163,12 @@ await ctx.route("**/functions/v1/read-page", async (r) => {
   if (vision.refuse) return r.fulfill({ status: 502, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "unavailable", detail: vision.refuse, used: 0, limit: 20 }) });
   if (vision.calls > vision.limitAfter) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 20, limit: 20 }) });
   const box = (y0, y1) => ({ x0: 80, y0, x1: 620, y1 });
+  const seen = vision.pages.shift();
+  if (seen) {
+    const lines = seen.blank ? [] : (STORY[seen.n] ?? []).map((text, i) => ({ text, box: box(90 + i * 200, 260 + i * 200), confidence: 0.97, unsure: [] }));
+    if (seen.number && !seen.blank) lines.push({ text: String(seen.n), box: box(890, 915), confidence: 0.99, unsure: [] });
+    return r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, used: vision.calls, limit: 20, width: 700, height: 950, paragraphs: lines }) });
+  }
   await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({
     ok: true, used: 20, limit: 20, width: 700, height: 950,
     paragraphs: [
@@ -809,6 +816,24 @@ check((await page.locator(".bookbtn").count()) === 1, "and stays gone after a re
 check((await page.locator(".studycard").count()) === 1, "its words stay: the Daily Challenge is still on Home");
 await shot("10-home-two-books");
 
+step("photographing a book: only with the access code (Google reads the pages)");
+await page.getByRole("button", { name: "Add a book" }).click();
+await page.getByText("EPUB file").waitFor();
+check((await page.getByRole("button", { name: /Photograph a book/ }).count()) === 0, "without the code, Add a book offers no photographing");
+await page.getByRole("button", { name: "Home" }).first().click();
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Experimental" }).click();
+const codeBox = page.getByLabel("Access code");
+await codeBox.fill("BW-NOPE-NOPE");
+await page.getByRole("button", { name: "Use code" }).click();
+check(await page.getByText("That code isn't valid").waitFor({ timeout: 5000 }).then(() => true, () => false), "a wrong code is refused");
+await codeBox.fill("bw-e2e test-code");
+await page.getByRole("button", { name: "Use code" }).click();
+await page.getByText("Google page reading is on.", { exact: true }).waitFor();
+check(true, "the right code turns on Google page reading");
+await shot("18-access-code");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+
 step("photo flow: camera explanation, then a library photo fallback");
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.getByRole("button", { name: /Photograph a book/ }).click();
@@ -829,6 +854,7 @@ const STORY = {
   17: ["Toen het donker werd, maakte Lotte soep van de groenten die nog in de koelkast lagen.", "Ze at aan het raam en keek naar de lichtjes van de boten die langzaam voorbij voeren."],
 };
 async function pagePhoto(n, { number = true, blank = false } = {}) {
+  if (vision.queue) vision.pages.push({ n, number, blank });
   const p = await browser.newPage({ viewport: { width: 700, height: 950 } });
   const body = blank
     ? `<div style="filter:blur(14px);opacity:.25">${(STORY[n] ?? STORY[9]).map((t) => `<p>${t}</p>`).join("")}</div>`
@@ -967,19 +993,13 @@ await shot("17-section-full");
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 300000 });
 
 
-step("access code: Google page reading for one reader, then the device past today's 20");
+step("Google page reading: the page number at the foot, then the device past today's 20");
+// From here Google sees the Sem aan zee page, and today's 20 run out after one more photo.
+vision.pages.length = 0;
+vision.queue = false;
+vision.calls = 0;
+vision.limitAfter = 1;
 await page.getByRole("button", { name: /Done/ }).first().click();
-await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
-await page.getByRole("tab", { name: "Experimental" }).click();
-const codeBox = page.getByLabel("Access code");
-await codeBox.fill("BW-NOPE-NOPE");
-await page.getByRole("button", { name: "Use code" }).click();
-check(await page.getByText("That code isn't valid").waitFor({ timeout: 5000 }).then(() => true, () => false), "a wrong code is refused");
-await codeBox.fill("bw-e2e test-code");
-await page.getByRole("button", { name: "Use code" }).click();
-await page.getByText("Google page reading is on.", { exact: true }).waitFor();
-check(true, "the right code turns on Google page reading");
-await shot("18-access-code");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.getByRole("button", { name: /Photograph a book/ }).click();

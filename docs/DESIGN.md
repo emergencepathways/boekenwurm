@@ -430,6 +430,9 @@ anywhere except `private/`.
 
 ## Decided
 
+- Photographing books (and scanned PDFs) is for access-code holders only, read by Google Cloud Vision; on-device
+  reading isn't good enough to release. Already photographed books stay readable for everyone. 2026-11-20.
+
 - 20-page milestones: every 20 new pages read in a book earn 100 XP, in every kind of book (printed page numbers
   for photographed books and PDFs that have them; 250 words a page otherwise), in unlimited lookup mode too. Each
   milestone pays once per book; pages read before this existed, and leaps of more than 20 pages (Go to), move the

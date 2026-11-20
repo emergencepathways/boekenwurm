@@ -16,7 +16,7 @@ import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
 import { bookFinished, checkAchievements, pagesRead as pagesReadMilestone, paragraphRead, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
-import { ADMIN } from "../lib/features.ts";
+import { ADMIN, usePhotoPages } from "../lib/features.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import { knownShare } from "../lib/books.ts";
 import { knownLemmas } from "../lib/store.ts";
@@ -67,6 +67,7 @@ interface RS {
 
 export function Reader({ bookId }: { bookId: string }) {
   const tr = useT();
+  const photoPages = usePhotoPages();
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const progress = useStore((s) => s.profile.progress);
   const settings = useStore((s) => s.profile.settings);
@@ -900,7 +901,7 @@ export function Reader({ bookId }: { bookId: string }) {
             </button>
           )}
           {atBookEnd ? (
-            nextUnphotographed() != null && (
+            photoPages && nextUnphotographed() != null && (
               <button className="btn" type="button" onClick={() => open({ name: "photo", bookId })}>
                 {tr("summary.photoNext")}
               </button>
@@ -977,6 +978,7 @@ export function Reader({ bookId }: { bookId: string }) {
         paragraphs={r.text!.paragraphs}
         current={r.pos}
         isPhoto={book!.source === "photo"}
+        canPhotograph={photoPages}
         noText={book!.pagesRead}
         onGo={(ord) => void jumpTo(ord)}
         onClose={() => ((r.modal = null), bump())}
@@ -1097,7 +1099,7 @@ function TypeMeaning({ word, onSave, open = false }: { word: string; onSave: (te
   );
 }
 
-function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, noText = [] }: {
+function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, canPhotograph, noText = [] }: {
   paragraphs: Paragraph[];
   current: number;
   /** Pages counted as read without text of their own (marked as a picture or map), so not missing. */
@@ -1105,6 +1107,8 @@ function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, 
   onGo: (ord: number) => void;
   onClose: () => void;
   onPhotograph: () => void;
+  /** Adding pages needs the access code (lib/features.ts PHOTO_PAGES). */
+  canPhotograph: boolean;
   isPhoto: boolean;
 }) {
   const nums = paragraphs.map((p) => p.pageNumber).filter((n): n is number => n != null);
@@ -1143,7 +1147,7 @@ function GotoSheet({ paragraphs, current, onGo, onClose, onPhotograph, isPhoto, 
       {note && <p className="small" style={{ margin: 0 }}>{note}</p>}
       <div className="actions">
         <button className="btn small" type="button" onClick={() => onGo(0)}>Back to the start</button>
-        {isPhoto && <button className="btn small ghost" type="button" onClick={onPhotograph}>Photograph more pages</button>}
+        {isPhoto && canPhotograph && <button className="btn small ghost" type="button" onClick={onPhotograph}>Photograph more pages</button>}
         <button className="btn small ghost" type="button" onClick={onClose}>Close</button>
       </div>
     </Sheet>

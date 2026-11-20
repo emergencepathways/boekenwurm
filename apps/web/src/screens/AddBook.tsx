@@ -14,7 +14,7 @@ import { gradeBook, hintFromWordMatch, newBook, readPhotoPage, toParagraphs, typ
 import { downscale, COVER_SIDE, OCR_SIDE, CLAUDE_SIDE } from "../lib/images.ts";
 import { saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
 import { stopReader } from "../lib/ocr.ts";
-import { ADMIN } from "../lib/features.ts";
+import { ADMIN, hasFeature, PHOTO_PAGES, usePhotoPages } from "../lib/features.ts";
 import { close, open } from "../nav.ts";
 import type { Book, Paragraph } from "../lib/types.ts";
 import { Icon, LevelPicker, plural } from "../ui.tsx";
@@ -39,6 +39,7 @@ type Step =
   | { kind: "details"; draft: Draft };
 
 export function AddBook() {
+  const photoPages = usePhotoPages();
   const [step, setStep] = useState<Step>({ kind: "choose" });
   const [error, setError] = useState<string | null>(null);
   const stop = useRef(false);
@@ -70,7 +71,14 @@ export function AddBook() {
     setStep({ kind: "reading", what: `Reading ${file.name}…` });
     try {
       const info = await readPdfFile(file);
-      if (info.reading.isScanned) return setStep({ kind: "scanned", file, pages: info.pageCount, title: info.title, author: info.author });
+      if (info.reading.isScanned) {
+        // Scanned pages are read like photos: for access-code holders only (lib/features.ts PHOTO_PAGES).
+        if (!hasFeature(PHOTO_PAGES)) {
+          setStep({ kind: "choose" });
+          return setError("This PDF is scanned: its pages are pictures, not text. Boekenwurm can't read scanned PDFs yet. Try an EPUB, or a PDF with text in it.");
+        }
+        return setStep({ kind: "scanned", file, pages: info.pageCount, title: info.title, author: info.author });
+      }
       const stitched = stitch(info.reading.pages).paragraphs;
       const verdict = checkBook(stitched.map((p) => p.text));
       if (isRejected(verdict)) return setStep({ kind: "rejected", title: info.title ?? file.name, text: verdict.text });
@@ -140,13 +148,15 @@ export function AddBook() {
             </label>
             <label className="tile">
               <span className="ico"><Icon.pdf /></span>
-              <span><b>PDF file</b><span className="small muted">Text PDFs are read directly. Scanned PDFs are read page by page, like photos.</span></span>
+              <span><b>PDF file</b><span className="small muted">{photoPages ? "Text PDFs are read directly. Scanned PDFs are read page by page, like photos." : "A PDF with text in it (not a scan)."}</span></span>
               <input type="file" accept=".pdf,application/pdf" onChange={(e) => e.target.files?.[0] && void fromPdf(e.target.files[0])} />
             </label>
-            <button className="tile" type="button" onClick={() => open({ name: "photo" })}>
-              <span className="ico"><Icon.camera /></span>
-              <span><b>Photograph a book</b><span className="small muted">A printed book you own: the cover, the page count, your level for it, then its pages.</span></span>
-            </button>
+            {photoPages && (
+              <button className="tile" type="button" onClick={() => open({ name: "photo" })}>
+                <span className="ico"><Icon.camera /></span>
+                <span><b>Photograph a book</b><span className="small muted">A printed book you own: the cover, the page count, your level for it, then its pages.</span></span>
+              </button>
+            )}
           </div>
           {error && <div className="verdict bad"><b>Couldn't add that file</b><span>{error}</span></div>}
           <p className="note">Your books stay private: on this device, and in your own account when you're signed in. Nothing is shared with anyone.</p>

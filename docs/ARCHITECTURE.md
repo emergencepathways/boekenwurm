@@ -132,6 +132,11 @@ and Noto Sans Arabic are bundled, split by alphabet, for the letters the reading
 
 ## Photographing a book you own
 
+**For access-code holders only (2026-11-20).** On-device page reading (Tesseract) isn't good enough to offer readers,
+so photographing a book, adding pages to one, and reading scanned PDFs are shown only with the Google page reading
+code (`lib/features.ts` `PHOTO_PAGES`). Books already photographed stay readable for everyone. The on-device reader
+remains only as the code holder's fallback past today's 20 Google pages.
+
 1. **Cover** (required): take a photo. With a key, Claude reads the title and author from it; in free mode the reader
    types them. Either way the reader confirms before saving.
 2. **Details**: the **first page to read** and the **last page** (both required). Books often have title pages,

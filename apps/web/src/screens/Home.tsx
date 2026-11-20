@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePhotoPages } from "../lib/features.ts";
 import { bookProgress } from "@boekenwurm/books";
 import { deleteBook, dueToday, reviewedTodayCount, saveBook, useStore } from "../lib/store.ts";
 import { open, setTab } from "../nav.ts";
@@ -170,6 +171,7 @@ function BookTile({ book, onLong }: { book: Book; onLong: () => void }) {
 
 function BookDetails({ book, onClose }: { book: Book; onClose: () => void }) {
   const tr = useT();
+  const photoPages = usePhotoPages();
   const [confirm, setConfirm] = useState(false);
   const pct = Math.round(bookShare(book) * 100);
   return (
@@ -193,7 +195,7 @@ function BookDetails({ book, onClose }: { book: Book; onClose: () => void }) {
         />
       </div>
       {book.source === "photo" && <PageRange book={book} />}
-      {book.source === "photo" && (
+      {book.source === "photo" && photoPages && (
         <button className="btn" type="button" onClick={() => (onClose(), open({ name: "photo", bookId: book.id }))}>
           {tr("book.morePages")}
         </button>
