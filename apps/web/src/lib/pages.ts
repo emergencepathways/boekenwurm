@@ -31,6 +31,8 @@ export interface PageEntry {
   by: "claude" | "google" | "device" | null;
   /** Read on the device although the reader has Google page reading: shown as a gentle flag. */
   fallback?: string;
+  /** The photo was deleted once the page was read and checked (photosToDelete); the text read from it stays. */
+  photoDeleted?: boolean;
   /** A page number the reader typed. It is kept as typed, and the photos taken after it follow on from it. */
   manualPage?: number | null;
   /** The reader saw that the number read from the photo differs, and kept the number in order. */
@@ -124,6 +126,19 @@ export const noTextPages = (entries: PageEntry[]): number[] => entries.filter((e
  * Pages missing between the first page and the furthest one photographed, as runs ([[10], [14, 15]]): a page that was
  * skipped, or one with no text that the reader hasn't marked yet.
  */
+/**
+ * Page photos to delete: a page photo is kept only while it may still be needed, so the book's pictures don't pile
+ * up on the phone (privacy, and the book's copyright: Boekenwurm keeps the text to read, not a copy of the book).
+ * A photo goes once its page is read (done) and has nothing left to check (no flags: no different number, no unsure
+ * words, no Google fallback note). Pages still reading, failed, to check or flagged keep theirs for the review.
+ */
+export function photosToDelete(entries: PageEntry[], range: Range): number[] {
+  const placed = arrange(entries, range);
+  return placed
+    .filter((p) => p.entry.status === "done" && !p.entry.noText && !p.entry.photoDeleted && flags(p, placed, range).length === 0)
+    .map((p) => p.entry.seq);
+}
+
 export function missingPages(entries: PageEntry[], range: Range): number[][] {
   const have = new Set(numberPages(entries, range).values());
   if (!have.size) return [];

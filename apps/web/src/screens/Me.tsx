@@ -19,7 +19,8 @@ import { loadEntries } from "../lib/diary.ts";
 import { LANGUAGETOOL_PRIVACY, setLanguageTool } from "../lib/consent.ts";
 import { LANGUAGES, languageOf, translate, useT, type Key, type Lang } from "../lib/i18n.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
-import type { Settings } from "../lib/types.ts";
+import type { BookText, Settings } from "../lib/types.ts";
+import { booksForExport } from "../lib/export.ts";
 
 /** The Account tab's categories. New features go into one of these. */
 type View = "achievements" | "reading" | "settings" | "experimental";
@@ -628,12 +629,12 @@ function YourData() {
 
   const exportJson = async () => {
     const s = getState();
-    const texts = await db.all("texts");
+    const texts = await db.all<BookText>("texts");
     const data = {
       exported: new Date().toISOString(),
       profile: { displayName: s.profile.displayName, settings: s.profile.settings, progress: s.profile.progress },
-      books: s.books,
-      paragraphs: texts,
+      // Photographed books: title, author, pages read and progress, not their text (lib/export.ts).
+      ...booksForExport(s.books, texts),
       words: s.wordbook, meanings: s.meanings, examples: s.examples, cards: s.cards,
       // Kept only on this device; part of the export because it is the reader's own writing.
       diary: await loadEntries(),
@@ -671,6 +672,7 @@ function YourData() {
     <section className="panel">
       <h2>Your data</h2>
       <p>Everything you read and every word you tap belongs to you. Export it, or erase it.</p>
+      <p className="small">Photographed books are in the export with their title, author, pages read and progress, but not their text: Boekenwurm keeps that only for you to read here.</p>
       <div className="actions">
         <button className="btn small" type="button" onClick={() => void exportJson()}>Export everything (JSON)</button>
         <button className="btn small ghost" type="button" onClick={() => setConfirm("device")}>Erase from this device…</button>

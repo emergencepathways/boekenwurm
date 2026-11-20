@@ -351,6 +351,8 @@ td .forms { color: var(--muted); font-size: 0.82rem; }
 .thumb.done .img { border-color: var(--leaf); }
 .thumb.failed .img, .thumb.check .img { border-color: var(--strike); }
 .thumb .img .spinner { position: absolute; inset: 0; margin: auto; }
+/* Read and checked: the photo is deleted (lib/pages.ts photosToDelete), the page's text stays. */
+.thumb .img .gone { position: absolute; inset: 0; display: grid; place-items: center; color: var(--leaf); font: 700 1.2rem var(--ui); }
 .thumb .seen { font-weight: 500; color: var(--muted); }
 .thumb .seen.off { color: var(--strike); font-weight: 700; }
 .thumb.notext .img { border: 2px dashed var(--line); background: transparent; display: grid; place-items: center; }

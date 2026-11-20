@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   arrange, differs, flags, inSection, keepEarlierOrder, keepPosition, markNoText, missingPages, nextPage, nextSection, noTextPages, numberPages,
-  SECTION_SIZE, stitchBook, type PageEntry,
+  photosToDelete, SECTION_SIZE, stitchBook, type PageEntry,
 } from "../src/lib/pages.ts";
 
 const range = { firstPage: 7, lastPage: 212 };
@@ -148,4 +148,18 @@ test("a missed page photographed later slots into its place and doesn't count to
   assert.equal(inSection(filled, 1), 20, "still 20: the missed page is extra");
   assert.deepEqual(missingPages(filled, range), []);
   assert.deepEqual(arrange(filled, range).slice(0, 4).map((p) => p.pageNumber), [7, 8, 9, 10]);
+});
+
+test("photos are deleted once their page is read and checked; pages still to check keep theirs (owner, 2026-11-20)", () => {
+  const es = [
+    entry(0, 7), // read, page 7 as expected: delete
+    entry(1, null), // read, no number on the photo: nothing to check, delete
+    entry(2, 12), // the photo seems to show page 12, not 9: keep for the review
+    entry(3, null, "Tekst met een woord dat moeilijk te lezen was.", { uncertain: ["moeilijk"] }), // an unsure word: keep
+    entry(4, null, "x", { status: "check", problems: ["Very little text was found on this page."] }), // to retake: keep
+    entry(5, null, "x", { status: "reading", page: null }), // still reading: keep
+    entry(6, null, "Al eerder verwijderd.", { photoDeleted: true }), // already gone
+    entry(7, null, "", { page: null, noText: true, manualPage: 30 }), // a page with no text has no photo
+  ];
+  assert.deepEqual(photosToDelete(es, range), [0, 1]);
 });

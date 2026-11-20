@@ -17,7 +17,7 @@ import { bookProgress } from "@boekenwurm/books";
 import { bookById, loadText, saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
 import {
   arrange, differs, flags, inSection as countInSection, isBusy, keepEarlierOrder, keepPosition, markNoText, missingPages, nextPage, nextSection,
-  numberPages, SECTION_SIZE, stitchBook, type PageEntry, type Placed, type Range,
+  numberPages, photosToDelete, SECTION_SIZE, stitchBook, type PageEntry, type Placed, type Range,
 } from "../lib/pages.ts";
 import { newBook, readCover, readPhotoPage, toParagraphs } from "../lib/books.ts";
 import { GOOGLE_PAGES, PAGE_READS_PER_DAY } from "../lib/features.ts";
@@ -381,12 +381,17 @@ function PagesStep({ bookId }: { bookId: string }) {
         await db.put("kv", list, `pages:${bookId}`);
       }
       await db.put("kv", 2, `pages-numbering:${bookId}`);
+      // Photos of pages read and checked on an earlier visit are deleted now (in case that visit didn't end cleanly).
+      list = await deleteReadPhotos(bookId, list, rangeRef.current);
       pagesRef.current = list;
       setPages(list);
       setSection(nextSection(list));
       setLoaded(true);
     })();
   }, [bookId]);
+
+  // Leaving the camera, however it's left: photos of the pages read and checked are deleted (lib/pages.ts).
+  useEffect(() => () => void deleteReadPhotos(bookId, pagesRef.current, rangeRef.current), [bookId]);
 
   const persist = useCallback(
     async (list: PageEntry[]) => {
@@ -740,6 +745,16 @@ function GapPrompt({ runs, onPhotograph, onNoText, onLater }: {
   );
 }
 
+/** Delete the photos of pages read and checked (photosToDelete), and note it on their entries. Returns the entries. */
+async function deleteReadPhotos(bookId: string, list: PageEntry[], range: Range): Promise<PageEntry[]> {
+  const seqs = new Set(photosToDelete(list, range));
+  if (!seqs.size) return list;
+  await Promise.all([...seqs].map((seq) => db.del("blobs", `page:${bookId}:${seq}`)));
+  const next = list.map((e) => (seqs.has(e.seq) ? { ...e, photoDeleted: true } : e));
+  await db.put("kv", next, `pages:${bookId}`);
+  return next;
+}
+
 function PageThumb({ bookId, seq, spinning, version = 0 }: { bookId: string; seq: number; spinning: boolean; version?: number }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -749,7 +764,7 @@ function PageThumb({ bookId, seq, spinning, version = 0 }: { bookId: string; seq
   }, [bookId, seq, version]);
   return (
     <span className="img">
-      {url && <img src={url} alt="" />}
+      {url ? <img src={url} alt="" /> : !spinning && <span className="gone" aria-hidden="true">✓</span>}
       {spinning && <span className="spinner" />}
     </span>
   );

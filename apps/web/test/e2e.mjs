@@ -981,6 +981,16 @@ await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para .w").first().waitFor();
 check((await page.locator(".folio .num").textContent()).startsWith("p. 9"), "reading starts at page 9");
 check((await page.locator(".para").textContent()).startsWith("Het was nog vroeg"), "with page 9's first paragraph");
+// Leaving the camera deletes the photos of pages read and checked; their text stays to read.
+const photos = await page.evaluate(async () => {
+  const db = await new Promise((ok) => { const r = indexedDB.open("boekenwurm-app"); r.onsuccess = () => ok(r.result); });
+  const get = (store, op) => new Promise((ok) => { const r = op(db.transaction(store).objectStore(store)); r.onsuccess = () => ok(r.result); });
+  const keys = (await get("blobs", (s) => s.getAllKeys())).filter((k) => String(k).startsWith("page:"));
+  const lists = (await get("kv", (s) => s.getAllKeys())).filter((k) => String(k).startsWith("pages:"));
+  const entries = (await Promise.all(lists.map((k) => get("kv", (s) => s.get(k))))).flat();
+  return { kept: keys.length, deleted: entries.filter((e) => e.photoDeleted).length, taken: entries.filter((e) => !e.noText).length };
+});
+check(photos.deleted > 0 && photos.kept + photos.deleted === photos.taken, `page photos deleted once read and checked (${photos.deleted} of ${photos.taken}; ${photos.kept} kept to check)`);
 await page.getByRole("button", { name: "Go to a page" }).click();
 await page.getByLabel("Page number").fill("12");
 await page.getByRole("button", { name: "Go", exact: true }).click();

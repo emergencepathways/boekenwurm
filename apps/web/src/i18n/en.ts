@@ -501,7 +501,7 @@ export const en = {
   "privacy.account": "**In your account** (if you sign in; Supabase, servers in the EU): your books, progress, words and settings, so they sync between your devices. Never your diary.",
   "privacy.languagetool": "**LanguageTool** (LanguageTool GmbH, Germany, EU): only if you agree, and only when you tap “Check my writing”, that diary entry is sent from your device to be checked.",
   "privacy.translate": "**Google Translate**: only the single word you tapped, when the dictionary doesn't know it (signed-in readers).",
-  "privacy.vision": "**Google Cloud Vision**: page photos, only for access-code holders who choose Google page reading.",
+  "privacy.vision": "**Book photos** (access-code holders only): each page photo is sent to Google Cloud Vision to be read. It stays on this device only until its page is read and checked, then it is deleted. The text read from it stays in your book so you can read it here, and is left out when you export your data.",
   "privacy.claude": "**Anthropic (Claude)**: only if you add your own Claude key (Experimental), the text a feature needs.",
   "privacy.reminder": "**Weekly reminder**: if you turn it on, this phone's notification address and your time zone, nothing you write.",
   "privacy.fonts": "**Fonts** are part of the app: opening it sends nothing to a font service.",

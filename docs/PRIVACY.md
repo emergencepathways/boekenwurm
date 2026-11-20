@@ -17,6 +17,8 @@
 | Which diary prompts you wrote, and on which days (not the text) | With your progress | For XP, badges and the weekly reminder | As your progress |
 | Your LanguageTool choice and its date | With your settings | To respect your choice on every device | As your settings |
 | Your device's notification address and time zone, if you turn on the weekly reminder | Supabase (EU) | To send the reminder | Until you turn it off or erase your account |
+| Photos of book pages (access-code holders only) | Only on your device | To read the page's text, and for you to check it | **Deleted as soon as the page is read and checked**; photos with something still to check are kept until it's checked |
+| Text read from photographed pages | On your device, and in your account if you sign in | So you can read the book here, on all your devices | Until you delete the book or erase your data; **not included in exports** (see "Your rights") |
 
 ## Services that receive data, and when
 
@@ -27,8 +29,8 @@
   [LanguageTool's privacy policy](https://languagetool.org/legal/privacy).
 - **Google Cloud Translation** (Google): the single word you tapped, when the dictionary doesn't know it (signed-in
   readers only). Never more than that word.
-- **Google Cloud Vision** (Google): photos of book pages, only for readers with an access code who choose Google page
-  reading.
+- **Google Cloud Vision** (Google): photos of book pages, only for readers with an access code (photographing books is
+  available only to them). Each photo is sent once, to read its text, and is not kept by Boekenwurm's servers.
 - **Anthropic (Claude)**: only if you add your own Claude API key (Account → Experimental), the text a feature needs
   (for example a paragraph to match to your level). Your key stays on your device.
 - **Web Push services** (Apple, Google or Mozilla, depending on your device): if you turn on the weekly reminder, a
@@ -39,7 +41,13 @@ Fonts and the dictionary are part of the app: opening Boekenwurm sends nothing t
 ## Your rights
 
 You can see, export and erase your data in the app (Account → Settings → Your data), and you can withdraw your
-LanguageTool consent or turn off the weekly reminder at any time. For anything else (access, correction, erasure,
+LanguageTool consent or turn off the weekly reminder at any time.
+
+**What an export leaves out.** For books you photographed, the export lists each book's title, author, ISBN, level,
+pages read, progress and when you added it, but not the book's text. That text is the author's and publisher's work,
+not information about you, and a copy of your data mustn't harm the rights of others (GDPR article 15(4)), copyright
+included. The same applies to a request by email. The photos themselves are deleted once read and checked, so there
+are none to export. Erasing your data deletes the books, their text and anything left of the photos. For anything else (access, correction, erasure,
 objection, a copy of your data), write to contact@emergencepathways.org. You can also complain to the Dutch Data
 Protection Authority (Autoriteit Persoonsgegevens).
 
@@ -50,3 +58,7 @@ Protection Authority (Autoriteit Persoonsgegevens).
   (health, sexuality, beliefs). Declining keeps the diary fully usable.
 - Weekly reminder: consent (you turn it on; the browser also asks).
 - Translation and page reading: performance of the service, limited to what the feature needs.
+- Page photos: deleted once read and checked (data minimisation, storage limitation). Text read from them is left out
+  of exports under article 15(4) and recital 63 (others' rights, copyright); the reader's own data about those books
+  (titles, progress, pages read) is included. The reviewer should confirm this, and the copyright position of reading
+  photographed books in the app, under Dutch law (Auteurswet, art. 16c).

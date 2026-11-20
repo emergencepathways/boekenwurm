@@ -430,6 +430,11 @@ anywhere except `private/`.
 
 ## Decided
 
+- Page photos are deleted once their page is read and checked (no different number, unsure words or other flag);
+  photos still to check are kept for the review, and the next visit cleans up any left behind. Photographed books are
+  in the data export as title, author, ISBN, level, pages read and progress, never their text (docs/PRIVACY.md).
+  2026-11-20.
+
 - Photographing books (and scanned PDFs) is for access-code holders only, read by Google Cloud Vision; on-device
   reading isn't good enough to release. Already photographed books stay readable for everyone. 2026-11-20.
 
