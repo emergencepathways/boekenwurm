@@ -121,7 +121,7 @@ Bottom tab bar, like a native app: **Home · Study · Words · Account**. The re
 - **Account** — four categories (new features join one of them): **Achievements** (rank and badges, earned and in
   progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, localization, name,
   install, connection check, export and delete my data, about and updates), **Experimental** (Claude key and models,
-  access code).
+  access code), **Privacy** (the full privacy notice: docs/PRIVACY.md itself, bundled at build time).
 
 **Languages.** The app's own text lives in message catalogs (`apps/web/src/i18n/en.ts` is the source; `uk.ts`, `ar.ts`
 translate it; a missing key falls back to English). `lib/i18n.ts` fills in `{placeholders}`, picks plural forms with

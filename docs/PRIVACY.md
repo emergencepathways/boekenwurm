@@ -2,6 +2,7 @@
 
 > Draft written for the owner's review. It describes how the app works as built; have it checked by someone qualified
 > in Dutch/EU privacy law before launch. The in-app summary (Account → Settings → About → Privacy) must say the same.
+> This file is shown in full, as written, in the app (Account → Privacy).
 
 **Who is responsible:** Emergence Pathways B.V., Den Haag, the Netherlands. Questions and requests about your data:
 **contact@emergencepathways.org**.

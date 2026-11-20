@@ -403,6 +403,7 @@ export const en = {
   "account.reading": "Reading",
   "account.settings": "Settings",
   "account.experimental": "Experimental",
+  "account.privacy": "Privacy",
   "account.experimentalNote": "Features still being tried out. They may change or move.",
   "account.rank": "Your rank",
   "account.rankNote": "Your rank rises by itself as you earn XP: 20 a paragraph (40 on a streak, × 1.5 in a book above your rank), 1,000 a book, and more for study and badges.",
@@ -514,6 +515,8 @@ export const en = {
   "privacy.toastOn": "LanguageTool on for your diary.",
   "privacy.toastOff": "LanguageTool off: nothing you write is sent anywhere.",
   "privacy.contact": "You can export or erase your data under Your data. Questions or requests about your data: {email} (Emergence Pathways, Den Haag).",
+  "privacy.fullLink": "Read the full privacy notice",
+  "privacy.fullNote": "The full privacy notice, as published. Questions or requests: {email}.",
 
   // ---------------------------------------------------------------- XP and badges (messages)
   "xp.study": "Study: +{xp} XP",

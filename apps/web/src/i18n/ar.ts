@@ -471,6 +471,7 @@ export const ar: Catalog = {
   "account.reading": "القراءة",
   "account.settings": "الإعدادات",
   "account.experimental": "تجريبي",
+  "account.privacy": "الخصوصية",
   "account.experimentalNote": "ميزات ما زالت قيد التجربة. قد تتغير أو تنتقل.",
   "account.rank": "رتبتك",
   "account.rankNote": "ترتفع رتبتك تلقائيًا كلما ربحت XP: 20 لكل فقرة (40 في السلسلة، × 1.5 في كتاب أعلى من رتبتك)، و1000 لكل كتاب، والمزيد على الدراسة والشارات.",
@@ -582,6 +583,8 @@ export const ar: Catalog = {
   "privacy.toastOn": "LanguageTool مفعّل ليومياتك.",
   "privacy.toastOff": "LanguageTool متوقف: لا يُرسَل شيء مما تكتبه إلى أي مكان.",
   "privacy.contact": "يمكنك تصدير بياناتك أو مسحها من «بياناتك». للأسئلة أو الطلبات المتعلقة ببياناتك: {email} (Emergence Pathways، لاهاي).",
+  "privacy.fullLink": "قراءة إشعار الخصوصية كاملًا",
+  "privacy.fullNote": "إشعار الخصوصية كاملًا (بالإنجليزية، كما نُشر). للأسئلة أو الطلبات: {email}.",
 
   // ---------------------------------------------------------------- XP and badges (messages)
   "xp.study": "الدراسة: +{xp} XP",

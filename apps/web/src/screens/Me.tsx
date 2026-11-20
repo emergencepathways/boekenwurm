@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
-import { useNav } from "../nav.ts";
+import { useEffect, useMemo, useState } from "react";
+import { marked } from "marked";
+// The full notice, as published (the repository's docs/PRIVACY.md), bundled at build time.
+import PRIVACY_MD from "../../../../docs/PRIVACY.md?raw";
+import { setTab, useNav } from "../nav.ts";
 import * as E from "@boekenwurm/engine";
 import { getState, SAVED_SOURCES, updateProfile, useStore } from "../lib/store.ts";
 import { lookupsToday } from "../lib/translate.ts";
@@ -23,13 +26,17 @@ import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
 
 /** The Account tab's categories. New features go into one of these. */
-type View = "achievements" | "reading" | "settings" | "experimental";
-const VIEWS: ReadonlyArray<[View, Key]> = [["achievements", "account.achievements"], ["reading", "account.reading"], ["settings", "account.settings"], ["experimental", "account.experimental"]];
+type View = "achievements" | "reading" | "settings" | "experimental" | "privacy";
+const VIEWS: ReadonlyArray<[View, Key]> = [
+  ["achievements", "account.achievements"], ["reading", "account.reading"], ["settings", "account.settings"], ["experimental", "account.experimental"],
+  ["privacy", "account.privacy"],
+];
 /** A link to a section (setTab("me", "claude")) opens the category that holds it. */
 const viewFor = (section: string | undefined): View =>
   section === "rank" || section === "badges" ? "achievements"
   : section === "reading" || section === "lookups" ? "reading"
   : section === "claude" || section === "access-code" ? "experimental"
+  : section === "privacy-notice" ? "privacy"
   : section ? "settings" : "achievements";
 
 export function Me() {
@@ -176,6 +183,12 @@ export function Me() {
         </div>
       )}
 
+      {view === "privacy" && (
+        <div className="panels" role="tabpanel" id="view-privacy" aria-labelledby="tab-privacy">
+          <PrivacyNotice />
+        </div>
+      )}
+
       {view === "settings" && (
         <div className="panels" role="tabpanel" id="view-settings" aria-labelledby="tab-settings">
           <SignIn />
@@ -279,7 +292,23 @@ function Privacy() {
         {lt?.allowed !== false && <button className="btn small ghost" type="button" onClick={() => void setLanguageTool(false).then(() => toast(t("privacy.toastOff")))}>{t("privacy.turnOff")}</button>}
       </div>
       <p className="small">{t("privacy.contact", { email: PRIVACY_CONTACT })}</p>
+      <button className="btn small" type="button" onClick={() => setTab("me", "privacy-notice")}>{t("privacy.fullLink")}</button>
     </details>
+  );
+}
+
+/**
+ * Account → Privacy: the full privacy notice, unabridged. It is docs/PRIVACY.md itself, built into the app, so the
+ * app and the published notice can never say different things. It is in English (the language it is reviewed in).
+ */
+function PrivacyNotice() {
+  const t = useT();
+  const html = useMemo(() => marked.parse(PRIVACY_MD, { async: false }).replace(/<a href="http/g, '<a target="_blank" rel="noopener noreferrer" href="http'), []);
+  return (
+    <section className="panel notice">
+      <p className="small muted">{t("privacy.fullNote", { email: PRIVACY_CONTACT })}</p>
+      <article className="legal" lang="en" dangerouslySetInnerHTML={{ __html: html }} />
+    </section>
   );
 }
 

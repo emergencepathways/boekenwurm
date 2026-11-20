@@ -662,3 +662,17 @@ details.entry summary { cursor: pointer; display: flex; gap: 8px; flex-wrap: wra
 @keyframes icon-turn { from { transform: rotate(-30deg) scale(0.4); opacity: 0; } }
 @keyframes band-in { 0%, 22% { opacity: 0; transform: translateX(-10px); } 32%, 84% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; } }
 @keyframes glint-across { to { translate: 110% 0; } }
+
+/* ---------------------------------------------------------------- Account → Privacy: the full notice */
+.legal { font: 400 0.98rem/1.6 var(--ui); color: var(--ink); overflow-wrap: anywhere; }
+.legal h1 { font: 600 1.5rem/1.2 var(--display); margin: 0 0 12px; }
+.legal h2 { font: 600 1.2rem/1.25 var(--display); margin: 26px 0 8px; }
+.legal p, .legal ul { margin: 0 0 12px; }
+.legal ul { padding-inline-start: 1.2em; display: grid; gap: 6px; }
+.legal a { color: var(--leaf); }
+.legal blockquote { margin: 0 0 14px; padding: 10px 14px; border-inline-start: 3px solid var(--gold); background: var(--gold-soft); border-radius: 4px 10px 10px 4px; }
+.legal blockquote p { margin: 0; }
+/* Tables scroll sideways inside themselves on a phone, so the page never does. */
+.legal table { display: block; overflow-x: auto; max-width: 100%; font-size: 0.88rem; margin: 0 0 14px; }
+.legal th, .legal td { min-width: 9rem; text-align: start; vertical-align: top; }
+.panel.notice { border-top: 0; }
