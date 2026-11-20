@@ -101,6 +101,9 @@ export interface Annotation { pages?: Array<{ width?: number; height?: number; b
  * becomes a space, and a word hyphenated at the end of a line ("HYPHEN", the hyphen not in the text) is joined into
  * one word. A paragraph ending in such a hyphen keeps a "-", so the app can join it with the next page.
  */
+/** Below this word confidence, a mark without two letters or digits in a row is dropped. */
+export const JUNK_BELOW = 0.5;
+
 export function fromAnnotation(a: Annotation | undefined): VisionPage {
   const page = a?.pages?.[0];
   const paragraphs: VisionParagraph[] = [];
@@ -112,6 +115,12 @@ export function fromAnnotation(a: Annotation | undefined): VisionPage {
       words.forEach((w, wi) => {
         const symbols = w.symbols ?? [];
         const word = symbols.map((s) => s.text ?? "").join("");
+        // A mark Vision itself doubts that isn't a word of two letters or digits (a speck, the edge of the facing
+        // page): left out of the text. Real words it doubts stay, listed as unsure for the reader to check.
+        if ((w.confidence ?? 1) < JUNK_BELOW && !/[\p{L}\d]{2}/u.test(word) && !/^[.,;:!?'"“”„‘’«»()…—–-]+$/u.test(word)) {
+          if (!text.endsWith(" ")) text += " ";
+          return;
+        }
         if ((w.confidence ?? 1) < 0.7 && /\p{L}/u.test(word)) unsure.push(word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, ""));
         symbols.forEach((s, si) => {
           text += s.text ?? "";

@@ -142,9 +142,29 @@ await ctx.route("**/rest/v1/rpc/report_shared_word", async (r) => {
 });
 
 // Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works.
-// Photographing a book needs the code. Each page photo the test draws queues what Google "sees" on it (`pages`), in
-// the order taken; with nothing queued, Google sees the Sem aan zee page. Past `limitAfter`, today's 20 are used up.
-const vision = { calls: 0, limitAfter: Infinity, redeemed: false, refuse: null, admin: false, pages: [], queue: true };
+// Photographing a book needs the code. Each page photo the test draws carries a coloured corner that says which page
+// it is (pagePhoto), and Google "sees" that page's text; with `marked` off, Google sees the Sem aan zee page. Past
+// `limitAfter`, today's 20 are used up.
+const vision = { calls: 0, limitAfter: Infinity, redeemed: false, refuse: null, admin: false, marked: true };
+let decoder = null;
+/** The page a drawn photo shows, from its corner: red = page × 6, green 100 = number printed, 200 = blurred. */
+async function seenOn(image) {
+  decoder ??= await browser.newPage();
+  const [r, g] = await decoder.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/jpeg;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const x = c.getContext("2d");
+    x.drawImage(img, 0, 0);
+    return [...x.getImageData(Math.round(img.width * 0.02), Math.round(img.height * 0.02), 1, 1).data];
+  }, image);
+  const n = Math.round(r / 6);
+  const kind = Math.round(g / 100);
+  return n ? { n, number: kind === 1, blank: kind === 2 } : null;
+}
 await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
   const { p_code } = JSON.parse(r.request().postData() || "{}");
   const ok = p_code.replace(/[\s-]/g, "").toUpperCase() === "BWE2ETESTCODE";
@@ -163,7 +183,7 @@ await ctx.route("**/functions/v1/read-page", async (r) => {
   if (vision.refuse) return r.fulfill({ status: 502, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "unavailable", detail: vision.refuse, used: 0, limit: 20 }) });
   if (vision.calls > vision.limitAfter) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 20, limit: 20 }) });
   const box = (y0, y1) => ({ x0: 80, y0, x1: 620, y1 });
-  const seen = vision.pages.shift();
+  const seen = vision.marked ? await seenOn(image) : null;
   if (seen) {
     const lines = seen.blank ? [] : (STORY[seen.n] ?? []).map((text, i) => ({ text, box: box(90 + i * 200, 260 + i * 200), confidence: 0.97, unsure: [] }));
     if (seen.number && !seen.blank) lines.push({ text: String(seen.n), box: box(890, 915), confidence: 0.99, unsure: [] });
@@ -854,12 +874,12 @@ const STORY = {
   17: ["Toen het donker werd, maakte Lotte soep van de groenten die nog in de koelkast lagen.", "Ze at aan het raam en keek naar de lichtjes van de boten die langzaam voorbij voeren."],
 };
 async function pagePhoto(n, { number = true, blank = false } = {}) {
-  if (vision.queue) vision.pages.push({ n, number, blank });
   const p = await browser.newPage({ viewport: { width: 700, height: 950 } });
   const body = blank
     ? `<div style="filter:blur(14px);opacity:.25">${(STORY[n] ?? STORY[9]).map((t) => `<p>${t}</p>`).join("")}</div>`
     : `${(STORY[n] ?? []).map((t) => `<p>${t}</p>`).join("")}${number ? `<div style="position:absolute;bottom:40px;left:0;right:0;text-align:center">${n}</div>` : ""}`;
-  await p.setContent(`<html><body style="margin:0;background:#fbfaf5"><div style="position:relative;height:950px;padding:70px 80px;box-sizing:border-box;font:26px/1.55 'Liberation Serif',Georgia,serif;color:#222;text-align:justify">${body}</div></body></html>`);
+  const mark = `<div style="position:absolute;left:0;top:0;width:44px;height:44px;background:rgb(${n * 6},${blank ? 200 : number ? 100 : 0},0)"></div>`;
+  await p.setContent(`<html><body style="margin:0;background:#fbfaf5"><div style="position:relative;height:950px;padding:70px 80px;box-sizing:border-box;font:26px/1.55 'Liberation Serif',Georgia,serif;color:#222;text-align:justify">${mark}${body}</div></body></html>`);
   const buffer = await p.screenshot({ type: "jpeg", quality: 90 });
   await p.close();
   return { name: `pagina-${n}.jpg`, mimeType: "image/jpeg", buffer };
@@ -995,8 +1015,7 @@ await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").le
 
 step("Google page reading: the page number at the foot, then the device past today's 20");
 // From here Google sees the Sem aan zee page, and today's 20 run out after one more photo.
-vision.pages.length = 0;
-vision.queue = false;
+vision.marked = false;
 vision.calls = 0;
 vision.limitAfter = 1;
 await page.getByRole("button", { name: /Done/ }).first().click();

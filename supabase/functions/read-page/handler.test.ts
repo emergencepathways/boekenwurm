@@ -152,3 +152,14 @@ test("without a service key nothing is given back, and the count says so", async
   assert.equal(body.used, 1);
   assert.equal(w.calls.filter((c) => c.url.includes("refund")).length, 0);
 });
+
+test("marks Vision doubts (under 0.5) that aren't words are left out; doubted words and punctuation stay", () => {
+  const out = fromAnnotation({
+    pages: [{
+      width: 10, height: 10,
+      blocks: [{ paragraphs: [para(1, [word("De"), word("|", "SPACE", 0.3), word("kat", "SPACE", 0.45), word("~", "SPACE", 0.2), word("sliep"), word(".", null, 0.4)])] }],
+    }],
+  });
+  assert.equal(out.paragraphs[0].text, "De kat sliep.");
+  assert.deepEqual(out.paragraphs[0].unsure, ["kat"]);
+});

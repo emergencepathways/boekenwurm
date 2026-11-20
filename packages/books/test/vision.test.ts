@@ -52,3 +52,31 @@ test("words Vision was unsure of are listed, and quality follows its confidence"
   assert.ok(r.quality > 0.5 && r.quality < 1);
   assert.equal(pageFromVision(page(), 0).quality, 0);
 });
+
+// ---------------------------------------------------------------- stray marks (owner, 2026-11-20)
+test("stray symbols are taken out of the text; Dutch punctuation and dashes stay", () => {
+  const r = pageFromVision(page(P("Het was | nog vroeg ~ toen • Lotte — heel stil — opstond.", 120)), 0);
+  assert.deepEqual(r.page.paragraphs, ["Het was nog vroeg toen Lotte — heel stil — opstond."]);
+});
+
+test("a paragraph with no word of two letters is noise: specks, rules, a scene break", () => {
+  const r = pageFromVision(page(P("* * *", 300), P("i ' .", 340), P("Daarna werd het stil in huis.", 400)), 0);
+  assert.deepEqual(r.page.paragraphs, ["Daarna werd het stil in huis."]);
+});
+
+test("Vision unsure (under 0.5) and under three words: dropped; three words or more stay, to be checked", () => {
+  const r = pageFromVision(page(P("lk ns", 200, 230, 0.31), P("De kat sliep op de bank.", 300, 340, 0.42), P("Ze las.", 400, 440, 0.9)), 0);
+  assert.deepEqual(r.page.paragraphs, ["De kat sliep op de bank.", "Ze las."]);
+});
+
+test("a sliver of words at the very side of the photo (the facing page, a thumb) is dropped", () => {
+  const sliver: VisionParagraph = { text: "ren het", box: { x0: 0, y0: 300, x1: 60, y1: 330 }, confidence: 0.9, unsure: [] };
+  const r = pageFromVision(page(sliver, P("Het was nog vroeg toen Lotte opstond.", 300)), 0);
+  assert.deepEqual(r.page.paragraphs, ["Het was nog vroeg toen Lotte opstond."]);
+});
+
+test("page and chapter numbers survive the clean-up", () => {
+  const r = pageFromVision(page(P("3", 260, 330), P("Het regende.", 380), P("• 41 •", 950, 975)), 0);
+  assert.equal(r.page.pageNumber, 41);
+  assert.deepEqual(r.page.paragraphs, ["3", "Het regende."]);
+});
