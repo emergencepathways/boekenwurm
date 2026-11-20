@@ -127,18 +127,21 @@ export async function readPhotoPage(
     };
   }
   const img = await downscale(photo, OCR_SIDE, 0.9);
-  // Google page reading (an access code): Google Cloud Vision reads the page; past today's 20, the device does.
-  let fallback: string | undefined;
+  // Google page reading (an access code): Google Cloud Vision reads the page, at most 20 pages a day for the whole
+  // account (the read-page function enforces it). There is no fallback to reading on the device: it isn't good enough
+  // to give readers (owner, 2026-11-20). A page Google can't read now fails, and can be read again later.
   if (hasFeature(GOOGLE_PAGES)) {
     onProgress?.(0, "reading with Google");
     const g = await readPageWithGoogle(img, seq, range);
     if (g.ok) return { ...g.page, problems: readingProblems(g.page.page, g.page.quality), by: "google", model: "cloud-vision" };
-    fallback =
-      g.reason === "limit" ? `Today's ${PAGE_READS_PER_DAY} Google page readings are used, so this page was read on this device and may be rough. Check its text.`
-      : `Google couldn't read this page${g.reason === "offline" ? " (offline)" : ""}, so it was read on this device and may be rough. Check its text.${g.ok === false && g.detail ? ` ${explainGoogleError(g.detail)}` : ""}`;
+    throw new Error(
+      g.reason === "limit" ? `Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Read this page again tomorrow.`
+      : g.reason === "offline" ? "You're offline, so Google couldn't read this page. Read it again when you're back online."
+      : `Google couldn't read this page. Try reading it again.${g.ok === false && g.detail ? ` ${explainGoogleError(g.detail)}` : ""}`,
+    );
   }
   const r = await readPageOnDevice(img, seq, onProgress, range);
-  return { page: r.page, uncertain: r.uncertain, quality: r.quality, problems: readingProblems(r.page, r.quality), by: "device", model: null, fallback };
+  return { page: r.page, uncertain: r.uncertain, quality: r.quality, problems: readingProblems(r.page, r.quality), by: "device", model: null };
 }
 
 /** A photo to retake: too many unsure words, or too little text found. */

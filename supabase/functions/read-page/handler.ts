@@ -9,11 +9,14 @@
  *   3. sends the photo to Vision and returns its paragraphs with their position on the page, so the app can tell the
  *      page number (at the head or foot) from a chapter number, and words Vision was unsure of.
  *
+ *   4. after a page is read, tells the owner if it was the reader's 200th this month (the soft limit, _shared/alerts.ts).
+ *
  * The photo goes only to Google, is not stored by this function, and the key never reaches the app.
  */
-import { bearer, claim, cors, googleError, refund, replier, timeZone, type ClaimConfig } from "../_shared/common.ts";
+import { bearer, claim, cors, googleError, readerId, refund, replier, timeZone, type ClaimConfig } from "../_shared/common.ts";
+import { pageReadsAlert, type AlertConfig } from "../_shared/alerts.ts";
 
-export interface Config extends ClaimConfig {
+export interface Config extends ClaimConfig, Omit<AlertConfig, "supabaseUrl" | "serviceKey" | "fetch"> {
   visionKey: string;
 }
 
@@ -82,7 +85,11 @@ export async function handle(req: Request, config: Config): Promise<Response> {
     const out = (await g.json().catch(() => null)) as { responses?: Array<{ fullTextAnnotation?: Annotation; error?: { message?: string } }> } | null;
     const res = out?.responses?.[0];
     if (!res || res.error) return await failed(res?.error?.message?.slice(0, 300) ?? "No answer from Google.");
-    return reply(200, { ok: true, ...counts, ...fromAnnotation(res.fullTextAnnotation) } satisfies Answer);
+    const page = fromAnnotation(res.fullTextAnnotation);
+    // 4. The monthly soft limit: never in the reader's way, so a failure here is only logged.
+    const user = readerId(auth);
+    if (user) await pageReadsAlert(user, c.day, config).catch((e) => console.error(`read-page: usage alert failed: ${(e as Error).message}`));
+    return reply(200, { ok: true, ...counts, ...page } satisfies Answer);
   } catch (e) {
     return await failed(`Couldn't reach Google (${(e as Error).message || "network"}).`);
   }

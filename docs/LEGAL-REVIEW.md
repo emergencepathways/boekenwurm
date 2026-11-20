@@ -12,3 +12,7 @@ was a draft; the notice itself is now shown to readers in full (Account → Priv
   the private copy), given that the text is kept only for the reader to read in the app and is never exported.
 - **LanguageTool consent:** explicit consent, asked before first use, because diary entries may contain
   special-category data. Confirm the consent text (in English, Ukrainian and Arabic) is sufficient.
+- **Usage alert (2026-11-20):** at 200 Google page readings in a calendar month, the owner gets one email through
+  Resend naming the reader's account email (legitimate interest: cost control of a paid-for service). Resend is a US
+  service: confirm the transfer basis (EU-US Data Privacy Framework certification or standard contractual clauses)
+  and add Resend to the processor list.

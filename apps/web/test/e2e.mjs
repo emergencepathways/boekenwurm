@@ -144,8 +144,8 @@ await ctx.route("**/rest/v1/rpc/report_shared_word", async (r) => {
 // Access codes and the read-page function (Google Cloud Vision behind it), mocked. Only "BW-E2E-TEST-CODE" works.
 // Photographing a book needs the code. Each page photo the test draws carries a coloured corner that says which page
 // it is (pagePhoto), and Google "sees" that page's text; with `marked` off, Google sees the Sem aan zee page. Past
-// `limitAfter`, today's 20 are used up.
-const vision = { calls: 0, limitAfter: Infinity, redeemed: false, refuse: null, admin: false, marked: true };
+// 20 pages (`used`, for the whole account, like the real function), the 21st is refused; set `used` to start a new day.
+const vision = { calls: 0, used: 0, redeemed: false, refuse: null, admin: false, marked: true };
 let decoder = null;
 /** The page a drawn photo shows, from its corner: red = page × 6, green 100 = number printed, 200 = blurred. */
 async function seenOn(image) {
@@ -174,23 +174,26 @@ await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
 });
 await ctx.route("**/rest/v1/feature_access*", (r) => r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
   body: JSON.stringify([...(vision.redeemed ? [{ feature: "google_page_reading" }] : []), ...(vision.admin ? [{ feature: "admin" }] : [])]) }));
+await ctx.route("**/rest/v1/page_read_usage*", (r) => r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
+  body: JSON.stringify(/object/.test(r.request().headers().accept ?? "") ? (vision.used ? { pages: vision.used } : null) : vision.used ? [{ pages: vision.used }] : []) }));
 await ctx.route("**/functions/v1/read-page", async (r) => {
   const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
   if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors });
   const { image } = JSON.parse(r.request().postData() || "{}");
   vision.calls++;
   vision.sentJpeg = typeof image === "string" && image.startsWith("/9j/");
-  if (vision.refuse) return r.fulfill({ status: 502, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "unavailable", detail: vision.refuse, used: 0, limit: 20 }) });
-  if (vision.calls > vision.limitAfter) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 20, limit: 20 }) });
+  if (vision.used >= 20) return r.fulfill({ status: 429, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "limit", used: 20, limit: 20 }) });
+  if (vision.refuse) return r.fulfill({ status: 502, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: false, reason: "unavailable", detail: vision.refuse, used: vision.used, limit: 20 }) });
+  vision.used++;
   const box = (y0, y1) => ({ x0: 80, y0, x1: 620, y1 });
   const seen = vision.marked ? await seenOn(image) : null;
   if (seen) {
     const lines = seen.blank ? [] : (STORY[seen.n] ?? []).map((text, i) => ({ text, box: box(90 + i * 200, 260 + i * 200), confidence: 0.97, unsure: [] }));
     if (seen.number && !seen.blank) lines.push({ text: String(seen.n), box: box(890, 915), confidence: 0.99, unsure: [] });
-    return r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, used: vision.calls, limit: 20, width: 700, height: 950, paragraphs: lines }) });
+    return r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({ ok: true, used: vision.used, limit: 20, width: 700, height: 950, paragraphs: lines }) });
   }
   await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify({
-    ok: true, used: 20, limit: 20, width: 700, height: 950,
+    ok: true, used: vision.used, limit: 20, width: 700, height: 950,
     paragraphs: [
       { text: "1", box: box(200, 260), confidence: 0.99, unsure: [] },
       { text: "De bus naar het strand vertrok om negen uur precies, en Sem zat helemaal achterin bij het raam.", box: box(300, 420), confidence: 0.98, unsure: [] },
@@ -914,7 +917,7 @@ check(await page.getByText("That's 204 pages to read.").isVisible(), "pages 9 to
 await page.getByRole("group", { name: "The book's level" }).getByRole("button", { name: "A2" }).click();
 await shot("12-photo-details");
 await page.getByRole("button", { name: /photograph the pages/ }).click();
-check(await page.getByText(/Section 1: photograph up to 20 pages in order, starting at page 9/).waitFor().then(() => true, () => false), "section 1 starts at the first page");
+check(await page.getByText(/Photograph the pages in order, starting at page 9/).waitFor().then(() => true, () => false), "the pages start at the first page");
 
 step("pages are numbered in the order taken; the number read from each photo is shown next to it");
 // Taken in this order: 9, 10 (number cut off), 12, 11 (out of order), then a blurry photo where 13 should be.
@@ -1015,30 +1018,31 @@ await page.getByRole("button", { name: "Go", exact: true }).click();
 check(await page.getByText("Page 14 has no text to read; going to page 15.").waitFor({ timeout: 5000 }).then(() => true, () => false), "Go to page 14 (a picture) explains and goes to page 15");
 
 // Read to the end of what's photographed: the app asks for the next section.
-const nextSection = page.getByText(/Next section: up to 20 pages, from page 18/);
+const nextSection = page.getByText(/Next pages: from page 18, up to 20 a day/);
 for (let i = 0; i < 60 && !(await nextSection.isVisible()); i++)
   await page.getByRole("button", { name: "Next page →" }).click({ timeout: 3000 }).catch(() => {});
 await nextSection.waitFor();
-check(true, "at the end of the photographed pages, the next section is offered from page 18");
+check(true, "at the end of the photographed pages, the next pages are offered from page 18");
 await shot("16-next-section");
 
-step("a section stops at 20 photos");
+step("20 pages a day for the whole account: the camera stops at today's 20, whatever the book");
+vision.used = 0; // a new day
 await page.getByRole("button", { name: "Photograph the next pages" }).click();
-check(await page.getByText(/Section 2: photograph up to 20 pages in order, starting at page 18/).waitFor().then(() => true, () => false), "section 2 starts at page 18");
+check(await page.getByText(/Photograph the pages in order, starting at page 18\. Google reads each page: up to 20 pages a day, for all your books together/).waitFor().then(() => true, () => false), "the next pages start at page 18, with the daily 20 explained");
+check(await page.getByText("20 of today's 20 pages left").waitFor({ timeout: 5000 }).then(() => true, () => false), "a new day: 20 pages left");
 const blanks = await Promise.all(Array.from({ length: 21 }, (_, i) => pagePhoto(18 + i, { blank: true })));
 await page.locator("input[type=file][multiple]").setInputFiles(blanks.map((b, i) => ({ ...b, name: `leeg-${i}.jpg` })));
-await page.getByText("This section is done: 20 photos.").waitFor({ timeout: 60000 });
-check((await page.locator(".thumb:not(.notext)").count()) === 28, "20 photos were taken in section 2 (the 21st was not)");
-check((await page.locator("video").count()) === 0 && (await page.getByRole("button", { name: "Take photo" }).count()) === 0, "the camera closes when the section is full");
+await page.getByText("Today's 20 pages are used, for all your books. Photograph more tomorrow.").first().waitFor({ timeout: 60000 });
+check((await page.locator(".thumb:not(.notext)").count()) === 28, "20 photos were taken today (the 21st was not)");
+check((await page.locator("video").count()) === 0 && (await page.getByRole("button", { name: "Take photo" }).count()) === 0, "the camera closes when today's 20 are used");
 await shot("17-section-full");
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 300000 });
 
 
-step("Google page reading: the page number at the foot, then the device past today's 20");
-// From here Google sees the Sem aan zee page, and today's 20 run out after one more photo.
+step("Google page reading: the page number at the foot; a new book shares today's 20; nothing read on the device");
+// From here Google sees the Sem aan zee page; two of today's 20 pages are left.
 vision.marked = false;
-vision.calls = 0;
-vision.limitAfter = 1;
+vision.used = 18;
 await page.getByRole("button", { name: /Done/ }).first().click();
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 await page.getByRole("button", { name: "Add a book" }).click();
@@ -1049,32 +1053,32 @@ await page.getByLabel("First page to read").fill("5");
 await page.getByLabel("Last page").fill("40");
 await page.getByRole("group", { name: "The book's level" }).getByRole("button", { name: "A1" }).click();
 await page.getByRole("button", { name: /photograph the pages/ }).click();
-check(await page.getByText(/Google reads each page \(20 a day, then this device\)/).waitFor({ timeout: 5000 }).then(() => true, () => false), "the camera says Google reads the pages");
+check(await page.getByText(/Google reads each page: up to 20 pages a day, for all your books together/).waitFor({ timeout: 5000 }).then(() => true, () => false), "the camera says Google reads the pages, 20 a day for all books");
+check(await page.getByText("2 of today's 20 pages left").waitFor({ timeout: 5000 }).then(() => true, () => false), "a new book shares the account's 20: 2 left today");
+const callsBefore = vision.calls;
 await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(9));
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 60000 });
-check(vision.calls === 1 && vision.sentJpeg, "the photo was sent to the read-page function as a JPEG");
+check(vision.calls === callsBefore + 1 && vision.sentJpeg, "the photo was sent to the read-page function as a JPEG");
 check((await thumbs())[0] === "p. 5 (read 5)", "the page number at the foot is read; the chapter number above the text isn't taken for it");
 await page.locator(".thumb").first().click();
 check(await page.getByText(/Read by Google/).isVisible(), "the page says it was read by Google");
 await page.getByRole("button", { name: "Close" }).click();
-await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(10));
-await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
-check(vision.calls === 2, "the next photo asked Google too");
-const second = (await thumbs())[1];
-check(second.startsWith("p. 6") && second.includes("⚑"), "past today's 20 it was read on this device, and flagged");
-await page.locator(".thumb").nth(1).click();
-check(await page.getByText(/Today's 20 Google page readings are used, so this page was read on this device/).isVisible(), "the flag explains why");
-check(await page.getByText(/Read on this device/).isVisible(), "and says where it was read");
-await shot("19-google-fallback");
-await page.getByRole("button", { name: "Close" }).click();
 vision.refuse = "Cloud Vision API has not been used in project 123 before or it is disabled.";
-await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(11));
-await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 180000 });
-await page.locator(".thumb").nth(2).click();
+await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(10));
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 60000 });
+await page.locator(".thumb").nth(1).click();
 check(await page.getByText(/The Cloud Vision API isn't turned on in the Google Cloud project\. Google said: “Cloud Vision API has not been used/).isVisible(),
   "when Google refuses, the page says why, in plain words and in Google's");
+check(!(await page.getByText(/Read on this device/).isVisible()), "and nothing is read on the device instead");
 await shot("20-google-refused");
-await page.getByRole("button", { name: "Close" }).click();
+vision.refuse = null;
+await page.getByRole("button", { name: "Read again" }).click();
+for (let i = 0; i < 300 && vision.used < 20; i++) await page.waitForTimeout(100);
+await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 60000 });
+check(vision.used === 20, "read again, Google reads it: today's 20 are used");
+check(await page.getByText("Today's 20 pages are used, for all your books. Photograph more tomorrow.").first().isVisible()
+  && (await page.getByRole("button", { name: "Take photo" }).count()) === 0, "the camera is closed until tomorrow");
+await shot("19-daily-limit");
 await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para").first().waitFor();
 check((await page.locator(".para").first().textContent()).startsWith("1 De bus naar het strand"), "the chapter number is read together with its first paragraph");

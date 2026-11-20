@@ -2,7 +2,8 @@
 # function to Supabase on every push to main.
 #   https://<project>.pages.dev   the app (apps/web)
 #   supabase/functions/translate  Google Translate for tapped words, 200 a day per reader (the key stays server-side)
-#   supabase/functions/read-page  Google Cloud Vision for page photos, access-code holders only, 20 a day
+#   supabase/functions/read-page  Google Cloud Vision for page photos, access-code holders only, 20 a day per account;
+#                                 at 200 in a month the owner is alerted (email if RESEND_API_KEY is set in Supabase)
 #   supabase/functions/diary-reminder  the weekly diary reminder (Web Push), run by diary-reminder.yml
 #
 # One-time setup in the GitHub repository (Settings → Secrets and variables → Actions):
@@ -14,6 +15,8 @@
 #            GOOGLE_VISION_KEY (optional)                      a separate key for read-page; without it, the Translate key
 #            CLOUDFLARE_API_TOKEN                              a token with the "Cloudflare Pages: Edit" permission
 #            CLOUDFLARE_ACCOUNT_ID                             from the Cloudflare dashboard
+# The owner's 200-pages-a-month email needs RESEND_API_KEY (and optionally ALERT_EMAIL, ALERT_FROM) set as Supabase
+# Edge Function secrets, in the Supabase dashboard; without it only the phone notification is sent.
 # The diary reminder's Web Push keys need no setup: the first deploy generates them straight into the function's
 # Supabase secrets (never printed, never in GitHub); the app asks the function for the public one.
 #   Variable CLOUDFLARE_PROJECT (optional)                     the Pages project name; default "boekenwurm"

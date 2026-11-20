@@ -163,3 +163,52 @@ test("marks Vision doubts (under 0.5) that aren't words are left out; doubted wo
   assert.equal(out.paragraphs[0].text, "De kat sliep.");
   assert.deepEqual(out.paragraphs[0].unsure, ["kat"]);
 });
+
+// ---------------------------------------------------------------- the 200-pages-a-month alert (owner, 2026-11-20)
+import { DEFAULT_ALERT_EMAIL, MONTH_SOFT_LIMIT, pageReadsAlert, type PushSub } from "../_shared/alerts.ts";
+
+/** Supabase and Resend, mocked: `pages` is what the month adds up to with this page; `first` whether it's the first time at 200. */
+function alertWorld(pages: number, first: boolean) {
+  const sent: Array<{ url: string; body: unknown }> = [];
+  const fetch = (async (url: string, init?: RequestInit) => {
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    sent.push({ url, body });
+    if (url.endsWith("/rpc/page_reads_month_alert")) return Response.json([{ pages, alert: pages >= MONTH_SOFT_LIMIT && first }]);
+    if (url.includes("/auth/v1/admin/users/")) return Response.json({ email: "lezer@example.org" });
+    if (url.includes("/feature_access")) return Response.json([{ user_id: "owner-1" }]);
+    if (url.includes("/push_subscriptions")) return Response.json([{ endpoint: "https://push.example/owner", user_id: "owner-1", p256dh: "k", auth: "a" }]);
+    if (url === "https://api.resend.com/emails") return Response.json({ id: "email-1" });
+    return new Response("not found", { status: 404 });
+  }) as typeof globalThis.fetch;
+  const pushes: Array<{ sub: PushSub; payload: string }> = [];
+  const sendPush = async (sub: PushSub, payload: string) => (pushes.push({ sub, payload }), 201);
+  return { sent, pushes, config: { supabaseUrl: "https://db.example", serviceKey: "service", resendKey: "re_test", fetch, sendPush } };
+}
+
+test("the 200th page this month: one email to the owner naming the reader, and a notification on her phone", async () => {
+  const w = alertWorld(200, true);
+  const r = await pageReadsAlert("reader-a", "2026-11-20", w.config);
+  assert.deepEqual(r, { pages: 200, alerted: true, emailed: true, pushed: 1 });
+  const email = w.sent.find((s) => s.url === "https://api.resend.com/emails")!.body as { to: string[]; subject: string; text: string };
+  assert.deepEqual(email.to, [DEFAULT_ALERT_EMAIL]);
+  assert.equal(email.subject, "Boekenwurm: a reader reached 200 pages in November 2026");
+  assert.match(email.text, /Reader: lezer@example\.org/);
+  assert.equal(w.pushes[0].sub.endpoint, "https://push.example/owner");
+  assert.doesNotMatch(w.pushes[0].payload, /lezer@example/, "the phone notification names no reader");
+});
+
+test("199 pages, or 200 again after the alert went: nothing is sent", async () => {
+  for (const [pages, first] of [[199, true], [200, false], [215, false]] as const) {
+    const w = alertWorld(pages, first);
+    const r = await pageReadsAlert("reader-a", "2026-11-20", w.config);
+    assert.equal(r.alerted, false);
+    assert.equal(w.sent.filter((s) => s.url === "https://api.resend.com/emails").length, 0);
+    assert.equal(w.pushes.length, 0);
+  }
+});
+
+test("without a Resend key there's no email, but the phone notification still goes", async () => {
+  const w = alertWorld(200, true);
+  const r = await pageReadsAlert("reader-a", "2026-11-20", { ...w.config, resendKey: "" });
+  assert.deepEqual(r, { pages: 200, alerted: true, emailed: false, pushed: 1 });
+});

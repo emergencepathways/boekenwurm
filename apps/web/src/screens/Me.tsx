@@ -492,8 +492,7 @@ function AccessCodeSection() {
       {on ? (
         <>
           <p>
-            <b>Google page reading is on.</b> Page photos are read by Google instead of on this device: up to {PAGE_READS_PER_DAY} pages a day, then
-            this device again until midnight.
+            <b>Google page reading is on.</b> You can photograph books, and Google reads the pages: up to {PAGE_READS_PER_DAY} pages a day for all your books together, again from midnight.
           </p>
           <div className="row">
             <span className="label">Today</span>

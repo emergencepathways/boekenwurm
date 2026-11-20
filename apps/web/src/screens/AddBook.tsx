@@ -14,7 +14,7 @@ import { gradeBook, hintFromWordMatch, newBook, readPhotoPage, toParagraphs, typ
 import { downscale, COVER_SIDE, OCR_SIDE, CLAUDE_SIDE } from "../lib/images.ts";
 import { saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
 import { stopReader } from "../lib/ocr.ts";
-import { ADMIN, hasFeature, PHOTO_PAGES, usePhotoPages } from "../lib/features.ts";
+import { ADMIN, hasFeature, PAGE_READS_PER_DAY, PHOTO_PAGES, usePhotoPages } from "../lib/features.ts";
 import { close, open } from "../nav.ts";
 import type { Book, Paragraph } from "../lib/types.ts";
 import { Icon, LevelPicker, plural } from "../ui.tsx";
@@ -205,11 +205,11 @@ function Scanned({ step, onRead, onBack }: {
         <>
           <p>With your Claude key: about {plural(step.pages, "request")}, one per page. Most accurate for Dutch.</p>
           <button className="btn primary" type="button" onClick={() => onRead(step.file, step.pages, step.title, step.author, true)}>Read with Claude</button>
-          <button className="btn" type="button" onClick={() => onRead(step.file, step.pages, step.title, step.author, false)}>Read on this device (free)</button>
+          <button className="btn" type="button" onClick={() => onRead(step.file, step.pages, step.title, step.author, false)}>Read with Google ({PAGE_READS_PER_DAY} a day)</button>
         </>
       ) : (
         <>
-          <p>On this device, for free. The first time downloads the Dutch reading model (about 7 MB); a page takes a few seconds.</p>
+          <p>Google reads the pages: up to {PAGE_READS_PER_DAY} a day, for all your books together. A longer PDF stops at today's limit and keeps the pages read so far.</p>
           <button className="btn primary" type="button" onClick={() => onRead(step.file, step.pages, step.title, step.author, false)}>Read the pages</button>
         </>
       )}

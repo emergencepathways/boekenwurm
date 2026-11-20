@@ -17,10 +17,11 @@ import { bookProgress } from "@boekenwurm/books";
 import { bookById, loadText, saveBook, saveCover, saveText, useStore } from "../lib/store.ts";
 import {
   arrange, differs, flags, inSection as countInSection, isBusy, keepEarlierOrder, keepPosition, markNoText, missingPages, nextPage, nextSection,
-  numberPages, photosToDelete, SECTION_SIZE, stitchBook, type PageEntry, type Placed, type Range,
+  numberPages, photosToDelete, stitchBook, type PageEntry, type Placed, type Range,
 } from "../lib/pages.ts";
 import { newBook, readCover, readPhotoPage, toParagraphs } from "../lib/books.ts";
-import { GOOGLE_PAGES, PAGE_READS_PER_DAY } from "../lib/features.ts";
+import { PAGE_READS_PER_DAY, pageReadsToday } from "../lib/features.ts";
+import { localDay } from "../lib/usage.ts";
 import { downscale, COVER_SIDE, OCR_SIDE } from "../lib/images.ts";
 import { checkBook } from "../lib/text.ts";
 import { db } from "../lib/db.ts";
@@ -344,11 +345,7 @@ function DetailsStep({ cover, details, onChange, onRetake, onSave }: {
 // ---------------------------------------------------------------- 3. pages
 
 function PagesStep({ bookId }: { bookId: string }) {
-  const hasKey = useStore((s) => s.hasKey);
-  const preferFree = useStore((s) => s.profile.settings.preferFreeReading);
   const book = useStore((s) => s.books.find((b) => b.id === bookId) ?? null);
-  const useClaude = hasKey && !preferFree;
-  const googlePages = useStore((s) => s.features.includes(GOOGLE_PAGES));
   const range: Range = { firstPage: book?.firstPage ?? 1, lastPage: book?.pageCount ?? null };
   const [pages, setPages] = useState<PageEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -370,6 +367,15 @@ function PagesStep({ bookId }: { bookId: string }) {
   pagesRef.current = pages;
   const rangeRef = useRef(range);
   rangeRef.current = range;
+  // Today's allowance, for the whole account (the read-page function keeps the count): what the server has counted,
+  // less the photos of this visit still waiting to be read.
+  const reads = useStore((s) => s.pageReads);
+  useEffect(() => void pageReadsToday(), []);
+  const leftToday = (list: PageEntry[]) => {
+    const today = localDay(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+    const used = reads && reads.day === today ? reads.used : 0;
+    return Math.max(0, (reads?.limit ?? PAGE_READS_PER_DAY) - used - list.filter(isBusy).length);
+  };
 
   // Pages photographed before. This visit is a new section of up to 20 photos.
   useEffect(() => {
@@ -430,7 +436,7 @@ function PagesStep({ bookId }: { bookId: string }) {
       const job = queue.current.shift()!;
       update(job.seq, { status: "reading" });
       try {
-        const r = await readPhotoPage(job.blob, job.seq, useClaude, (p, s) => setProgress(s === "reading with Google" ? "Google is reading the page…" : s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"), { lastPage: rangeRef.current.lastPage });
+        const r = await readPhotoPage(job.blob, job.seq, false, (p, s) => setProgress(s === "reading with Google" ? "Google is reading the page…" : s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"), { lastPage: rangeRef.current.lastPage });
         // Unsure words don't hold a page back: it is used at once and flagged for an optional quick check.
         const status: PageEntry["status"] = r.problems.length ? "check" : "done";
         await persist(update(job.seq, { status, page: r.page, problems: r.problems, uncertain: r.uncertain, by: r.by, fallback: r.fallback }));
@@ -440,19 +446,16 @@ function PagesStep({ bookId }: { bookId: string }) {
       setProgress(null);
     }
     working.current = false;
-  }, [persist, useClaude]);
+  }, [persist]);
 
   /**
    * A new photo: it claims the next slot in this visit's section at once (so several photos picked together get
    * distinct slots, in the order picked, and the section stops at 20), then is stored and read in the background.
    */
   const add = (photo: Blob) => {
-    // A missed page: it takes its number and slots into place, outside the section's 20.
+    // Every photo is read by Google and counts toward today's 20 pages, for all the reader's books.
+    if (leftToday(pagesRef.current) <= 0) return toast(`Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Photograph more tomorrow.`);
     const missed = fillRef.current[0];
-    if (missed == null && countInSection(pagesRef.current, section) >= SECTION_SIZE) {
-      toast(`This section is full: ${SECTION_SIZE} photos. Read them, then photograph the next section.`);
-      return;
-    }
     if (missed != null) {
       fillRef.current = fillRef.current.slice(1);
       setFill(fillRef.current);
@@ -479,6 +482,7 @@ function PagesStep({ bookId }: { bookId: string }) {
   /** A retake: the new photo replaces the old one in the same slot, so its place in the book doesn't change. */
   const replace = async (seq: number, photo: Blob) => {
     setRetaking(null);
+    if (leftToday(pagesRef.current) <= 0) return toast(`Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Retake it tomorrow.`);
     const small = await downscale(photo, OCR_SIDE, 0.9).catch(() => photo);
     await db.put("blobs", small, `page:${bookId}:${seq}`);
     update(seq, { status: "queued", page: null, problems: [], uncertain: [], by: null, fallback: undefined });
@@ -491,6 +495,7 @@ function PagesStep({ bookId }: { bookId: string }) {
   const retry = async (seq: number) => {
     const blob = await db.get<Blob>("blobs", `page:${bookId}:${seq}`);
     if (!blob) return toast("That photo isn't on this device any more. Retake it.");
+    if (leftToday(pagesRef.current) <= 0) return toast(`Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Read it again tomorrow.`);
     update(seq, { status: "queued", problems: [] });
     queue.current.push({ seq, blob });
     void work();
@@ -541,7 +546,8 @@ function PagesStep({ bookId }: { bookId: string }) {
   const flagged = placed.filter((p) => flags(p, placed, range).length);
   const inSection = countInSection(pages, section);
   const filling = fill.length > 0;
-  const full = inSection >= SECTION_SIZE && !filling;
+  const left = leftToday(pages);
+  const full = left <= 0;
   const gaps = missingPages(pages, range);
   // Leaving with gaps (Start reading, Add more later): ask first, once per visit.
   const finish = (then: () => void) => (gaps.length && !gapsLater && !filling ? setGapAsk({ then }) : then());
@@ -568,11 +574,11 @@ function PagesStep({ bookId }: { bookId: string }) {
       <p className="muted" style={{ margin: 0 }}>
         {retakeOf
           ? `Retake page ${retakeOf.pageNumber}. It goes back in the same place.`
-          : filling
+          : full
+            ? `Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Photograph more tomorrow.`
+            : filling
             ? `Photograph page ${fill[0]}${fill.length > 1 ? ` (then ${fill.slice(1).join(", ")})` : ""}. It goes into its place in the book.`
-            : full
-            ? `This section is done: ${SECTION_SIZE} photos.`
-            : `Section ${section}: photograph up to ${SECTION_SIZE} pages in order${inSection ? "" : `, starting at page ${startAt}`}. ${useClaude ? "Claude reads each page (one request per page)." : googlePages ? `Google reads each page (${PAGE_READS_PER_DAY} a day, then this device).` : "Each page is read on this device, for free."}`}
+            : `Photograph the pages in order${inSection ? "" : `, starting at page ${startAt}`}. Google reads each page: up to ${PAGE_READS_PER_DAY} pages a day, for all your books together.`}
       </p>
 
       {askGaps && (
@@ -594,7 +600,7 @@ function PagesStep({ bookId }: { bookId: string }) {
           <Camera key={`retake-${retaking}`} onPhoto={(b) => void replace(retakeOf.entry.seq, b)} hint="Flat, in good light, the whole page in the frame, with its page number." />
           <button className="btn ghost" type="button" onClick={() => setRetaking(null)}>Cancel the retake</button>
         </>
-      ) : filling ? (
+      ) : filling && !full ? (
         <>
           <Camera key="missed" onPhoto={add} hint={`The missed page: page ${fill[0]}.`} />
           <button className="btn ghost" type="button" onClick={() => setFill([])}>Stop: decide later</button>
@@ -603,7 +609,7 @@ function PagesStep({ bookId }: { bookId: string }) {
         <section className="panel">
           <h2>{flagged.length ? `Check ${plural(flagged.length, "flagged page")}, then read` : "All set: time to read"}</h2>
           <p>
-            Read these pages before photographing more. When you reach the end, Boekenwurm asks for the next {SECTION_SIZE}, from page {startAt}.
+            That's today's {PAGE_READS_PER_DAY} pages. Read them now; tomorrow you can photograph the next ones, from page {startAt}.
           </p>
           <div className="actions">
             {flagged.length > 0 && <button className="btn" type="button" onClick={() => openNext(null)}>Review flagged pages</button>}
@@ -614,7 +620,7 @@ function PagesStep({ bookId }: { bookId: string }) {
         <>
           <Camera key="camera" onPhoto={add} hint="One page per photo, flat and in good light, with the page number in the frame." />
           <p className="small muted num" style={{ margin: 0, textAlign: "center" }}>
-            Next photo: <b>page {upcoming}</b> · {inSection} of {SECTION_SIZE} in this section
+            Next photo: <b>page {upcoming}</b> · {left} of today's {PAGE_READS_PER_DAY} pages left
           </p>
         </>
       )}

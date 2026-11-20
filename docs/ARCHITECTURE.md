@@ -89,8 +89,13 @@ code; migration 0004) have their page photos read by Google Cloud Vision's docum
 device: the `read-page` Edge Function holds the owner's key, claims one of the reader's 20 pages a day with
 `claim_page_read()` (which also refuses readers without access), and returns Vision's paragraphs with their position
 on the page. `packages/books/vision.ts` tells the printed page number (a number alone in the top or bottom tenth of
-the page, the foot first) from a chapter number (alone further in, kept as text). Past the 20, or when Google can't be
-reached, the page is read on the device and flagged so the reader checks it. When Google refuses or fails, the
+the page, the foot first) from a chapter number (alone further in, kept as text). The 20 pages a day are for the
+whole account, across all books (the camera shows how many are left today and closes at 0); there is no reading on
+the device instead, past the 20 or when Google can't be reached: the page waits and can be read again. A reader's
+200th page in a calendar month (a soft limit, nothing refused) sends the owner one alert, by email through Resend
+(`RESEND_API_KEY`, to `ALERT_EMAIL`, default contact@emergencepathways.org) naming the reader's account email, and as
+a notification to the owner's phone (admin accounts' push addresses); once per reader per month
+(`page_reads_month_alert`, `usage_alerts`, migration 0012; `supabase/functions/_shared/alerts.ts`). When Google refuses or fails, the
 function gives the page back (`refund_page_read`, migration 0005, callable by the server only; Translate lookups the
 same with `refund_translation`) and the flag carries Google's reason, e.g. that the Cloud Vision API isn't enabled. Codes are stored only as hashes, each
 works for one reader by default, and the owner adds them in the SQL Editor:
@@ -160,15 +165,15 @@ the data export lists photographed books without their text (`lib/export.ts`); s
    the page number (readings outside the chosen pages are ignored), outside the chosen pages, the same page twice, or
    words the device was unsure of. The reader uses the number read, keeps the one in order, types another, or
    **retakes** the photo: a retake replaces the photo *in its slot*, so it keeps its number and place.
-   A **gap in the page numbers** is asked about when a section ends (20 photos) or before the reader leaves to
-   read: "Missed a page?" The reader photographs it now (the photo takes the missing number and slots into place,
-   outside the section's 20), or marks it as having **no text**: a picture, a map, or left out on purpose. A page
+   A **gap in the page numbers** is asked about when today's 20 pages are used or before the reader leaves to
+   read: "Missed a page?" The reader photographs it now (the photo takes the missing number and slots into place;
+   it counts toward today's 20), or marks it as having **no text**: a picture, a map, or left out on purpose. A page
    with no text is no longer missing, counts as read in the book's progress, and Go to page skips over it.
 6. Paragraphs that run over a page break are joined, and words hyphenated across lines or pages are rejoined. The
    reader stays on the same paragraph when an earlier page arrives later.
 7. **Reading** is in order by default; **Go to page** jumps anywhere photographed (a jump starts a fresh run and
    doesn't mark skipped pages as read). At the end of the photographed pages, the reader is asked for the next
-   section: up to 20 pages, from the page after the last one photographed.
+   pages, from the page after the last one photographed, within the account's 20 a day.
 
 Camera access: the app asks the first time the reader taps **Take photo**, after a short screen that says why. On
 phones the back camera is used (`facingMode: environment`, or `<input capture="environment">` as the fallback that

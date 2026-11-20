@@ -1,4 +1,4 @@
-// The weekly diary reminder (lib/push.ts). Loaded into the app's service worker (vite.config.ts, importScripts).
+// Phone notifications: the weekly diary reminder (lib/push.ts) and, for the owner, the usage alert. Loaded into the app's service worker (vite.config.ts, importScripts).
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(data.title || "Je wekelijkse dagboek", {
       body: data.body || "Schrijf een paar zinnen in het Nederlands: er wacht een nieuwe vraag op je.",
       icon: scope + "icons/icon-192.png",
-      tag: "diary-weekly",
-      data: { url: scope + "?open=diary" },
+      tag: data.tag || "diary-weekly",
+      data: { url: scope + (data.path ?? "?open=diary") },
     }),
   );
 });

@@ -430,6 +430,11 @@ anywhere except `private/`.
 
 ## Decided
 
+- Google page reading: a hard limit of 20 pages a day for the whole account, across all books (no per-book sections
+  of 20, and no reading on the device past the limit); a soft limit of 200 pages in a calendar month, at which the
+  owner gets one alert per reader per month by email (contact@emergencepathways.org, naming the reader's account
+  email) and on her phone. 2026-11-20.
+
 - Page photos are deleted once their page is read and checked (no different number, unsure words or other flag);
   photos still to check are kept for the review, and the next visit cleans up any left behind. Photographed books are
   in the data export as title, author, ISBN, level, pages read and progress, never their text (docs/PRIVACY.md).

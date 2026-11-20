@@ -355,6 +355,41 @@ do $$ begin
 end $$;
 reset role;
 
+-- 200 pages a month: one alert per reader per month (0012), for the server only
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  perform page_reads_month_alert('00000000-0000-0000-0000-00000000000a', current_date);
+  raise exception 'FAIL: a reader called the monthly alert';
+exception when insufficient_privilege then raise notice 'ok: readers cannot call the monthly alert';
+end $$;
+do $$ begin
+  perform 1 from usage_alerts;
+  raise exception 'FAIL: a reader read the alerts';
+exception when insufficient_privilege then raise notice 'ok: readers cannot see the alerts';
+end $$;
+reset role;
+do $$ declare r record; d date := date_trunc('month', current_date)::date; begin
+  delete from page_read_usage where user_id = '00000000-0000-0000-0000-00000000000a';
+  -- 9 days of 20 and one of 19: 199 pages this month, and 20 last month, which doesn't count
+  insert into page_read_usage (user_id, day, pages)
+    select '00000000-0000-0000-0000-00000000000a', d + i, case when i = 9 then 19 else 20 end from generate_series(0, 9) i;
+  insert into page_read_usage (user_id, day, pages) values ('00000000-0000-0000-0000-00000000000a', d - 1, 20);
+  set role service_role;
+  select * into r from page_reads_month_alert('00000000-0000-0000-0000-00000000000a', d + 9);
+  if r.pages <> 199 or r.alert then raise exception 'FAIL: 199 pages alerted (pages %, alert %)', r.pages, r.alert; end if;
+  reset role;
+  update page_read_usage set pages = 20 where user_id = '00000000-0000-0000-0000-00000000000a' and day = d + 9;
+  set role service_role;
+  select * into r from page_reads_month_alert('00000000-0000-0000-0000-00000000000a', d + 9);
+  if r.pages <> 200 or not r.alert then raise exception 'FAIL: 200 pages did not alert (pages %, alert %)', r.pages, r.alert; end if;
+  select * into r from page_reads_month_alert('00000000-0000-0000-0000-00000000000a', d + 9);
+  if r.alert then raise exception 'FAIL: the alert was sent twice in one month'; end if;
+  reset role;
+  raise notice 'ok: 199 pages in a month: no alert; the 200th: one alert; after that: none (last month''s pages not counted)';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

@@ -35,7 +35,8 @@ owner asks, and update the design doc and the tests together.
 - `supabase/` — database schema with owner-only row-level security; `supabase/tests/run.sh` tests it on local Postgres.
   `supabase/functions/translate/` — the Edge Function that holds the Google Translate key and enforces 200 words a
   day per reader; `supabase/functions/read-page/` — Google Cloud Vision for page photos, access-code holders only,
-  20 a day (migration 0004). In each, `handler.ts` is plain TypeScript, tested under Node, and `index.ts` is the Deno
+  20 a day for the whole account, with no reading on the device past it (migration 0004), and the owner's alert at
+  200 pages in a month (`_shared/alerts.ts`, migration 0012: email via Resend, push to the owner's phone). In each, `handler.ts` is plain TypeScript, tested under Node, and `index.ts` is the Deno
   entry; `_shared/common.ts` has what they share (CORS, the reader's token, claiming a daily use).
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.

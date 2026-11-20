@@ -15,6 +15,8 @@
 | Your LanguageTool choice and its date | With your settings | To respect your choice on every device | As your settings |
 | Your device's notification address and time zone, if you turn on the weekly reminder | Supabase (EU) | To send the reminder | Until you turn it off or erase your account |
 | Photos of book pages (access-code holders only) | Only on your device | To read the page's text, and for you to check it | **Deleted as soon as the page is read and checked**; photos with something still to check are kept until it's checked |
+| How many pages Google read for you each day (page readings) | Supabase (EU) | For the limit of 20 pages a day per account, and the monthly check below | As long as you have an account |
+| That your account reached 200 page readings in a month, and when | Supabase (EU); the alert by email to Emergence Pathways | So Emergence Pathways can see heavy use early and contact you | As long as you have an account |
 | Text read from photographed pages | On your device, and in your account if you sign in | So you can read the book here, on all your devices | Until you delete the book or erase your data; **not included in exports** (see "Your rights") |
 
 ## Services that receive data, and when
@@ -28,6 +30,9 @@
   readers only). Never more than that word.
 - **Google Cloud Vision** (Google): photos of book pages, only for readers with an access code (photographing books is
   available only to them). Each photo is sent once, to read its text, and is not kept by Boekenwurm's servers.
+- **Resend** (an email service): if your account reaches 200 page readings in a calendar month, Emergence Pathways
+  receives one email about it, with your account's email address, so we can contact you about your use. Nothing is
+  blocked by it.
 - **Anthropic (Claude)**: only if you add your own Claude API key (Account → Experimental), the text a feature needs
   (for example a paragraph to match to your level). Your key stays on your device.
 - **Web Push services** (Apple, Google or Mozilla, depending on your device): if you turn on the weekly reminder, a
@@ -55,6 +60,8 @@ Protection Authority (Autoriteit Persoonsgegevens).
   (health, sexuality, beliefs). Declining keeps the diary fully usable.
 - Weekly reminder: consent (you turn it on; the browser also asks).
 - Translation and page reading: performance of the service, limited to what the feature needs.
+- Counting page readings, and the alert at 200 a month: legitimate interest (keeping a paid-for service fair and its
+  costs in hand). Only the count, the month and your account email are used.
 - Page photos: deleted once read and checked, so no more is kept, for no longer, than reading the page needs (data
   minimisation and storage limitation). Text read from them is left out of exports under article 15(4) and recital
   63 (the rights of others, copyright included); your own data about those books (titles, progress, pages read) is
