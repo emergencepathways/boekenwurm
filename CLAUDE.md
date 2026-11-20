@@ -48,7 +48,10 @@ owner asks, and update the design doc and the tests together.
   Nothing is preloaded except the open dictionary (`public/dict/nl.json`, built at deploy time, not committed).
   The app's text is in `src/i18n/` (English source, Ukrainian, Arabic); new UI text goes into `en.ts` and every
   catalog in the same change (docs/TRANSLATING.md). Dutch stays Dutch in every language.
-  `docs/PRIVACY.md` is bundled into the app and shown in full under Account → Privacy: edit it as published text.
+  `docs/PRIVACY.md` is the privacy notice, bundled into the app and shown in full under Account → Privacy: edit it as
+  published text, and every change to what the app keeps or sends goes into it in the same change, together with the
+  short summary under Account → Settings → About (the `privacy.*` keys, in every catalog). Notes for the legal
+  reviewer go in `docs/LEGAL-REVIEW.md`, never in the notice.
 - `apps/playtest/` — the first reader, built into one page; kept for reference, no longer hosted.
 - `services/ingest/` — Python, standard library only (spaCy optional, used when installed): `epub.py`, `language.py`, `spelling.py`, `dating.py`,
   `gate.py` (verdicts), `tokenize.py` (tap tokens), `textbook.py` (private word list), `dictionary.py` (the open

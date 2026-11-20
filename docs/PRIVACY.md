@@ -1,8 +1,4 @@
-# Boekenwurm privacy notice (draft)
-
-> Draft written for the owner's review. It describes how the app works as built; have it checked by someone qualified
-> in Dutch/EU privacy law before launch. The in-app summary (Account → Settings → About → Privacy) must say the same.
-> This file is shown in full, as written, in the app (Account → Privacy).
+# Boekenwurm privacy notice
 
 **Who is responsible:** Emergence Pathways B.V., Den Haag, the Netherlands. Questions and requests about your data:
 **contact@emergencepathways.org**.
@@ -52,14 +48,14 @@ are none to export. Erasing your data deletes the books, their text and anything
 objection, a copy of your data), write to contact@emergencepathways.org. You can also complain to the Dutch Data
 Protection Authority (Autoriteit Persoonsgegevens).
 
-## Legal bases (for the reviewer)
+## Legal bases
 
 - Running the app and syncing your account: performance of the service you asked for.
 - LanguageTool: **explicit consent**, asked before first use, as diary entries may contain special-category data
   (health, sexuality, beliefs). Declining keeps the diary fully usable.
 - Weekly reminder: consent (you turn it on; the browser also asks).
 - Translation and page reading: performance of the service, limited to what the feature needs.
-- Page photos: deleted once read and checked (data minimisation, storage limitation). Text read from them is left out
-  of exports under article 15(4) and recital 63 (others' rights, copyright); the reader's own data about those books
-  (titles, progress, pages read) is included. The reviewer should confirm this, and the copyright position of reading
-  photographed books in the app, under Dutch law (Auteurswet, art. 16c).
+- Page photos: deleted once read and checked, so no more is kept, for no longer, than reading the page needs (data
+  minimisation and storage limitation). Text read from them is left out of exports under article 15(4) and recital
+  63 (the rights of others, copyright included); your own data about those books (titles, progress, pages read) is
+  included.
