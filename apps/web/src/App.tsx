@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useStore, dueToday } from "./lib/store.ts";
 import { applyFont, applyTextSize } from "./lib/fonts.ts";
 import { usePhotoPages } from "./lib/features.ts";
+import { Hexbound } from "./screens/Hexbound.tsx";
 import { applyLanguage, useT, type Key } from "./lib/i18n.ts";
 import { setTab, useNav, type Tab } from "./nav.ts";
 import { Icon, Toaster, Unlocker } from "./ui.tsx";
@@ -33,6 +34,7 @@ export function App() {
   const t = useT();
   const language = useStore((s) => s.profile.settings.language);
   const photoPages = usePhotoPages();
+  const game = useStore((s) => s.game);
   useEffect(() => applyLanguage(language), [language]);
 
   useEffect(() => {
@@ -49,6 +51,8 @@ export function App() {
   useEffect(() => applyTextSize(textSize), [textSize]);
 
   if (!ready) return <div className="app" aria-busy="true" />;
+  // The secret Mörk Borg mode: while a character lives, the app is only the game (lib/hexbound.ts).
+  if (game) return <Hexbound />;
   if (!onboarded) return <Welcome />;
 
   return (

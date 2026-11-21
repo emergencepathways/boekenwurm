@@ -1127,6 +1127,94 @@ step("20 pages read: a milestone unlocks with 100 XP (books without page numbers
   check((await page.locator(".patchcell").count()) === 12, "it isn't an achievement: still the same 12 badges");
 }
 
+step("the secret Mörk Borg mode: the Hex-bound Collector reads the cursed book until death");
+{
+  const enterCode = async (code) => {
+    await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+    await page.getByRole("tab", { name: "Experimental" }).click();
+    await page.getByLabel("Access code").fill(code);
+    await page.getByRole("button", { name: "Use code" }).click();
+  };
+  // A C1 reader: none of the books so far (A1–B2) is good enough for the cursed book.
+  await page.getByRole("tab", { name: "Reading" }).click();
+  await page.getByLabel("Reading level").selectOption("C1");
+  await enterCode("MÖRK BORG");
+  await page.getByRole("heading", { name: "Hex-bound Collector", exact: true }).waitFor({ timeout: 5000 });
+  check(await page.getByText(/Your life will be payment enough/).isVisible(), "the code opens the backstory");
+  check(await page.getByText(/Begins with 1d4 × 10s and d2 Omens/).isVisible() && await page.getByText(/your weapon is d6 instead of d10/).isVisible(), "with the class: silver, Omens, HP, the book, the scroll");
+  check((await page.locator(".tabbar").count()) === 0, "and nothing else: no tabs");
+  await shot("22-hexbound-intro");
+  await page.reload();
+  await page.getByRole("heading", { name: "Hex-bound Collector", exact: true }).waitFor({ timeout: 10000 });
+  check(true, "closing and opening the app keeps the game open");
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "the intro fits a phone screen (no sideways scrolling)");
+  await page.getByRole("button", { name: "Take up the book" }).click();
+  await page.getByRole("heading", { name: "The book stays blank" }).waitFor({ timeout: 10000 });
+  check(await page.getByText(/at least one above your reading level/).isVisible() && await page.getByText(/more than 20 words/).isVisible(), "no book good enough: the character dies, and the requirements are explained");
+  await shot("23-hexbound-no-book");
+  await page.getByRole("button", { name: "Return to the living" }).click();
+  await page.locator(".tabbar").waitFor();
+  check(true, "back to the app");
+
+  // A C1 book with unread pages of more than 20 words, made of words the dictionary knows.
+  const base = "Op woensdag fietst de bakker naar de markt en koopt brood, vis, groente en fruit voor de hele week";
+  // Five pages (the import needs five), 25 words each: 6 fouten on turn 1 (25%), 5 on turn 2 (22%), 4 on turn 3 (19%), whichever page comes up.
+  const pages = [`${base} bij de kraam op het plein.`, `${base}, want het is al heel laat.`, `${base} en gaat dan weer naar huis.`, `${base}, zoals hij al jaren lang doet.`, `${base} met een grote tas aan het stuur.`];
+  const zwartPath = await epub("Het zwarte boek", "Test Auteur", pages, "bw-e2e-zwarte-boek.epub");
+  await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+  await page.getByRole("button", { name: "Add a book" }).first().click();
+  await page.locator('input[type=file][accept*="epub"]').setInputFiles(zwartPath);
+  await page.getByText("Ready to read").waitFor({ timeout: 30000 });
+  await page.getByRole("group", { name: "Book level" }).getByRole("button", { name: "C1" }).click();
+  await page.getByRole("button", { name: "Add to my books" }).click();
+  await page.locator(".para .w").first().waitFor();
+  await page.getByRole("button", { name: "Back to Home" }).click();
+
+  await enterCode("mork borg");
+  await page.getByRole("button", { name: "Take up the book" }).click();
+  await page.getByRole("button", { name: "Begin my journey" }).waitFor({ timeout: 10000 });
+  check(await page.getByRole("button", { name: /Dead, exit game mode/ }).isVisible() && (await page.getByRole("button", { name: /Unlimited/ }).count()) === 0, "a blank book, with Dead, exit game mode instead of Unlimited");
+  await page.getByRole("button", { name: "Begin my journey" }).click();
+  await page.locator(".hb-para").waitFor();
+  const fouten = async () => (await page.locator(".hb-fouten").textContent()).trim();
+  const first = await fouten();
+  check(/^0 of 6 fouten$/.test(first), `a random unread page, at 25% (${first}: 25 words)`);
+  await page.locator(".hb-para").getByRole("button", { name: "markt", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector(".hb-fouten")?.textContent?.startsWith("1 of"));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(1300); // let the ink and the stamp settle
+  await shot("24-hexbound-turn");
+  await page.getByRole("button", { name: "Close the book" }).click();
+  await page.getByRole("heading", { name: "The ink obeys" }).waitFor({ timeout: 5000 });
+  check(await page.getByText(/\+2 on every roll this turn/).isVisible(), "within the fouten: blessed, +2 this turn");
+  check(await page.locator(".hb-recap td", { hasText: "market" }).count() === 1 && (await page.getByRole("button", { name: /Study/ }).count()) === 0, "the words revealed, and no studying");
+  await page.waitForTimeout(1300); // let the ink and the stamp settle
+  await shot("25-hexbound-blessed");
+  await page.getByRole("button", { name: "Next turn" }).click();
+  await page.locator(".hb-para").waitFor();
+  const second = await fouten();
+  check(/^0 of 5 fouten$/.test(second), `the next page forgives less: 22% (${second})`);
+  for (const w of ["woensdag", "fietst", "bakker", "markt", "koopt", "brood"]) {
+    await page.locator(".hb-para").getByRole("button", { name: w, exact: true }).click();
+    await page.keyboard.press("Escape");
+  }
+  await page.waitForFunction(() => document.querySelector(".hb-fouten")?.textContent?.startsWith("6 of"));
+  await page.getByRole("button", { name: "Close the book" }).click();
+  await page.getByRole("heading", { name: "You failed to read the cursed book" }).waitFor({ timeout: 5000 });
+  check(await page.getByText(/2 damage/).isVisible() && await page.getByText(/−2 on all rolls this turn/).isVisible(), "past the fouten: cursed, 2 damage and −2 this turn");
+  await page.waitForTimeout(1300); // let the ink and the stamp settle
+  await shot("26-hexbound-cursed");
+  await page.getByRole("button", { name: "Next turn" }).click();
+  await page.locator(".hb-para").waitFor();
+  check(/^0 of 4 fouten$/.test(await fouten()), "and a failed turn tightens the fouten too: 19%");
+  await page.getByRole("button", { name: /Dead, exit game mode/ }).click();
+  await page.getByRole("button", { name: "Yes, dead" }).click();
+  await page.locator(".tabbar").waitFor();
+  await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("tab", { name: "Achievements" }).click();
+  check(await page.getByRole("img", { name: "Mörk Borg Enjoyer, a secret badge" }).isVisible(), "played until death: the secret badge, Mörk Borg Enjoyer");
+}
+
 check(fontRequests.length === 0, `no request to a font service (GDPR)${fontRequests.length ? ": " + fontRequests[0] : ""}`);
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.join(" | ") : ""}`);
 await browser.close();

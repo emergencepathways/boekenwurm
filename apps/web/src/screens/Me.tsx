@@ -24,6 +24,7 @@ import { LANGUAGES, languageOf, translate, useT, type Key, type Lang } from "../
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
+import { startGame } from "../lib/hexbound.ts";
 
 /** The Account tab's categories. New features go into one of these. */
 type View = "achievements" | "reading" | "settings" | "experimental" | "privacy";
@@ -96,6 +97,13 @@ export function Me() {
               </div>
             );
           })}
+          {play.secrets?.includes(E.SECRET_MORK_BORG) && (
+            <div className="patchcell got secret">
+              <span className="mb-patch" role="img" aria-label="Mörk Borg Enjoyer, a secret badge">MB</span>
+              <div className="t" lang="en">Mörk Borg Enjoyer</div>
+              <div className="m">Secret</div>
+            </div>
+          )}
         </div>
         <p className="small muted">
           {t("account.badgesNote", { xp: E.XP.achievement })}{" "}
@@ -502,34 +510,34 @@ function AccessCodeSection() {
             </span>
           </div>
         </>
-      ) : !user ? (
-        <p>Have an access code? Sign in first: the code is added to your account.</p>
-      ) : (
-        <form
-          className="stack"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setErr(null);
-            try {
-              await redeemCode(code);
-              setCode("");
-              toast("Code accepted: Google page reading is on.");
-            } catch (x) {
-              setErr((x as Error).message);
-            }
-            setBusy(false);
-          }}
-        >
-          <p style={{ margin: 0 }}>Have an access code? Enter it to turn on a feature that isn't open to everyone yet.</p>
-          <div className="row">
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BW-XXXX-XXXX-XXXX-XXXX" aria-label="Access code"
-              autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={40} style={{ flex: 1, minWidth: 0 }} className="num" />
-            <button className="btn primary small" type="submit" disabled={busy || code.trim().length < 6}>{busy ? "Checking…" : "Use code"}</button>
-          </div>
-          {err && <span className="error">{err}</span>}
-        </form>
-      )}
+      ) : null}
+      <form
+        className="stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setErr(null);
+          // Some codes open something on this device only and are never sent anywhere (lib/hexbound.ts).
+          if (E.isGameCode(code)) return void startGame().then(() => setCode(""));
+          if (!user) return setErr("Sign in first: a code is added to your account.");
+          setBusy(true);
+          try {
+            await redeemCode(code);
+            setCode("");
+            toast("Code accepted: Google page reading is on.");
+          } catch (x) {
+            setErr((x as Error).message);
+          }
+          setBusy(false);
+        }}
+      >
+        <p style={{ margin: 0 }}>{on ? "Have another code? Enter it here." : `Have an access code? Enter it to turn on a feature that isn't open to everyone yet.${user ? "" : " Most codes need you to sign in first."}`}</p>
+        <div className="row">
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BW-XXXX-XXXX-XXXX-XXXX" aria-label="Access code"
+            autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={40} style={{ flex: 1, minWidth: 0 }} className="num" />
+          <button className="btn primary small" type="submit" disabled={busy || code.trim().length < 5}>{busy ? "Checking…" : "Use code"}</button>
+        </div>
+        {err && <span className="error">{err}</span>}
+      </form>
     </section>
   );
 }

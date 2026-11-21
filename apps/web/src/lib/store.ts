@@ -2,6 +2,7 @@
  * App state: one small store that React reads with useSyncExternalStore. Every change is written to the device
  * store first (local-first), marked dirty, and picked up by the sync when the reader is signed in.
  */
+import type { GameState } from "./hexbound.ts";
 import { useSyncExternalStore } from "react";
 import * as E from "@boekenwurm/engine";
 import type { CefrLevel, Session } from "@boekenwurm/engine";
@@ -52,6 +53,8 @@ export interface State {
   features: string[];
   /** Google page readings today (lib/features.ts). */
   pageReads: { day: string; used: number; limit: number } | null;
+  /** The secret Hex-bound Collector game (lib/hexbound.ts), kept on this device until the character dies. */
+  game: GameState | null;
 }
 
 const now = () => Date.now();
@@ -76,6 +79,7 @@ let state: State = {
   translations: null,
   features: [],
   pageReads: null,
+  game: null,
 };
 
 const listeners = new Set<() => void>();
@@ -123,6 +127,7 @@ export async function init(): Promise<void> {
     db.get<WordList>("kv", "wordlist"),
     db.get<WordList[]>("kv", "wordlists"),
   ]);
+  setState({ game: (await db.get<GameState>("kv", "hexbound")) ?? null });
   // One list (the textbook's) was kept before the Words tab; it becomes the first of the lists.
   const lists = savedLists ?? (oldList ? [{ ...oldList, id: "textbook", source: "textbook" as const }] : []);
   if (stored.some((b) => b.id === LEGACY_SAMPLE_ID)) await Promise.all([db.del("books", LEGACY_SAMPLE_ID), db.del("texts", LEGACY_SAMPLE_ID)]);
@@ -208,6 +213,8 @@ export interface FinishedSession {
   sentences: Record<string, string>;
   /** Read in unlimited lookup mode: words not tapped don't count towards "learned". */
   lookupMode?: boolean;
+  /** A turn of the Hex-bound Collector game: its words join the word book and reviews, but nothing else (no streak, no session row). */
+  game?: boolean;
 }
 
 /**
@@ -259,7 +266,7 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
     ended_by: f.endedBy,
     results: s.results,
   };
-  const outbox = ((await db.get<SessionRow[]>("kv", "sessionOutbox")) ?? []).concat(row);
+  const outbox = ((await db.get<SessionRow[]>("kv", "sessionOutbox")) ?? []).concat(f.game ? [] : [row]);
 
   setState({ wordbook, examples, cards });
   await Promise.all([
@@ -269,7 +276,7 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
     db.put("kv", cards, "cards"),
     db.put("kv", outbox, "sessionOutbox"),
   ]);
-  if (progress !== before) await updateProfile((p) => ({ ...p, progress }));
+  if (progress !== before && !f.game) await updateProfile((p) => ({ ...p, progress }));
   else changed();
   return { list, offer };
 }

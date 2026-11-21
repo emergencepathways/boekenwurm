@@ -10,3 +10,4 @@ export * from "./play.ts";
 export * from "./review.ts";
 export * from "./wordlist.ts";
 export * from "./diary.ts";
+export * from "./hexbound.ts";

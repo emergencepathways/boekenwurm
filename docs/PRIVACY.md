@@ -10,6 +10,7 @@
 | Your books, reading progress, words, flashcards, settings | On your device | So the app works, also offline | Until you delete them or clear the app's data |
 | The same, if you sign in | Your account at Supabase (servers in the EU) | To keep them in step between your devices | Until you erase your account data (Account → Settings → Your data) |
 | Your email address, if you sign in | Supabase (EU) | To send you sign-in links and codes | As long as you have an account |
+| A game in progress, if you play one: its turn and which pages it has shown you | Only on your device | So the game carries on when you reopen the app | Until the game ends; a badge it earns is kept with your progress |
 | **Your diary entries** | **Only on your device** | They are yours; Boekenwurm never receives or stores them | Until you delete them or clear the app's data |
 | Which diary prompts you wrote, and on which days (not the text) | With your progress | For XP, badges and the weekly reminder | As your progress |
 | Your LanguageTool choice and its date | With your settings | To respect your choice on every device | As your settings |

@@ -1175,7 +1175,7 @@ function TopBar({ title, center, right }: { title: string; center?: React.ReactN
  * A tapped word's meaning, laid over the text just below the word (above it when there's no room below on screen),
  * so the reader never scrolls away from the sentence. Escape or × closes it; tapping another word moves it.
  */
-function WordPopover({ wrap, index, onClose, children }: { wrap: RefObject<HTMLDivElement | null>; index: number; onClose: () => void; children: ReactNode }) {
+export function WordPopover({ wrap, index, onClose, children }: { wrap: RefObject<HTMLDivElement | null>; index: number; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; arrow: number; above: boolean } | null>(null);
   useLayoutEffect(() => {

@@ -19,6 +19,10 @@ import "@fontsource-variable/jetbrains-mono/index.css";
 // Cyrillic and Arabic letters for the Ukrainian and Arabic translations (only the alphabets on screen are downloaded).
 import "@fontsource-variable/noto-sans/index.css";
 import "@fontsource-variable/noto-sans-arabic/index.css";
+// The secret Mörk Borg mode (screens/Hexbound.tsx): a blackletter for titles and an old, readable book face.
+import "@fontsource/pirata-one/index.css";
+import "@fontsource/im-fell-dw-pica/index.css";
+import "@fontsource/im-fell-dw-pica/400-italic.css";
 import "./styles.css";
 
 void init().then(() => startAuth());

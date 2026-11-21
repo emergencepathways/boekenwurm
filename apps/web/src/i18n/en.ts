@@ -498,7 +498,7 @@ export const en = {
 
   // ---------------------------------------------------------------- privacy (About)
   "privacy.summary": "**Privacy**: what Boekenwurm keeps, and where",
-  "privacy.device": "**On this device:** your books, reading progress, words, flashcards and settings. Your **diary** stays only here: Boekenwurm never receives or stores it.",
+  "privacy.device": "**On this device:** your books, reading progress, words, flashcards and settings, and a game in progress if you play one. Your **diary** stays only here: Boekenwurm never receives or stores it.",
   "privacy.account": "**In your account** (if you sign in; Supabase, servers in the EU): your books, progress, words and settings, so they sync between your devices. Never your diary.",
   "privacy.languagetool": "**LanguageTool** (LanguageTool GmbH, Germany, EU): only if you agree, and only when you tap “Check my writing”, that diary entry is sent from your device to be checked.",
   "privacy.translate": "**Google Translate**: only the single word you tapped, when the dictionary doesn't know it (signed-in readers).",

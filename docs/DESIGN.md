@@ -430,6 +430,11 @@ anywhere except `private/`.
 
 ## Decided
 
+- A secret Mörk Borg game mode, the Hex-bound Collector (docs/HEXBOUND.md): the code `Mork Borg` opens it; each turn is
+  a random unread page of more than 20 words from a book at least one level above the reader (same level from B2 up);
+  fouten from 25%, 3 points less every turn, to a single fout; no XP and no change to the reader's place; death after
+  a turn unlocks a hidden badge. The game stays on the device. 2026-11-21.
+
 - Google page reading: a hard limit of 20 pages a day for the whole account, across all books (no per-book sections
   of 20, and no reading on the device past the limit); a soft limit of 200 pages in a calendar month, at which the
   owner gets one alert per reader per month by email (contact@emergencepathways.org, naming the reader's account

@@ -676,3 +676,102 @@ details.entry summary { cursor: pointer; display: flex; gap: 8px; flex-wrap: wra
 .legal table { display: block; overflow-x: auto; max-width: 100%; font-size: 0.88rem; margin: 0 0 14px; }
 .legal th, .legal td { min-width: 9rem; text-align: start; vertical-align: top; }
 .panel.notice { border-top: 0; }
+
+/* ---------------------------------------------------------------- the secret Mörk Borg mode (screens/Hexbound.tsx) */
+/* Black and yellow for the first screen, in homage to the game; then a near-black slate page with bone-coloured text.
+   Pirata One (a blackletter) for titles only; IM Fell DW Pica, an old book face that stays readable, for the text. */
+:root[data-game] body { background: #0d0f11; }
+:root[data-game="intro"] body { background: #ffe500; }
+.hexbound {
+  --hb-yellow: #ffe500; --hb-black: #0b0b0b; --hb-bone: #ddd6c4; --hb-slate: #14171a; --hb-ash: #8d877a; --hb-blood: #e0442f;
+  --sheet: var(--hb-slate); --ink: var(--hb-bone); --line: #2c3035; --leaf: var(--hb-yellow); --muted: var(--hb-ash); --mark: #3a2f12; --mark-ink: var(--hb-yellow);
+  --hb-title: "Pirata One", "UnifrakturCook", Georgia, serif;
+  --hb-text: "IM Fell DW Pica", Georgia, serif;
+  color: var(--hb-bone); font: 400 1.1rem/1.6 var(--hb-text); min-height: 100dvh;
+  /* The stamped title and torn edges may reach past the screen's edge; they never make the page scroll sideways. */
+  overflow-x: clip;
+}
+.hexbound :focus-visible { outline: 2px solid var(--hb-yellow); outline-offset: 2px; }
+.hexbound h1, .hexbound h2, .hexbound h3 { font-family: var(--hb-title); font-weight: 400; letter-spacing: 0.01em; margin: 0; }
+
+/* The intro: black on yellow, the title huge and slightly off true, like a stamped cover. */
+.hb-intro {
+  background: var(--hb-yellow); color: var(--hb-black); max-width: 40rem; margin: 0 auto; display: grid; gap: 16px;
+  padding: calc(var(--safe-top) + 28px) max(18px, env(safe-area-inset-right)) calc(var(--safe-bottom) + 40px) max(18px, env(safe-area-inset-left));
+}
+.hb-intro h1 { font-size: clamp(3rem, 15vw, 5.2rem); line-height: 0.85; transform: rotate(-2.5deg); margin: 4px 0 10px -2px; text-shadow: 3px 3px 0 rgb(0 0 0 / 0.12); }
+.hb-intro p { margin: 0; }
+.hb-intro .hb-lede { font-size: 1.35rem; font-style: italic; }
+.hb-block { background: var(--hb-black); color: var(--hb-yellow); padding: 20px 18px 22px; display: grid; gap: 10px; transform: rotate(0.4deg);
+  clip-path: polygon(0 1%, 3% 0, 40% 1.2%, 72% 0, 100% 0.8%, 99.4% 40%, 100% 99%, 61% 100%, 24% 99.2%, 0.5% 100%, 0 60%); }
+.hb-block h2 { font-size: 2rem; line-height: 1; }
+.hb-block h3 { font-size: 1.35rem; margin-top: 6px; }
+.hb-block p, .hb-block li { color: #f3eed9; }
+.hb-block b { color: var(--hb-yellow); }
+.hb-table { margin: 0; padding-inline-start: 1.6em; display: grid; gap: 4px; }
+.hb-table li::marker { font-family: var(--hb-title); color: var(--hb-yellow); }
+.hb-note { font-style: italic; }
+
+/* Buttons: blunt slabs. */
+.hb-btn {
+  font: 400 1.45rem/1 var(--hb-title); letter-spacing: 0.02em; padding: 14px 22px; min-height: 54px; border: 0; cursor: pointer;
+  background: var(--hb-yellow); color: var(--hb-black); justify-self: start;
+  clip-path: polygon(0 4%, 98% 0, 100% 92%, 2% 100%);
+}
+.hb-btn:disabled { opacity: 0.6; cursor: default; }
+.hb-btn.hb-ghost { background: transparent; color: var(--hb-bone); box-shadow: inset 0 0 0 2px var(--hb-ash); clip-path: none; }
+.hb-intro .hb-take { background: var(--hb-black); color: var(--hb-yellow); font-size: 1.8rem; justify-self: stretch; }
+
+/* The book: a slate page, edges a little torn. */
+.hb-page { max-width: 42rem; margin: 0 auto; display: grid; gap: 16px; align-content: start;
+  padding: calc(var(--safe-top) + 12px) max(16px, env(safe-area-inset-right)) calc(var(--safe-bottom) + 40px) max(16px, env(safe-area-inset-left)); }
+.hb-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.hb-turn { font: 400 1.4rem var(--hb-title); color: var(--hb-yellow); }
+.hb-deadbtn, .hb-confirm button { font: 400 1rem var(--hb-text); background: none; border: 1px solid var(--hb-ash); color: var(--hb-bone); padding: 8px 12px; cursor: pointer; }
+.hb-confirm { display: flex; gap: 8px; align-items: center; font-style: italic; }
+.hb-confirm button:first-of-type { border-color: var(--hb-blood); color: var(--hb-blood); }
+.hb-sheet {
+  background: var(--hb-slate); padding: clamp(20px, 6vw, 40px); display: grid; gap: 14px; min-height: 40vh; align-content: start;
+  box-shadow: 0 0 0 1px #24282d, 0 18px 40px rgb(0 0 0 / 0.6), inset 0 0 80px rgb(0 0 0 / 0.55);
+  clip-path: polygon(0 0.6%, 12% 0, 55% 0.8%, 100% 0, 99.2% 35%, 100% 100%, 70% 99.4%, 30% 100%, 0.4% 99.2%, 0 70%);
+}
+.hb-blank { place-items: center; }
+.hb-blank p { font-style: italic; color: var(--hb-ash); }
+.hb-para { font: 400 calc(var(--read-size) * 1.05)/1.75 var(--hb-text); color: var(--hb-bone); }
+.hexbound .w:hover { background: #22262b; }
+.hexbound .w.sel { outline-color: var(--hb-yellow); }
+.hexbound .wordpop { background: #1b1f23; border-color: #33383e; }
+.hexbound .def .word { font-family: var(--hb-text); }
+.hb-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.hb-fouten { font: 400 1.3rem var(--hb-title); color: var(--hb-yellow); }
+.hb-warn { color: var(--hb-blood); font-style: italic; }
+
+/* The recap: blessed in yellow, cursed in blood. */
+.hb-recap { display: grid; gap: 14px; }
+.hb-recap h1 { font-size: clamp(2.2rem, 10vw, 3.4rem); line-height: 0.95; transform: rotate(-1.5deg); }
+.hb-blessed h1 { color: var(--hb-yellow); }
+.hb-cursed h1 { color: var(--hb-blood); }
+.hb-recap p { margin: 0; font-size: 1.2rem; }
+.hb-recap .hb-small, .hb-small { font-size: 1rem; color: var(--hb-ash); font-style: italic; }
+.hb-recap table { font-family: var(--hb-text); }
+.hb-recap th { color: var(--hb-ash); }
+.hb-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* The secret badge in Account → Achievements, once earned. */
+.patchcell.secret .mb-patch { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: #0b0b0b;
+  box-shadow: inset 0 0 0 3px #ffe500, 0 2px 6px rgb(0 0 0 / 0.5); color: #ffe500; font: 400 1.9rem/1 "Pirata One", Georgia, serif; transform: rotate(-6deg); }
+
+/* No book: the character dies. */
+.hb-dead h1 { font-size: clamp(2.4rem, 11vw, 3.6rem); color: var(--hb-blood); line-height: 0.95; }
+.hb-dead h2 { color: var(--hb-yellow); font-size: 1.6rem; }
+.hb-dead p { margin: 0; }
+.hb-dead ul { margin: 0; padding-inline-start: 1.2em; display: grid; gap: 8px; }
+.hb-dead b { color: var(--hb-yellow); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hb-intro h1 { animation: hb-stamp 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+  .hb-recap h1 { animation: hb-stamp 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+  .hb-para { animation: hb-ink 1.2s ease-out both; }
+}
+@keyframes hb-stamp { from { transform: scale(1.6) rotate(-6deg); opacity: 0; } }
+@keyframes hb-ink { from { opacity: 0; filter: blur(3px); } }

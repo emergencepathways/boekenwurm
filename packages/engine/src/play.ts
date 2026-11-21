@@ -32,6 +32,8 @@ export interface PlayState {
   tiers: Record<string, number>;
   /** Book id → 20-page milestones already rewarded in that book (pageMilestones). */
   pageMilestones?: Record<string, number>;
+  /** Secret badges earned (hexbound.ts SECRET_MORK_BORG): shown only once earned, no XP. */
+  secrets?: string[];
 }
 
 export const WORDS_PER_PAGE = 250;
@@ -69,6 +71,7 @@ export function mergePlay(a: PlayState | undefined, b: PlayState | undefined): P
     finishedAboveRank: x.finishedAboveRank || y.finishedAboveRank,
     tiers: maxBy(x.tiers, y.tiers),
     pageMilestones: maxBy(x.pageMilestones ?? {}, y.pageMilestones ?? {}),
+    secrets: union(x.secrets ?? [], y.secrets ?? []),
   };
 }
 

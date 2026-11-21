@@ -21,7 +21,7 @@ owner asks, and update the design doc and the tests together.
   `diary.ts` (the 20 prompts, one entry a day, weekly reminder, free writing),
   `xp.ts` (XP and ranks A0–C2), `achievements.ts` (tiered badges), `play.ts` (the synced play record and its merge),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
-  `definitions.ts` (English/Dutch). No dependencies, so it ports to Lua for KOReader.
+  `definitions.ts` (English/Dutch), `hexbound.ts` (the secret Mörk Borg game mode, docs/HEXBOUND.md). No dependencies, so it ports to Lua for KOReader.
 - `packages/dutch/` — base forms (`lemma.ts`), twin of `services/ingest/boekenwurm_ingest/lemma.py`; both must pass
   `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
 - `packages/ai/` — model-agnostic level work: book grading, matching a paragraph to a level, word-in-context;
