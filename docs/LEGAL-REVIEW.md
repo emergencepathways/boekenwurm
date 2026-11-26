@@ -21,8 +21,9 @@ was a draft; the notice itself is now shown to readers in full (Account → Priv
   sees what will be shared and agrees before a pairing code exists, then allows the app's request; only today's
   numbers (pages, active reading minutes, cards reviewed, diary yes/no), no history; active reading time is measured
   only while an app is connected and deleted when the last one goes; connections expire after 90 days unused;
-  erase and export cover connections; failed pairing attempts keep a one-way hash of the network address for up to
-  an hour (legitimate interest: security); no calendar or other data is stored for apps. Basis for the sharing and
+  erase and export cover connections; no calendar or other data is stored for apps. Migration 0015 (same day) limits
+  the feature to the owner's account and replaces typed codes with a browser handoff (PKCE): consent and approval are
+  one signed-in click, and the log of hashed network addresses for failed attempts is gone (nothing to guess). Basis for the sharing and
   the measuring: consent at pairing, withdrawn by disconnecting. Because the owner decided to remove the feature
   before launch, a full review of it is only needed if that decision changes; please confirm the removal plan is
   enough (deleting the data with the columns and tables, and the notice text).

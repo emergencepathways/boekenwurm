@@ -4,7 +4,8 @@
 > Poortwachter) and are **removed completely before Boekenwurm is offered to the public**, on the web, iOS or
 > Android. See [PRELAUNCH.md](PRELAUNCH.md) for the removal plan. Do not build on this feature.
 
-A reader can let an app they pair see **today's numbers**, so the app can act on them. The only app is
+The owner's account (the `admin` feature, migration 0010; the database checks it) can let an app see **today's
+numbers**, so the app can act on them. The only app is
 [Poortwachter](https://github.com/emergencepathways/poortwachter): it keeps the owner's Steam closed until the day's
 Dutch study is done.
 
@@ -27,20 +28,30 @@ Never history, book titles, book text, words, meanings or diary entries. `connec
 database drops it for readers without an approved connection, whatever a device sends. When the last connection
 goes (disconnected, expired, erased), what was measured for it is deleted.
 
-## Pairing
+## Connecting (migration 0015)
 
-1. Account → Settings → **Connected apps** → **Pair Poortwachter** first shows exactly what the app will see,
-   including active reading time. Only after **I agree** is there a code, like `K7QM-3XPA`, valid 10 minutes.
-2. The reader types it into the app. The app finds the database in `/connect.json` and calls
-   `claim_pairing_code(code, name)`. Wrong codes are counted: 10 per network address in 10 minutes and 300 in all
-   per minute, then everyone waits (only a hash of the address is kept, for up to an hour).
-3. The app gets a token (360 random bits), but the connection is **pending**: Boekenwurm shows "Poortwachter on
-   laptop wants to connect" with **Allow** / **Deny**. Until the reader allows it (within 10 minutes), the token
-   opens nothing.
-4. An allowed connection shows when it was allowed, last used, and when it expires: **90 days without use**, then it
-   is deleted. **Disconnect** at any time.
+A browser handoff with PKCE, the way desktop apps sign in ([RFC 8252](https://www.rfc-editor.org/rfc/rfc8252),
+[RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)). Nothing to type, and no Supabase settings in Poortwachter.
 
-Codes and tokens are stored only as SHA-256 hashes. No calendar or other data is stored for apps.
+1. **Account → Experimental → Connected apps → Connect Poortwachter on this computer** opens
+   `http://127.0.0.1:7623/boekenwurm/connect?site=<this Boekenwurm>` (Poortwachter must be running). Poortwachter
+   also has a Connect button that opens the same address.
+2. Poortwachter goes on only for the Boekenwurm address it is set to (`https://boekenwurm.pages.dev` by default). It
+   makes a one-time secret (the *verifier*), keeps it, and sends the browser back to
+   `<site>/?connect=poortwachter&challenge=<SHA-256 of the verifier>&state=<random>&name=Poortwachter on <computer>`.
+3. Boekenwurm takes the request out of the address bar (kept 10 minutes, in this tab only) and opens Connected apps.
+   Signed in, the reader sees exactly what will be shared, active reading time included, and clicks **Allow**.
+4. `link_app(challenge, name)` keeps a one-time code (240 bits, stored as a hash) bound to that challenge for
+   2 minutes, and the browser goes to `http://127.0.0.1:7623/boekenwurm/linked?code=…&state=…`. The address is fixed
+   in the app: no request can send a code anywhere else.
+5. Poortwachter checks the state is one it made, reads `<site>/connect.json` for the database address, and calls
+   `claim_app_link(code, verifier)`: the database checks the verifier against the challenge and returns a token
+   (360 bits, stored as a hash). A code without the verifier connects nothing and is used up by the try, so there is
+   nothing to guess and no attempt log (0014's hashed addresses are gone).
+6. The connection shows when it was allowed, last used, and when it expires: **90 days without use**, then it is
+   deleted. **Disconnect** at any time. If the account loses the admin feature, its connections stop and are deleted.
+
+No calendar or other data is stored for apps.
 
 ## Your data
 
@@ -49,13 +60,16 @@ Codes and tokens are stored only as SHA-256 hashes. No calendar or other data is
 
 ## Rolling it out (owner's deployment only)
 
-Run `0013_connected_apps.sql` and `0014_connected_apps_hardening.sql` in the Supabase SQL Editor before the app
-version that uses them is deployed. The app copes without them.
+Run `0013_connected_apps.sql`, `0014_connected_apps_hardening.sql` and `0015_connected_apps_link.sql` in the
+Supabase SQL Editor, give the owner's account the admin feature if it doesn't have it
+(`insert into feature_access (user_id, feature) select id, 'admin' from auth.users where email = '…';`), then deploy
+the app. The app copes without the migrations.
 
 ## Tests
 
-- `supabase/tests/run.sh`: consent-free code refused to anon, codes work once, guessing limits, approval, today-only
-  windows, no history, 90-day expiry, active time dropped without a connection and deleted with the last one,
-  erase, no calendar.
+- `supabase/tests/run.sh`: owner only, PKCE (RFC 7636 test vector), codes work once and only with the verifier,
+  hashes only, today-only windows, no history, 90-day expiry, admin removed → connection gone, active time dropped
+  without a connection and deleted with the last one, erase, no calendar, no attempt log.
 - `packages/engine/test/activity.test.ts`: active time.
-- `apps/web/test/e2e.mjs`: agree → code → the app's request → allow → disconnect.
+- `apps/web/test/e2e.mjs`: Connect link → Poortwachter's request → what is shared → Allow → back to Poortwachter →
+  disconnect; malformed requests ignored.

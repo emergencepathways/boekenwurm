@@ -14,7 +14,7 @@ import { appUrl, supabase } from "../lib/supabase.ts";
 import { db, wipeDevice } from "../lib/db.ts";
 import { InstallRow } from "./InstallHelp.tsx";
 import { updateNow } from "../lib/update.ts";
-import { GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "../lib/features.ts";
+import { ADMIN, GOOGLE_PAGES, PAGE_READS_PER_DAY, pageReadsToday, redeemCode } from "../lib/features.ts";
 import { Sheet, toast } from "../ui.tsx";
 import { Patch, RankBar, RankShield } from "../badges.tsx";
 import { statsNow } from "../lib/play.ts";
@@ -25,7 +25,7 @@ import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
 import { startGame } from "../lib/hexbound.ts";
-import { approve, createPairingCode, disconnect, exportConnections, forgetConnections, listConnections, NotReady, PAIRING_MINUTES, type Connection } from "../lib/connections.ts";
+import { allowLink, clearLinkRequest, disconnect, exportConnections, forgetConnections, linkRequest, listConnections, NotReady, startUrl, type Connection } from "../lib/connections.ts";
 
 /** The Account tab's categories. New features go into one of these. */
 type View = "achievements" | "reading" | "settings" | "experimental" | "privacy";
@@ -37,7 +37,7 @@ const VIEWS: ReadonlyArray<[View, Key]> = [
 const viewFor = (section: string | undefined): View =>
   section === "rank" || section === "badges" ? "achievements"
   : section === "reading" || section === "lookups" ? "reading"
-  : section === "claude" || section === "access-code" ? "experimental"
+  : section === "claude" || section === "access-code" || section === "connected-apps" ? "experimental"
   : section === "privacy-notice" ? "privacy"
   : section ? "settings" : "achievements";
 
@@ -189,6 +189,7 @@ export function Me() {
           <p className="small muted">{t("account.experimentalNote")}</p>
           <ClaudeSection />
           <AccessCodeSection />
+          <ConnectedApps />
         </div>
       )}
 
@@ -201,7 +202,6 @@ export function Me() {
       {view === "settings" && (
         <div className="panels" role="tabpanel" id="view-settings" aria-labelledby="tab-settings">
           <SignIn />
-          <ConnectedApps />
           <Localization />
           <section className="panel">
             <h2>{t("account.name")}</h2>
@@ -491,128 +491,108 @@ function LookupsSection() {
  * Account → Settings → Connected apps: agree to what an app will see, pair it with a 10-minute code, then allow its
  * request. Approved apps see today's numbers only (migrations 0013 + 0014). PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
  */
+/**
+ * Account → Experimental → Connected apps (lib/connections.ts). PRELAUNCH-REMOVE (docs/PRELAUNCH.md). Shown to the
+ * owner's account (admin feature) only, and to anyone Poortwachter sends here, who is told it's owner-only.
+ */
 function ConnectedApps() {
   const t = useT();
   const user = useStore((s) => s.user);
+  const owner = useStore((s) => s.features.includes(ADMIN));
+  const [request, setRequest] = useState(() => linkRequest());
   const [list, setList] = useState<Connection[] | null>(null);
-  const [step, setStep] = useState<"idle" | "consent" | "code">("idle");
-  const [code, setCode] = useState<{ code: string; until: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fail = (x: unknown) => setErr(x instanceof NotReady ? t("apps.notReady") : (x as Error)?.message || t("apps.error"));
   const load = () => listConnections().then(setList, fail);
   useEffect(() => {
-    if (user) void load();
+    if (user && owner) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-  // The code disappears when it expires.
-  useEffect(() => {
-    if (!code) return;
-    const timer = setTimeout(() => (setCode(null), setStep("idle")), Math.max(0, code.until - Date.now()));
-    return () => clearTimeout(timer);
-  }, [code]);
-  // While a code is shown, look for the app's request so the reader can allow it right away.
-  useEffect(() => {
-    if (step !== "code") return;
-    const timer = setInterval(() => void listConnections().then((l) => {
-      setList(l);
-      if (l.some((c) => !c.approved_at)) {
-        setCode(null);
-        setStep("idle");
-      }
-    }, () => {}), 3000);
-    return () => clearInterval(timer);
-  }, [step]);
+  }, [user, owner]);
 
-  const pending = (list ?? []).filter((c) => !c.approved_at);
-  const approved = (list ?? []).filter((c) => c.approved_at);
-  const act = async (f: () => Promise<void>, done?: string) => {
-    setErr(null);
-    try {
-      await f();
-      if (done) toast(done);
-      await load();
-    } catch (x) {
-      fail(x);
-    }
-  };
+  if (!owner && !request) return null;
+  const cancel = () => (clearLinkRequest(), setRequest(null));
 
   return (
     <section className="panel" id="connected-apps">
       <h2>{t("apps.title")}</h2>
-      <p>{t("apps.lead")}</p>
       {!user ? (
         <p className="small">{t("apps.signIn")}</p>
+      ) : !owner ? (
+        <>
+          <p className="small">{t("apps.ownerOnly")}</p>
+          <button className="btn ghost small" type="button" onClick={cancel}>{t("common.cancel")}</button>
+        </>
+      ) : request ? (
+        <div className="stack" role="alertdialog" aria-label={t("apps.request", { name: request.name })} style={{ border: "2px solid var(--accent, currentColor)", borderRadius: 12, padding: 12 }}>
+          <h3 style={{ margin: 0 }}>{t("apps.request", { name: request.name })}</h3>
+          <span className="small">{t("apps.requestLead")}</span>
+          <b className="small">{t("apps.consentTitle")}</b>
+          <ul className="small" style={{ margin: 0 }}>
+            <li>{t("apps.c1")}</li>
+            <li>{t("apps.c2")}</li>
+            <li>{t("apps.c3")}</li>
+            <li>{t("apps.c4")}</li>
+          </ul>
+          <p className="small" style={{ margin: 0 }}>{t.rich("apps.consentNever")}</p>
+          <p className="small" style={{ margin: 0 }}>{t("apps.consentControl")}</p>
+          <div className="row">
+            <button
+              className="btn primary"
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setErr(null);
+                setBusy(true);
+                try {
+                  location.assign(await allowLink(request));
+                } catch (x) {
+                  fail(x);
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? t("apps.allowing") : t("apps.allow")}
+            </button>
+            <button className="btn ghost" type="button" disabled={busy} onClick={cancel}>{t("common.cancel")}</button>
+          </div>
+        </div>
       ) : (
         <>
-          {pending.map((c) => (
-            <div className="stack" key={c.id} role="alertdialog" aria-label={t("apps.request", { name: c.name })} style={{ border: "2px solid var(--accent, currentColor)", borderRadius: 12, padding: 12 }}>
-              <b>{t("apps.request", { name: c.name })}</b>
-              <span className="small">{t("apps.requestLead")}</span>
-              <div className="row">
-                <button className="btn primary small" type="button" onClick={() => void act(() => approve(c.id), t("apps.allowed", { name: c.name }))}>{t("apps.allow")}</button>
-                <button className="btn small ghost" type="button" onClick={() => void act(() => disconnect(c.id))}>{t("apps.deny")}</button>
-              </div>
-            </div>
-          ))}
-          {step === "consent" ? (
-            <div className="stack">
-              <h3 style={{ margin: 0 }}>{t("apps.consentTitle")}</h3>
-              <ul className="small" style={{ margin: 0 }}>
-                <li>{t("apps.c1")}</li>
-                <li>{t("apps.c2")}</li>
-                <li>{t("apps.c3")}</li>
-                <li>{t("apps.c4")}</li>
-              </ul>
-              <p className="small" style={{ margin: 0 }}>{t.rich("apps.consentNever")}</p>
-              <p className="small" style={{ margin: 0 }}>{t("apps.consentControl")}</p>
-              <div className="row">
-                <button
-                  className="btn primary"
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    setErr(null);
-                    setBusy(true);
-                    try {
-                      setCode({ code: await createPairingCode("poortwachter"), until: Date.now() + PAIRING_MINUTES * 60_000 });
-                      setStep("code");
-                    } catch (x) {
-                      fail(x);
-                    }
-                    setBusy(false);
-                  }}
-                >
-                  {busy ? t("apps.pairing") : t("apps.agree")}
-                </button>
-                <button className="btn ghost" type="button" onClick={() => setStep("idle")}>{t("common.cancel")}</button>
-              </div>
-            </div>
-          ) : step === "code" && code ? (
-            <div className="stack">
-              <p style={{ margin: 0 }}>{t("apps.code")}</p>
-              <p className="num" style={{ fontSize: "2rem", letterSpacing: "0.15em", margin: 0 }} aria-live="polite">{code.code}</p>
-              <span className="small">{t("apps.expires", { time: new Date(code.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}</span>
-            </div>
-          ) : (
-            <button className="btn primary" type="button" onClick={() => (setErr(null), setStep("consent"))}>{t("apps.pair")}</button>
-          )}
-          {err && <span className="error">{err}</span>}
-          {list && approved.length === 0 && pending.length === 0 && step === "idle" && <p className="small">{t("apps.none")}</p>}
-          {approved.map((c) => (
+          <p>{t("apps.lead")}</p>
+          <a className="btn primary" href={startUrl(location.origin)}>{t("apps.start")}</a>
+          <span className="small">{t("apps.startNote")}</span>
+          {list && list.length === 0 && <p className="small">{t("apps.none")}</p>}
+          {(list ?? []).map((c) => (
             <div className="row" key={c.id}>
               <span className="grow">
                 <b>{c.name}</b>
                 <br />
                 <span className="small">
-                  {t("apps.connected", { date: t.date(Date.parse(c.approved_at!)) })} · {c.last_used_at ? t("apps.lastUsed", { date: t.date(Date.parse(c.last_used_at)) }) : t("apps.neverUsed")} · {t("apps.expiresOn", { date: t.date(Date.parse(c.expires_at)) })}
+                  {t("apps.connected", { date: t.date(Date.parse(c.approved_at ?? c.created_at)) })} · {c.last_used_at ? t("apps.lastUsed", { date: t.date(Date.parse(c.last_used_at)) }) : t("apps.neverUsed")} · {t("apps.expiresOn", { date: t.date(Date.parse(c.expires_at)) })}
                 </span>
               </span>
-              <button className="btn small ghost" type="button" onClick={() => void act(() => disconnect(c.id), t("apps.disconnected"))}>{t("apps.disconnect")}</button>
+              <button
+                className="btn small ghost"
+                type="button"
+                onClick={async () => {
+                  setErr(null);
+                  try {
+                    await disconnect(c.id);
+                    toast(t("apps.disconnected"));
+                    await load();
+                  } catch (x) {
+                    fail(x);
+                  }
+                }}
+              >
+                {t("apps.disconnect")}
+              </button>
             </div>
           ))}
         </>
       )}
+      {err && <span className="error">{err}</span>}
     </section>
   );
 }

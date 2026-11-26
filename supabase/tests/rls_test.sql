@@ -390,7 +390,7 @@ do $$ declare r record; d date := date_trunc('month', current_date)::date; begin
 end $$;
 reset role;
 
--- connected apps (migrations 0013 + 0014): consent and approval, limited guessing, today only, 90-day expiry,
+-- connected apps (migrations 0013-0015): the owner only, browser handoff with PKCE, today only, 90-day expiry,
 -- active time only while connected, erase. PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
 reset role;
 delete from reading_sessions where user_id = '00000000-0000-0000-0000-00000000000a';
@@ -425,60 +425,95 @@ do $$ begin
 end $$;
 delete from reading_sessions where id = '40000000-0000-0000-0000-000000000009';
 
+do $$ begin
+  if to_regprocedure('claim_pairing_code(text, text)') is not null or to_regprocedure('create_pairing_code(text)') is not null
+     or to_regclass('app_pairing_failures') is not null then
+    raise exception 'FAIL: typed pairing codes or the failure log are still there';
+  end if;
+  raise notice 'ok: no typed codes and no log of network addresses (0015)';
+end $$;
+
+-- the PKCE pair Poortwachter would make: verifier (secret, stays on the computer) and challenge (sent to Boekenwurm)
+create temp table pk as select v, pkce_challenge(v) as ch from (select repeat('Ab3_-', 9) as v) x;
+grant select on pk to anon, authenticated;
+do $$ begin
+  -- RFC 7636, appendix B: this verifier has this challenge
+  if pkce_challenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk') <> 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM' then
+    raise exception 'FAIL: pkce_challenge does not match RFC 7636';
+  end if;
+  raise notice 'ok: challenges are made as RFC 7636 says';
+end $$;
+
 set role anon;
 do $$ begin
-  perform create_pairing_code('poortwachter');
-  raise exception 'FAIL: anon made a pairing code';
-exception when insufficient_privilege then raise notice 'ok: only signed-in readers make pairing codes';
+  perform link_app((select ch from pk), 'x');
+  raise exception 'FAIL: anon linked an app';
+exception when insufficient_privilege then raise notice 'ok: only signed-in readers can allow an app';
 end $$;
 reset role;
 
+-- C is not the owner (no admin feature): no connecting
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000c';
+do $$ begin
+  perform link_app((select ch from pk), 'x');
+  raise exception 'FAIL: a reader without the admin feature linked an app';
+exception when insufficient_privilege then raise notice 'ok: only the owner''s account (admin feature) can connect apps';
+end $$;
+reset role;
+
+insert into feature_access (user_id, feature) values ('00000000-0000-0000-0000-00000000000a', 'admin') on conflict do nothing;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
-create temp table pair as select create_pairing_code('poortwachter') as code;
-grant select, update on pair to anon;
 do $$ begin
-  if (select code from pair) !~ '^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$' then
-    raise exception 'FAIL: pairing code looks like %', (select code from pair);
+  perform link_app('too-short', 'x');
+  raise exception 'FAIL: a malformed challenge was accepted';
+exception when invalid_parameter_value then raise notice 'ok: malformed requests are refused';
+end $$;
+create temp table pair as select link_app((select ch from pk), E'Poortwachter on laptop\n') as code;
+grant select on pair to anon;
+do $$ begin
+  if (select code from pair) !~ '^[0-9a-f]{60}$' then raise exception 'FAIL: code looks like %', (select code from pair); end if;
+  raise notice 'ok: allowing makes a 240-bit one-time code';
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from app_pairing_codes where code_hash = (select code from pair)) then
+    raise exception 'FAIL: a code was stored as it is';
   end if;
-  raise notice 'ok: pairing codes look like XXXX-XXXX, without look-alike characters';
+  if (select expires_at from app_pairing_codes where user_id = '00000000-0000-0000-0000-00000000000a') > now() + interval '2 minutes' then
+    raise exception 'FAIL: a code lives longer than 2 minutes';
+  end if;
+  raise notice 'ok: codes are stored only as hashes, for 2 minutes';
 end $$;
 
-reset role;
 set role anon;
-do $$ declare r jsonb; begin
-  r := claim_pairing_code('ZZZZ-ZZZZ', 'x');
-  if r ->> 'error' <> 'invalid' then raise exception 'FAIL: a wrong code was accepted %', r; end if;
-  for i in 1..9 loop r := claim_pairing_code('ZZZZ-ZZZ' || i, 'x'); end loop;
-  r := claim_pairing_code((select code from pair), 'x');
-  if r ->> 'error' <> 'too_many' then raise exception 'FAIL: 10 wrong tries did not stop guessing %', r; end if;
-  raise notice 'ok: wrong codes are refused, and after 10 wrong tries from one address even the right one waits';
-end $$;
-reset role;
 do $$ begin
-  if exists (select 1 from app_pairing_failures where addr_key !~ '^[0-9a-f]{64}$') then
-    raise exception 'FAIL: a failed try kept something other than a hash';
+  if claim_app_link((select code from pair), repeat('x', 43)) ->> 'error' <> 'invalid' then
+    raise exception 'FAIL: a code worked without the app''s verifier';
   end if;
-  raise notice 'ok: failed tries keep only a hash of the address';
+  if claim_app_link((select code from pair), (select v from pk)) ->> 'error' <> 'invalid' then
+    raise exception 'FAIL: a code survived a wrong verifier';
+  end if;
+  raise notice 'ok: a code without the app''s secret connects nothing, and is used up by the try';
 end $$;
-delete from app_pairing_failures;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+create temp table pair2 as select link_app((select ch from pk), 'Poortwachter on laptop') as code;
+grant select on pair2 to anon;
+reset role;
 set role anon;
-create temp table conn as select claim_pairing_code(lower(replace((select code from pair), '-', ' ')), 'Poortwachter on laptop') as j;
+create temp table conn as select claim_app_link((select code from pair2), (select v from pk)) as j;
 grant select on conn to authenticated;
 do $$ begin
-  if (select j ->> 'status' from conn) <> 'pending' or length((select j ->> 'token' from conn)) <> 90 then
+  if (select j ->> 'status' from conn) <> 'ok' or length((select j ->> 'token' from conn)) <> 90 then
     raise exception 'FAIL: claim %', (select j from conn);
   end if;
-  if claim_pairing_code((select code from pair), 'again') ->> 'error' <> 'invalid' then
+  if claim_app_link((select code from pair2), (select v from pk)) ->> 'error' <> 'invalid' then
     raise exception 'FAIL: a code was used twice';
   end if;
-  raise notice 'ok: a pairing code works once (case, dashes and spaces ignored), and the connection waits for approval';
-end $$;
-do $$ begin
-  if connection_summary((select j ->> 'token' from conn), current_date, 'UTC', 0) ->> 'error' <> 'pending' then
-    raise exception 'FAIL: a pending connection got numbers';
-  end if;
-  raise notice 'ok: until the reader approves, the token opens nothing';
+  raise notice 'ok: code + verifier give the app its token once; the connection is allowed (the reader clicked Allow)';
 end $$;
 do $$ begin
   perform 1 from app_connections;
@@ -491,20 +526,15 @@ set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 do $$ begin
   if exists (select 1 from my_app_connections()) then raise exception 'FAIL: B sees A''s connection'; end if;
-  perform approve_app_connection((select (j ->> 'connection_id')::uuid from conn));
-  raise exception 'FAIL: B approved A''s connection';
-exception when invalid_parameter_value then raise notice 'ok: readers cannot see or approve each other''s connections';
+  raise notice 'ok: readers cannot see each other''s connections';
 end $$;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
 do $$ declare c record; begin
   select * into c from my_app_connections();
-  if c.name <> 'Poortwachter on laptop' or c.approved_at is not null or c.expires_at > now() + interval '10 minutes' then
-    raise exception 'FAIL: pending connection %', c;
+  if c.name <> 'Poortwachter on laptop' or c.approved_at is null or c.expires_at < now() + interval '89 days' then
+    raise exception 'FAIL: connection %', c;
   end if;
-  perform approve_app_connection(c.id);
-  select * into c from my_app_connections();
-  if c.approved_at is null or c.expires_at < now() + interval '89 days' then raise exception 'FAIL: approval %', c; end if;
-  raise notice 'ok: the reader sees the request, approves it, and it expires 90 days after its last use';
+  raise notice 'ok: the reader sees it, allowed, expiring 90 days after its last use';
 end $$;
 reset role;
 
@@ -578,13 +608,31 @@ do $$ begin
   raise notice 'ok: it is deleted, and with the last connection gone, the active time measured for it goes too';
 end $$;
 
+-- the admin feature taken away: the connection stops working and is deleted
+insert into app_connections (user_id, app, name, token_hash, approved_at) values
+  ('00000000-0000-0000-0000-00000000000a', 'poortwachter', 'z', app_secret_hash('owner-test-token'), now());
+delete from feature_access where user_id = '00000000-0000-0000-0000-00000000000a' and feature = 'admin';
+set role anon;
+do $$ begin
+  if connection_summary('owner-test-token', current_date, 'UTC', 0) ->> 'error' <> 'gone' then
+    raise exception 'FAIL: a connection worked for an account without the admin feature';
+  end if;
+  raise notice 'ok: without the admin feature, a connection stops working';
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from app_connections where name = 'z') then raise exception 'FAIL: it was kept'; end if;
+  raise notice 'ok: and is deleted';
+end $$;
+insert into feature_access (user_id, feature) values ('00000000-0000-0000-0000-00000000000a', 'admin');
+
 -- erase from my account: connections, requests and codes
 insert into app_connections (user_id, app, name, token_hash, approved_at) values
   ('00000000-0000-0000-0000-00000000000a', 'poortwachter', 'a', repeat('1', 64), now()),
   ('00000000-0000-0000-0000-00000000000a', 'poortwachter', 'b', repeat('2', 64), null);
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
-do $$ begin perform create_pairing_code('poortwachter'); perform forget_app_connections(); end $$;
+do $$ begin perform link_app(repeat('c', 43), 'x'); perform forget_app_connections(); end $$;
 reset role;
 do $$ begin
   if exists (select 1 from app_connections where user_id = '00000000-0000-0000-0000-00000000000a')

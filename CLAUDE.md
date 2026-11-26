@@ -48,7 +48,7 @@ owner asks, and update the design doc and the tests together.
   200 pages in a month (`_shared/alerts.ts`, migration 0012: email via Resend, push to the owner's phone). In each, `handler.ts` is plain TypeScript, tested under Node, and `index.ts` is the Deno
   entry; `_shared/common.ts` has what they share (CORS, the reader's token, claiming a daily use).
 - `docs/CONNECTED_APPS.md` — apps a reader pairs (Poortwachter): consent, pairing code, approval, today's numbers only
-  (never text), 90-day expiry; migrations 0013 + 0014. PRELAUNCH-REMOVE: removed before going public
+  (never text), 90-day expiry, owner's account only, connected by a browser handoff with PKCE; migrations 0013-0015. PRELAUNCH-REMOVE: removed before going public
   (`docs/PRELAUNCH.md`, `scripts/prelaunch-check.sh`).
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.

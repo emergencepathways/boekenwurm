@@ -21,7 +21,6 @@
 | That your account reached 200 page readings in a month, and when | Supabase (EU); the alert by email to Emergence Pathways | So Emergence Pathways can see heavy use early and contact you | As long as you have an account |
 | Apps you connect (such as Poortwachter): the app's name, when you allowed it, when it last asked for today's numbers | Supabase (EU) | So you can see and disconnect them | Until you disconnect the app, it goes 90 days unused, or you erase your account |
 | **Only while an app is connected:** how long you actively read in each session (time with the book on screen and a tap, page turn or scroll in the last 2 minutes), the level of the text and your rank then | With your reading sessions | For the numbers the connected app receives | Until your last connected app is disconnected or expires, then deleted |
-| A failed attempt to use a pairing code: a one-way hash of the network address it came from | Supabase (EU) | To stop codes being guessed | Deleted within an hour |
 | Text read from photographed pages | On your device, and in your account if you sign in | So you can read the book here, on all your devices | Until you delete the book or erase your data; **not included in exports** (see "Your rights") |
 
 ## Services that receive data, and when
@@ -40,8 +39,8 @@
   blocked by it.
 - **Anthropic (Claude)**: only if you add your own Claude API key (Account → Experimental), the text a feature needs
   (for example a paragraph to match to your level). Your key stays on your device.
-- **Apps you connect** (such as Poortwachter): **only if you agree and then allow the app** (Account → Settings →
-  Connected apps), that app can ask for **today's** numbers: pages read and active reading minutes (also counted for
+- **Apps you connect** (Poortwachter; for now only on the owner's account): **only after you read what it will
+  receive and allow it** (Account → Experimental → Connected apps), that app can ask for **today's** numbers: pages read and active reading minutes (also counted for
   reading at or above your level), flashcards reviewed, and whether you wrote in your diary today (never the text).
   Nothing from earlier days (yesterday only for apps whose day ends after midnight), and never book titles, book
   text, words or diary entries. Disconnect it any time, and it sees nothing more; unused for 90 days, it disconnects
@@ -70,10 +69,8 @@ Protection Authority (Autoriteit Persoonsgegevens).
 - LanguageTool: **explicit consent**, asked before first use, as diary entries may contain special-category data
   (health, sexuality, beliefs). Declining keeps the diary fully usable.
 - Weekly reminder: consent (you turn it on; the browser also asks).
-- Connected apps, and measuring active reading time for them: **your consent**, given when you pair an app (you see
-  what it will receive first, then allow it) and withdrawn by disconnecting it. Not connecting changes nothing else.
-- Limiting attempts to guess pairing codes (a hashed network address, kept up to an hour): legitimate interest
-  (keeping accounts safe).
+- Connected apps, and measuring active reading time for them: **your consent**, given when you connect an app (you
+  see what it will receive, then allow it) and withdrawn by disconnecting it. Not connecting changes nothing else.
 - Translation and page reading: performance of the service, limited to what the feature needs.
 - Counting page readings, and the alert at 200 a month: legitimate interest (keeping a paid-for service fair and its
   costs in hand). Only the count, the month and your account email are used.

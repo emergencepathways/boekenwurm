@@ -15,11 +15,12 @@ measure active reading time or share anything with other apps.
 
 1. **Database.** Copy `supabase/prelaunch/remove_connected_apps.sql` into `supabase/migrations/` with the next
    number, and run it in the Supabase SQL Editor. It drops the tables, functions and triggers of migrations 0013 and
-   0014, deletes every connection, and removes the three reading-session columns (active time, text level, rank).
-   Keep 0013 and 0014 in history: migrations are never edited after they ran.
+   0014 and 0015, deletes every connection, and removes the three reading-session columns (active time, text level, rank).
+   Keep 0013 to 0015 in history: migrations are never edited after they ran.
 2. **App code.** Remove everything marked `PRELAUNCH-REMOVE`:
    - `apps/web/src/lib/connections.ts` (delete the file)
-   - `apps/web/src/screens/Me.tsx`: the `ConnectedApps` section, its imports, and the connected-apps lines in
+   - `apps/web/src/App.tsx`: the `?connect=poortwachter` handling and its import
+   - `apps/web/src/screens/Me.tsx`: the `ConnectedApps` section (Account → Experimental), its imports, and the connected-apps lines in
      `exportJson` and `eraseAccount`
    - `apps/web/src/screens/Reader.tsx`: the active-time effect, `sessionExtras()`, `clock` in the reader state
    - `apps/web/src/lib/store.ts`: `appsConnected`, the three `FinishedSession` fields and the three row fields

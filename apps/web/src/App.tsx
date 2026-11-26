@@ -16,6 +16,7 @@ import { AddBook } from "./screens/AddBook.tsx";
 import { PhotoBook } from "./screens/PhotoBook.tsx";
 import { InstallHelp } from "./screens/InstallHelp.tsx";
 import { Welcome } from "./screens/Welcome.tsx";
+import { parseLinkRequest, saveLinkRequest } from "./lib/connections.ts";
 
 const TABS: Array<[Tab, Key, () => React.JSX.Element]> = [
   ["home", "tab.home", Icon.home],
@@ -43,6 +44,13 @@ export function App() {
     if (q.get("open") === "diary") {
       history.replaceState(null, "", location.pathname);
       setTab("study", "diary");
+    }
+    // Sent here by Poortwachter to be allowed (lib/connections.ts). PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
+    const link = parseLinkRequest(location.search);
+    if (q.get("connect")) history.replaceState(null, "", location.pathname);
+    if (link) {
+      saveLinkRequest(link);
+      setTab("me", "connected-apps");
     }
   }, []);
   const font = useStore((s) => s.profile.settings.font);

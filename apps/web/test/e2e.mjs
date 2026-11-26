@@ -172,24 +172,26 @@ await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
   await r.fulfill({ status: ok ? 200 : 400, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
     body: JSON.stringify(ok ? "google_page_reading" : { code: "22023", message: "That code isn't valid" }) });
 });
-// Connected apps (migrations 0013 + 0014; PRELAUNCH-REMOVE), mocked: one pairing code, the reader's connection list
-// (filled in by the test, as if the app had claimed the code), approval and disconnecting.
-const apps = { list: [], codes: 0, approved: 0, deleted: 0 };
+// Connected apps (migrations 0013-0015; PRELAUNCH-REMOVE), mocked: link_app (the reader allows), the reader's
+// connection list, disconnecting, and Poortwachter on 127.0.0.1:7623, which receives the code.
+const apps = { list: [], links: [], deleted: 0, landed: null };
 const appsCors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" };
 const appsJson = (r, body, status = 200) => r.request().method() === "OPTIONS"
   ? r.fulfill({ status: 204, headers: appsCors })
   : r.fulfill({ status, contentType: "application/json", headers: appsCors, body: JSON.stringify(body) });
-await ctx.route("**/rest/v1/rpc/create_pairing_code", async (r) => {
-  if (r.request().method() !== "OPTIONS") apps.codes++;
-  await appsJson(r, "K7QM-3XPA");
+await ctx.route("**/rest/v1/rpc/link_app", async (r) => {
+  if (r.request().method() === "OPTIONS") return appsJson(r, null);
+  const body = JSON.parse(r.request().postData() || "{}");
+  apps.links.push(body);
+  const now = new Date();
+  apps.list = [{ id: "c0000000-0000-4000-8000-000000000001", app: "poortwachter", name: body.p_name, created_at: now.toISOString(), approved_at: now.toISOString(), last_used_at: null, expires_at: new Date(Date.now() + 90 * 864e5).toISOString() }];
+  await appsJson(r, "ab".repeat(30));
+});
+await ctx.route("http://127.0.0.1:7623/**", async (r) => {
+  apps.landed = r.request().url();
+  await r.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Poortwachter</title><h1>Connected to Boekenwurm</h1>" });
 });
 await ctx.route("**/rest/v1/rpc/my_app_connections", (r) => appsJson(r, apps.list));
-await ctx.route("**/rest/v1/rpc/approve_app_connection", async (r) => {
-  if (r.request().method() === "OPTIONS") return appsJson(r, null);
-  apps.approved++;
-  apps.list = apps.list.map((c) => ({ ...c, approved_at: new Date().toISOString(), expires_at: new Date(Date.now() + 90 * 864e5).toISOString() }));
-  await appsJson(r, null);
-});
 await ctx.route("**/rest/v1/rpc/forget_app_connections", (r) => appsJson(r, null));
 await ctx.route("**/rest/v1/app_connections*", async (r) => {
   if (r.request().method() === "DELETE") {
@@ -895,30 +897,39 @@ check(true, "the right code turns on Google page reading");
 await shot("18-access-code");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
-step("connected apps: agree first, then a code, then allow the app's request; disconnect it");
+step("connected apps (owner only): Poortwachter sends the browser here, the reader reads what is shared and allows it");
 await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
 await page.getByRole("tab", { name: "Settings" }).click();
+check((await page.getByRole("heading", { name: "Connected apps" }).count()) === 0, "not under Settings any more");
+await page.getByRole("tab", { name: "Experimental" }).click();
 await page.getByRole("heading", { name: "Connected apps" }).waitFor();
-check(await page.getByText("No apps connected.").isVisible(), "nothing connected at first");
-await page.getByRole("button", { name: "Pair Poortwachter" }).click();
-await page.getByText("Share today's reading with Poortwachter?").waitFor();
-check(apps.codes === 0, "no code before the reader agrees");
-check(await page.getByText(/Active reading minutes today/).isVisible(), "the reader is told about active reading time before agreeing");
-await shot("18b-connect-consent");
-await page.getByRole("button", { name: "I agree, show the code" }).click();
-await page.getByText("K7QM-3XPA").waitFor();
-check(apps.codes === 1 && (await page.getByText(/Valid until/).isVisible()), "after agreeing: a pairing code, and how long it is valid");
-const soon = new Date(Date.now() + 10 * 6e4).toISOString();
-apps.list = [{ id: "c0000000-0000-4000-8000-000000000001", app: "poortwachter", name: "Poortwachter on laptop", created_at: new Date().toISOString(), approved_at: null, last_used_at: null, expires_at: soon }];
+check(await page.getByText("No apps connected.").waitFor({ timeout: 5000 }).then(() => true, () => false), "the owner's account: nothing connected at first");
+const start = await page.getByRole("link", { name: "Connect Poortwachter on this computer" }).getAttribute("href");
+check(start === `http://127.0.0.1:7623/boekenwurm/connect?site=${encodeURIComponent(new URL(base).origin)}`, "Connect opens Poortwachter on this computer, telling it which Boekenwurm");
+// What Poortwachter does next: it sends the browser back with its challenge.
+const challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+await page.goto(`${base}?connect=poortwachter&challenge=${challenge}&state=st4te-st4te-st4te&name=${encodeURIComponent("Poortwachter on laptop")}`);
 await page.getByText("Poortwachter on laptop wants to connect").waitFor({ timeout: 10000 });
-check((await page.getByText("K7QM-3XPA").count()) === 0, "once the app claims the code, the code goes and its request shows");
-await shot("18c-connect-request");
+check(!page.url().includes("challenge"), "the request is taken out of the address bar");
+check(apps.links.length === 0, "nothing is made before the reader allows it");
+check(await page.getByText(/Active reading minutes today/).isVisible(), "the reader is told about active reading time before allowing");
+await shot("18b-connect-request");
 await page.getByRole("button", { name: "Allow" }).click();
-await page.getByText("Poortwachter on laptop is connected.").waitFor();
-check(apps.approved === 1 && (await page.getByText(/disconnects by itself after/).isVisible()), "allowed: connected, with when it expires if unused");
+await page.waitForURL(/127\.0\.0\.1:7623/);
+check(apps.links.length === 1 && apps.links[0].p_challenge === challenge && apps.links[0].p_name === "Poortwachter on laptop", "Allow makes a code bound to Poortwachter's challenge");
+check(apps.landed === `http://127.0.0.1:7623/boekenwurm/linked?code=${"ab".repeat(30)}&state=st4te-st4te-st4te`, "and the browser takes it straight back to Poortwachter");
+await page.goto(base);
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Experimental" }).click();
+await page.getByText("Poortwachter on laptop").waitFor();
+check(await page.getByText(/disconnects by itself after/).isVisible(), "connected, with when it expires if unused");
 await page.getByRole("button", { name: "Disconnect" }).click();
 await page.getByText("No apps connected.").waitFor();
 check(apps.deleted === 1, "Disconnect removes the connection");
+await page.goto(`${base}?connect=poortwachter&challenge=bad&state=x`);
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Experimental" }).click();
+check((await page.getByText(/wants to connect/).count()) === 0, "a malformed request is ignored");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("photo flow: camera explanation, then a library photo fallback");
