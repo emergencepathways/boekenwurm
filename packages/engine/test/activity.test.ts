@@ -1,4 +1,4 @@
-// Active reading time (src/activity.ts): only time on screen, with input in the last two minutes, counts.
+// PRELAUNCH-REMOVE (docs/PRELAUNCH.md). Active reading time (src/activity.ts): only time on screen, with input in the last two minutes, counts.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { activeSeconds, IDLE_MS, noteInput, startClock, tickClock } from "../src/activity.ts";

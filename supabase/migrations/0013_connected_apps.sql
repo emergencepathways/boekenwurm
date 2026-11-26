@@ -1,3 +1,5 @@
+-- PRELAUNCH-REMOVE: connected apps are for the owner's own use and are removed before any public release
+-- (docs/PRELAUNCH.md). Tightened by 0014 (no calendar, approval, limits, today only).
 -- Boekenwurm: connected apps (Poortwachter first). docs/CONNECTED_APPS.md has the whole design.
 --
 -- A reader pairs an app from Account → Settings → Connected apps: Boekenwurm shows a short code, valid 10 minutes,

@@ -1,0 +1,13 @@
+# Release gate (docs/PRELAUNCH.md): connected apps must be removed before any public release. Runs on release tags
+# and by hand (Actions → Pre-launch check → Run workflow). A failing run means: not ready to release publicly.
+name: Pre-launch check
+on:
+  workflow_dispatch:
+  push:
+    tags: ["release-*", "store-*"]
+jobs:
+  prelaunch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/prelaunch-check.sh

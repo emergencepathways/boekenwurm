@@ -24,6 +24,7 @@
   Cache-Control: no-cache
 /version.json
   Cache-Control: no-store
+# PRELAUNCH-REMOVE (docs/PRELAUNCH.md): connected apps
 /connect.json
   Cache-Control: no-cache
 

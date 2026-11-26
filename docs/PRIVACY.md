@@ -1,3 +1,4 @@
+<!-- PRELAUNCH-REMOVE (docs/PRELAUNCH.md): the connected-apps rows, bullets and legal bases below are removed before any public release. -->
 # Boekenwurm privacy notice
 
 **Who is responsible:** Emergence Pathways B.V., Den Haag, the Netherlands. Questions and requests about your data:
@@ -18,9 +19,9 @@
 | Photos of book pages (access-code holders only) | Only on your device | To read the page's text, and for you to check it | **Deleted as soon as the page is read and checked**; photos with something still to check are kept until it's checked |
 | How many pages Google read for you each day (page readings) | Supabase (EU) | For the limit of 20 pages a day per account, and the monthly check below | As long as you have an account |
 | That your account reached 200 page readings in a month, and when | Supabase (EU); the alert by email to Emergence Pathways | So Emergence Pathways can see heavy use early and contact you | As long as you have an account |
-| Apps you connect (such as Poortwachter): the app's name, when you connected it, when it last asked for your numbers | Supabase (EU) | So you can see and disconnect them | Until you disconnect the app or erase your account |
-| How long you actively read in each session (only time with the book on screen and recent taps or page turns), the level of the text and your rank then | With your reading sessions | For the daily summary connected apps receive | As your reading sessions |
-| A connected app's calendar (its study plan), if it publishes one | Supabase (EU), at a secret address | So your calendar app can subscribe to it | Until you disconnect the app |
+| Apps you connect (such as Poortwachter): the app's name, when you allowed it, when it last asked for today's numbers | Supabase (EU) | So you can see and disconnect them | Until you disconnect the app, it goes 90 days unused, or you erase your account |
+| **Only while an app is connected:** how long you actively read in each session (time with the book on screen and a tap, page turn or scroll in the last 2 minutes), the level of the text and your rank then | With your reading sessions | For the numbers the connected app receives | Until your last connected app is disconnected or expires, then deleted |
+| A failed attempt to use a pairing code: a one-way hash of the network address it came from | Supabase (EU) | To stop codes being guessed | Deleted within an hour |
 | Text read from photographed pages | On your device, and in your account if you sign in | So you can read the book here, on all your devices | Until you delete the book or erase your data; **not included in exports** (see "Your rights") |
 
 ## Services that receive data, and when
@@ -39,11 +40,12 @@
   blocked by it.
 - **Anthropic (Claude)**: only if you add your own Claude API key (Account → Experimental), the text a feature needs
   (for example a paragraph to match to your level). Your key stays on your device.
-- **Apps you connect** (such as Poortwachter): **only if you pair one** (Account → Settings → Connected apps), that
-  app can ask for a daily summary of numbers: pages read, active reading minutes, paragraphs, cards reviewed, whether
-  you wrote in your diary that day (never the text), and your rank. Never book titles, book text, words or diary
-  entries. It can also publish its own study plan as a calendar at a secret address. Disconnect it any time, and it
-  sees nothing more.
+- **Apps you connect** (such as Poortwachter): **only if you agree and then allow the app** (Account → Settings →
+  Connected apps), that app can ask for **today's** numbers: pages read and active reading minutes (also counted for
+  reading at or above your level), flashcards reviewed, and whether you wrote in your diary today (never the text).
+  Nothing from earlier days (yesterday only for apps whose day ends after midnight), and never book titles, book
+  text, words or diary entries. Disconnect it any time, and it sees nothing more; unused for 90 days, it disconnects
+  by itself. Active reading time is measured only while an app is connected, and deleted when the last one goes.
 - **Web Push services** (Apple, Google or Mozilla, depending on your device): if you turn on the weekly reminder, a
   short reminder message is sent through your device's push service.
 
@@ -68,7 +70,10 @@ Protection Authority (Autoriteit Persoonsgegevens).
 - LanguageTool: **explicit consent**, asked before first use, as diary entries may contain special-category data
   (health, sexuality, beliefs). Declining keeps the diary fully usable.
 - Weekly reminder: consent (you turn it on; the browser also asks).
-- Connected apps: performance of the service you asked for (you pair the app yourself, and can disconnect it).
+- Connected apps, and measuring active reading time for them: **your consent**, given when you pair an app (you see
+  what it will receive first, then allow it) and withdrawn by disconnecting it. Not connecting changes nothing else.
+- Limiting attempts to guess pairing codes (a hashed network address, kept up to an hour): legitimate interest
+  (keeping accounts safe).
 - Translation and page reading: performance of the service, limited to what the feature needs.
 - Counting page readings, and the alert at 200 a month: legitimate interest (keeping a paid-for service fair and its
   costs in hand). Only the count, the month and your account email are used.

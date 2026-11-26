@@ -25,7 +25,7 @@ import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
 import { startGame } from "../lib/hexbound.ts";
-import { createPairingCode, disconnect, listConnections, NotReady, PAIRING_MINUTES, type Connection } from "../lib/connections.ts";
+import { approve, createPairingCode, disconnect, exportConnections, forgetConnections, listConnections, NotReady, PAIRING_MINUTES, type Connection } from "../lib/connections.ts";
 
 /** The Account tab's categories. New features go into one of these. */
 type View = "achievements" | "reading" | "settings" | "experimental" | "privacy";
@@ -488,17 +488,18 @@ function LookupsSection() {
 
 /** An access code opens a feature that isn't open to everyone yet: for now, Google page reading. */
 /**
- * Account → Settings → Connected apps: pair an app such as Poortwachter with a 10-minute code, see what is connected,
- * disconnect it. Connected apps see a daily summary of numbers only (migration 0013), never books, words or the diary.
+ * Account → Settings → Connected apps: agree to what an app will see, pair it with a 10-minute code, then allow its
+ * request. Approved apps see today's numbers only (migrations 0013 + 0014). PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
  */
 function ConnectedApps() {
   const t = useT();
   const user = useStore((s) => s.user);
   const [list, setList] = useState<Connection[] | null>(null);
+  const [step, setStep] = useState<"idle" | "consent" | "code">("idle");
   const [code, setCode] = useState<{ code: string; until: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const fail = (x: unknown) => setErr(x instanceof NotReady ? t("apps.notReady") : t("apps.error"));
+  const fail = (x: unknown) => setErr(x instanceof NotReady ? t("apps.notReady") : (x as Error)?.message || t("apps.error"));
   const load = () => listConnections().then(setList, fail);
   useEffect(() => {
     if (user) void load();
@@ -507,22 +508,34 @@ function ConnectedApps() {
   // The code disappears when it expires.
   useEffect(() => {
     if (!code) return;
-    const left = code.until - Date.now();
-    const timer = setTimeout(() => setCode(null), Math.max(0, left));
+    const timer = setTimeout(() => (setCode(null), setStep("idle")), Math.max(0, code.until - Date.now()));
     return () => clearTimeout(timer);
   }, [code]);
-  // While a code is shown, look for the new connection so it appears as soon as the app pairs.
+  // While a code is shown, look for the app's request so the reader can allow it right away.
   useEffect(() => {
-    if (!code) return;
+    if (step !== "code") return;
     const timer = setInterval(() => void listConnections().then((l) => {
-      if (list && l.length > list.length) {
-        setCode(null);
-        toast(t("apps.paired"));
-      }
       setList(l);
-    }, () => {}), 4000);
+      if (l.some((c) => !c.approved_at)) {
+        setCode(null);
+        setStep("idle");
+      }
+    }, () => {}), 3000);
     return () => clearInterval(timer);
-  }, [code, list, t]);
+  }, [step]);
+
+  const pending = (list ?? []).filter((c) => !c.approved_at);
+  const approved = (list ?? []).filter((c) => c.approved_at);
+  const act = async (f: () => Promise<void>, done?: string) => {
+    setErr(null);
+    try {
+      await f();
+      if (done) toast(done);
+      await load();
+    } catch (x) {
+      fail(x);
+    }
+  };
 
   return (
     <section className="panel" id="connected-apps">
@@ -532,57 +545,70 @@ function ConnectedApps() {
         <p className="small">{t("apps.signIn")}</p>
       ) : (
         <>
-          {code ? (
+          {pending.map((c) => (
+            <div className="stack" key={c.id} role="alertdialog" aria-label={t("apps.request", { name: c.name })} style={{ border: "2px solid var(--accent, currentColor)", borderRadius: 12, padding: 12 }}>
+              <b>{t("apps.request", { name: c.name })}</b>
+              <span className="small">{t("apps.requestLead")}</span>
+              <div className="row">
+                <button className="btn primary small" type="button" onClick={() => void act(() => approve(c.id), t("apps.allowed", { name: c.name }))}>{t("apps.allow")}</button>
+                <button className="btn small ghost" type="button" onClick={() => void act(() => disconnect(c.id))}>{t("apps.deny")}</button>
+              </div>
+            </div>
+          ))}
+          {step === "consent" ? (
+            <div className="stack">
+              <h3 style={{ margin: 0 }}>{t("apps.consentTitle")}</h3>
+              <ul className="small" style={{ margin: 0 }}>
+                <li>{t("apps.c1")}</li>
+                <li>{t("apps.c2")}</li>
+                <li>{t("apps.c3")}</li>
+                <li>{t("apps.c4")}</li>
+              </ul>
+              <p className="small" style={{ margin: 0 }}>{t.rich("apps.consentNever")}</p>
+              <p className="small" style={{ margin: 0 }}>{t("apps.consentControl")}</p>
+              <div className="row">
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setErr(null);
+                    setBusy(true);
+                    try {
+                      setCode({ code: await createPairingCode("poortwachter"), until: Date.now() + PAIRING_MINUTES * 60_000 });
+                      setStep("code");
+                    } catch (x) {
+                      fail(x);
+                    }
+                    setBusy(false);
+                  }}
+                >
+                  {busy ? t("apps.pairing") : t("apps.agree")}
+                </button>
+                <button className="btn ghost" type="button" onClick={() => setStep("idle")}>{t("common.cancel")}</button>
+              </div>
+            </div>
+          ) : step === "code" && code ? (
             <div className="stack">
               <p style={{ margin: 0 }}>{t("apps.code")}</p>
               <p className="num" style={{ fontSize: "2rem", letterSpacing: "0.15em", margin: 0 }} aria-live="polite">{code.code}</p>
               <span className="small">{t("apps.expires", { time: new Date(code.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}</span>
             </div>
           ) : (
-            <button
-              className="btn primary"
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                setErr(null);
-                setBusy(true);
-                try {
-                  setCode({ code: await createPairingCode("poortwachter"), until: Date.now() + PAIRING_MINUTES * 60_000 });
-                } catch (x) {
-                  fail(x);
-                }
-                setBusy(false);
-              }}
-            >
-              {busy ? t("apps.pairing") : t("apps.pair")}
-            </button>
+            <button className="btn primary" type="button" onClick={() => (setErr(null), setStep("consent"))}>{t("apps.pair")}</button>
           )}
           {err && <span className="error">{err}</span>}
-          {list && list.length === 0 && !code && <p className="small">{t("apps.none")}</p>}
-          {list?.map((c) => (
+          {list && approved.length === 0 && pending.length === 0 && step === "idle" && <p className="small">{t("apps.none")}</p>}
+          {approved.map((c) => (
             <div className="row" key={c.id}>
               <span className="grow">
                 <b>{c.name}</b>
                 <br />
                 <span className="small">
-                  {t("apps.connected", { date: t.date(Date.parse(c.created_at)) })} · {c.last_used_at ? t("apps.lastUsed", { date: t.date(Date.parse(c.last_used_at)) }) : t("apps.neverUsed")}
+                  {t("apps.connected", { date: t.date(Date.parse(c.approved_at!)) })} · {c.last_used_at ? t("apps.lastUsed", { date: t.date(Date.parse(c.last_used_at)) }) : t("apps.neverUsed")} · {t("apps.expiresOn", { date: t.date(Date.parse(c.expires_at)) })}
                 </span>
               </span>
-              <button
-                className="btn small ghost"
-                type="button"
-                onClick={async () => {
-                  try {
-                    await disconnect(c.id);
-                    toast(t("apps.disconnected"));
-                    await load();
-                  } catch (x) {
-                    fail(x);
-                  }
-                }}
-              >
-                {t("apps.disconnect")}
-              </button>
+              <button className="btn small ghost" type="button" onClick={() => void act(() => disconnect(c.id), t("apps.disconnected"))}>{t("apps.disconnect")}</button>
             </div>
           ))}
         </>
@@ -781,6 +807,8 @@ function YourData() {
       words: s.wordbook, meanings: s.meanings, examples: s.examples, cards: s.cards,
       // Kept only on this device; part of the export because it is the reader's own writing.
       diary: await loadEntries(),
+      // Connected apps and the reading activity measured for them (PRELAUNCH-REMOVE, docs/PRELAUNCH.md).
+      ...(await exportConnections().catch(() => ({ connections: [], readingActivity: [] }))),
     };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
@@ -801,6 +829,8 @@ function YourData() {
       for (const t of ["cards", "word_stats", "reading_sessions", "word_lists", "books"]) await supabase.from(t).delete().eq("user_id", user.id);
       // Reminder subscriptions (migration 0011); ignored before that migration runs.
       await supabase.from("push_subscriptions").delete().eq("user_id", user.id);
+      // Connected apps, requests and pairing codes (migration 0014; PRELAUNCH-REMOVE).
+      await forgetConnections();
       await supabase.from("profiles").update({ progress: {}, settings: {}, display_name: null }).eq("user_id", user.id);
       await signOut(true);
       toast("Your data was erased from your account and this device.");

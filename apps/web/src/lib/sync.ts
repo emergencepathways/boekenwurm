@@ -13,6 +13,7 @@ import {
 import { bookToRow, mergeProgress, rowToBook, serverWins, wordbookFrom, type BookRow, type WordStatRow } from "./merge.ts";
 import { fromRow, toRow, type CardColumns, type CardRow } from "./cards.ts";
 import type { BookText, CardState, Meaning, Paragraph, SessionRow, WordDelta } from "./types.ts";
+import { refreshAppsConnected } from "./connections.ts";
 
 let running: Promise<void> | null = null;
 let again = false;
@@ -64,6 +65,7 @@ async function syncOnce(): Promise<void> {
     await pushDeletes(sb);
     await syncProfile(sb, user.id);
     await pushBooks(sb, user.id);
+    await refreshAppsConnected(); // PRELAUNCH-REMOVE (docs/PRELAUNCH.md)
     await pushSessions(sb, user.id);
     await pushWordDeltas(sb);
     await pushCards(sb, user.id);
@@ -168,6 +170,7 @@ async function pushSessions(sb: SB, userId: string) {
   const rows = outbox.map((r) => ({ ...r, user_id: userId, book_id: r.book_id && known.has(r.book_id) ? r.book_id : null }));
   let res = await sb.from("reading_sessions").upsert(rows, { onConflict: "id", ignoreDuplicates: true });
   // Before migration 0013 the server has no columns for active time and levels: send the rows without them.
+  // PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
   if (res.error && /active_seconds|text_level|reader_rank/.test(res.error.message ?? "")) {
     const plain = rows.map(({ active_seconds: _a, text_level: _t, reader_rank: _r, ...rest }) => rest);
     res = await sb.from("reading_sessions").upsert(plain, { onConflict: "id", ignoreDuplicates: true });

@@ -55,6 +55,8 @@ export interface State {
   pageReads: { day: string; used: number; limit: number } | null;
   /** The secret Hex-bound Collector game (lib/hexbound.ts), kept on this device until the character dies. */
   game: GameState | null;
+  /** An app is connected (lib/connections.ts): only then is active reading time measured. PRELAUNCH-REMOVE. */
+  appsConnected: boolean;
 }
 
 const now = () => Date.now();
@@ -78,6 +80,7 @@ let state: State = {
   dictionary: undefined,
   translations: null,
   features: [],
+  appsConnected: false,
   pageReads: null,
   game: null,
 };
@@ -215,7 +218,7 @@ export interface FinishedSession {
   lookupMode?: boolean;
   /** A turn of the Hex-bound Collector game: its words join the word book and reviews, but nothing else (no streak, no session row). */
   game?: boolean;
-  /** Active reading time in seconds (engine activity.ts), for connected apps. */
+  /** Active reading time in seconds (engine activity.ts), for connected apps. PRELAUNCH-REMOVE (docs/PRELAUNCH.md). */
   activeSeconds?: number;
   /** The level of the text read (the matched level in match mode, else the book's level) and the reader's rank then. */
   textLevel?: E.CefrLevel | null;
@@ -270,6 +273,7 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
     token_earned: s.tokenEarned,
     ended_by: f.endedBy,
     results: s.results,
+    // PRELAUNCH-REMOVE (docs/PRELAUNCH.md): the three fields for connected apps.
     active_seconds: Math.max(0, Math.min(86400, Math.round(f.activeSeconds ?? 0))),
     text_level: f.textLevel ?? null,
     reader_rank: f.readerRank ?? null,

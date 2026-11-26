@@ -74,6 +74,7 @@ export function rankFor(totalXp: number): RankStatus {
 }
 
 /**
+ * PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
  * Is a text at or above the reader's rank? For connected apps (Poortwachter counts reading only at or above the
  * reader's level). A text without a level never counts; every set level counts for an A0 reader.
  */

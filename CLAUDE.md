@@ -4,6 +4,14 @@ A Dutch reading-challenge app (web first, a KOReader/Kobo plugin later). Owner: 
 `emergencepathways/boekenwurm`). The owner is learning Dutch (A2), lives in Den Haag, and also uses this repo as a
 public portfolio project: code, commits and docs should be of a quality a hiring manager would be glad to read.
 
+## Release blocker: remove connected apps before going public
+
+**Connected apps (pairing Poortwachter, the daily summary, active reading time, `connect.json`) are for the owner's
+own use only and must be removed completely before any public release, web launch or App Store / Google Play
+submission.** The plan, file by file, is `docs/PRELAUNCH.md`; everything involved is marked `PRELAUNCH-REMOVE`. Never
+approve, tag or submit a public release while `scripts/prelaunch-check.sh` fails, and don't build new features on
+connected apps.
+
 Read `docs/DESIGN.md` before changing behaviour. The checkpoint rules there are the owner's; change them only when the
 owner asks, and update the design doc and the tests together.
 
@@ -22,7 +30,7 @@ owner asks, and update the design doc and the tests together.
   `xp.ts` (XP and ranks A0–C2), `achievements.ts` (tiered badges), `play.ts` (the synced play record and its merge),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
   `definitions.ts` (English/Dutch), `hexbound.ts` (the secret Mörk Borg game mode, docs/HEXBOUND.md),
-  `activity.ts` (active reading time for connected apps). No dependencies, so it ports to Lua for KOReader.
+  `activity.ts` (active reading time for connected apps; PRELAUNCH-REMOVE). No dependencies, so it ports to Lua for KOReader.
 - `packages/dutch/` — base forms (`lemma.ts`), twin of `services/ingest/boekenwurm_ingest/lemma.py`; both must pass
   `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
 - `packages/ai/` — model-agnostic level work: book grading, matching a paragraph to a level, word-in-context;
@@ -39,8 +47,9 @@ owner asks, and update the design doc and the tests together.
   20 a day for the whole account, with no reading on the device past it (migration 0004), and the owner's alert at
   200 pages in a month (`_shared/alerts.ts`, migration 0012: email via Resend, push to the owner's phone). In each, `handler.ts` is plain TypeScript, tested under Node, and `index.ts` is the Deno
   entry; `_shared/common.ts` has what they share (CORS, the reader's token, claiming a daily use).
-- `docs/CONNECTED_APPS.md` — apps a reader pairs (Poortwachter): pairing codes, the daily summary of numbers (never
-  text), the calendar feed (`supabase/functions/calendar/`), migration 0013.
+- `docs/CONNECTED_APPS.md` — apps a reader pairs (Poortwachter): consent, pairing code, approval, today's numbers only
+  (never text), 90-day expiry; migrations 0013 + 0014. PRELAUNCH-REMOVE: removed before going public
+  (`docs/PRELAUNCH.md`, `scripts/prelaunch-check.sh`).
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.

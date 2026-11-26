@@ -5,7 +5,6 @@
 #   supabase/functions/read-page  Google Cloud Vision for page photos, access-code holders only, 20 a day per account;
 #                                 at 200 in a month the owner is alerted (email if RESEND_API_KEY is set in Supabase)
 #   supabase/functions/diary-reminder  the weekly diary reminder (Web Push), run by diary-reminder.yml
-#   supabase/functions/calendar   a connected app's calendar feed at a secret address (docs/CONNECTED_APPS.md)
 #
 # One-time setup in the GitHub repository (Settings → Secrets and variables → Actions):
 #   Secrets  VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY   public by design; row-level security protects the data
@@ -69,7 +68,7 @@ jobs:
       - name: Database schema and row-level security
         run: supabase/tests/run.sh
       - name: Edge Functions (translate, read-page, diary-reminder)
-        run: node --test supabase/functions/translate/handler.test.ts supabase/functions/read-page/handler.test.ts supabase/functions/diary-reminder/handler.test.ts supabase/functions/calendar/handler.test.ts
+        run: node --test supabase/functions/translate/handler.test.ts supabase/functions/read-page/handler.test.ts supabase/functions/diary-reminder/handler.test.ts
       - name: Ingest and dictionary build
         working-directory: services/ingest
         run: python -m unittest discover -s tests -t tests
@@ -172,7 +171,7 @@ jobs:
             rm -f "$RUNNER_TEMP/fn.env" "$RUNNER_TEMP/vapid.json"
             echo "Diary reminder keys created."
           fi
-          for fn in translate read-page diary-reminder calendar; do
+          for fn in translate read-page diary-reminder; do
             supabase functions deploy "$fn" --project-ref "$ref" --no-verify-jwt --use-api
           done
 

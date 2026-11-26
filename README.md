@@ -66,4 +66,7 @@ the tools at wherever they live. Tests use synthetic books written for the tests
 
 ---
 
+> **Before a public release:** connected apps (pairing Poortwachter) are for the owner's own use and are removed
+> first. See [docs/PRELAUNCH.md](docs/PRELAUNCH.md).
+
 Built by [Emergence Pathways](https://emergencepathways.org), Den Haag.

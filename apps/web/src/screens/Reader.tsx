@@ -122,8 +122,12 @@ export function Reader({ bookId }: { bookId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
-  // Active reading time for connected apps: any input restarts the two-minute window; ticks count time on screen.
+  // Active reading time for connected apps, measured only while one is connected (PRELAUNCH-REMOVE): any input
+  // restarts the two-minute window; ticks count time on screen.
+  const appsConnected = useStore((s) => s.appsConnected);
   useEffect(() => {
+    if (!appsConnected) return;
+    r.clock = E.startClock(Date.now());
     const visible = () => document.visibilityState === "visible";
     const input = () => void (r.clock = E.noteInput(r.clock, Date.now(), visible()));
     const tick = () => void (r.clock = E.tickClock(r.clock, Date.now(), visible()));
@@ -136,7 +140,7 @@ export function Reader({ bookId }: { bookId: string }) {
       document.removeEventListener("visibilitychange", tick);
       clearInterval(t);
     };
-  }, [r]);
+  }, [r, appsConnected]);
 
   // Keep the "Undo tap" button honest: it disappears when the 5 seconds are up.
   useEffect(() => {
@@ -359,8 +363,13 @@ export function Reader({ bookId }: { bookId: string }) {
     }
   }
 
-  /** What connected apps get with a session: active time, the level of the text read, and the reader's rank. */
+  /**
+   * What connected apps get with a session: active time, the level of the text read, and the reader's rank. Only
+   * while an app is connected (the reader agreed when pairing); otherwise nothing is measured or sent.
+   * PRELAUNCH-REMOVE (docs/PRELAUNCH.md).
+   */
   function sessionExtras() {
+    if (!getState().appsConnected) return {};
     const clock = E.tickClock(r.clock, Date.now(), document.visibilityState === "visible");
     const matchedMode = r.book?.position.mode === "match" && mode === "match";
     const textLevel = (matchedMode ? getState().profile.progress.level : r.book?.level ?? null) as E.CefrLevel | null;

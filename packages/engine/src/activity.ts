@@ -1,4 +1,6 @@
 /**
+ * PRELAUNCH-REMOVE (docs/PRELAUNCH.md): only for connected apps, removed before a public release.
+ *
  * Active reading time: how long the reader actually read in a session, for connected apps such as Poortwachter
  * (docs/CONNECTED_APPS.md). Wall-clock time from start to end would count a book left open on the table; this only
  * counts time while the book is on screen and the reader did something (turned a paragraph, tapped a word, scrolled,
