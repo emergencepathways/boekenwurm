@@ -18,6 +18,9 @@
 | Photos of book pages (access-code holders only) | Only on your device | To read the page's text, and for you to check it | **Deleted as soon as the page is read and checked**; photos with something still to check are kept until it's checked |
 | How many pages Google read for you each day (page readings) | Supabase (EU) | For the limit of 20 pages a day per account, and the monthly check below | As long as you have an account |
 | That your account reached 200 page readings in a month, and when | Supabase (EU); the alert by email to Emergence Pathways | So Emergence Pathways can see heavy use early and contact you | As long as you have an account |
+| Apps you connect (such as Poortwachter): the app's name, when you connected it, when it last asked for your numbers | Supabase (EU) | So you can see and disconnect them | Until you disconnect the app or erase your account |
+| How long you actively read in each session (only time with the book on screen and recent taps or page turns), the level of the text and your rank then | With your reading sessions | For the daily summary connected apps receive | As your reading sessions |
+| A connected app's calendar (its study plan), if it publishes one | Supabase (EU), at a secret address | So your calendar app can subscribe to it | Until you disconnect the app |
 | Text read from photographed pages | On your device, and in your account if you sign in | So you can read the book here, on all your devices | Until you delete the book or erase your data; **not included in exports** (see "Your rights") |
 
 ## Services that receive data, and when
@@ -36,6 +39,11 @@
   blocked by it.
 - **Anthropic (Claude)**: only if you add your own Claude API key (Account → Experimental), the text a feature needs
   (for example a paragraph to match to your level). Your key stays on your device.
+- **Apps you connect** (such as Poortwachter): **only if you pair one** (Account → Settings → Connected apps), that
+  app can ask for a daily summary of numbers: pages read, active reading minutes, paragraphs, cards reviewed, whether
+  you wrote in your diary that day (never the text), and your rank. Never book titles, book text, words or diary
+  entries. It can also publish its own study plan as a calendar at a secret address. Disconnect it any time, and it
+  sees nothing more.
 - **Web Push services** (Apple, Google or Mozilla, depending on your device): if you turn on the weekly reminder, a
   short reminder message is sent through your device's push service.
 
@@ -44,7 +52,7 @@ Fonts and the dictionary are part of the app: opening Boekenwurm sends nothing t
 ## Your rights
 
 You can see, export and erase your data in the app (Account → Settings → Your data), and you can withdraw your
-LanguageTool consent or turn off the weekly reminder at any time.
+LanguageTool consent, turn off the weekly reminder or disconnect a connected app at any time.
 
 **What an export leaves out.** For books you photographed, the export lists each book's title, author, ISBN, level,
 pages read, progress and when you added it, but not the book's text. That text is the author's and publisher's work,
@@ -60,6 +68,7 @@ Protection Authority (Autoriteit Persoonsgegevens).
 - LanguageTool: **explicit consent**, asked before first use, as diary entries may contain special-category data
   (health, sexuality, beliefs). Declining keeps the diary fully usable.
 - Weekly reminder: consent (you turn it on; the browser also asks).
+- Connected apps: performance of the service you asked for (you pair the app yourself, and can disconnect it).
 - Translation and page reading: performance of the service, limited to what the feature needs.
 - Counting page readings, and the alert at 200 a month: legitimate interest (keeping a paid-for service fair and its
   costs in hand). Only the count, the month and your account email are used.

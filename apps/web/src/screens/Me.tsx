@@ -25,6 +25,7 @@ import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
 import { startGame } from "../lib/hexbound.ts";
+import { createPairingCode, disconnect, listConnections, NotReady, PAIRING_MINUTES, type Connection } from "../lib/connections.ts";
 
 /** The Account tab's categories. New features go into one of these. */
 type View = "achievements" | "reading" | "settings" | "experimental" | "privacy";
@@ -200,6 +201,7 @@ export function Me() {
       {view === "settings" && (
         <div className="panels" role="tabpanel" id="view-settings" aria-labelledby="tab-settings">
           <SignIn />
+          <ConnectedApps />
           <Localization />
           <section className="panel">
             <h2>{t("account.name")}</h2>
@@ -292,6 +294,7 @@ function Privacy() {
         <li>{t.rich("privacy.vision")}</li>
         <li>{t.rich("privacy.claude")}</li>
         <li>{t.rich("privacy.reminder")}</li>
+        <li>{t.rich("privacy.apps")}</li>
         <li>{t.rich("privacy.fonts")}</li>
       </ul>
       <div className="row">
@@ -484,6 +487,110 @@ function LookupsSection() {
 // ---------------------------------------------------------------- access code
 
 /** An access code opens a feature that isn't open to everyone yet: for now, Google page reading. */
+/**
+ * Account → Settings → Connected apps: pair an app such as Poortwachter with a 10-minute code, see what is connected,
+ * disconnect it. Connected apps see a daily summary of numbers only (migration 0013), never books, words or the diary.
+ */
+function ConnectedApps() {
+  const t = useT();
+  const user = useStore((s) => s.user);
+  const [list, setList] = useState<Connection[] | null>(null);
+  const [code, setCode] = useState<{ code: string; until: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const fail = (x: unknown) => setErr(x instanceof NotReady ? t("apps.notReady") : t("apps.error"));
+  const load = () => listConnections().then(setList, fail);
+  useEffect(() => {
+    if (user) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  // The code disappears when it expires.
+  useEffect(() => {
+    if (!code) return;
+    const left = code.until - Date.now();
+    const timer = setTimeout(() => setCode(null), Math.max(0, left));
+    return () => clearTimeout(timer);
+  }, [code]);
+  // While a code is shown, look for the new connection so it appears as soon as the app pairs.
+  useEffect(() => {
+    if (!code) return;
+    const timer = setInterval(() => void listConnections().then((l) => {
+      if (list && l.length > list.length) {
+        setCode(null);
+        toast(t("apps.paired"));
+      }
+      setList(l);
+    }, () => {}), 4000);
+    return () => clearInterval(timer);
+  }, [code, list, t]);
+
+  return (
+    <section className="panel" id="connected-apps">
+      <h2>{t("apps.title")}</h2>
+      <p>{t("apps.lead")}</p>
+      {!user ? (
+        <p className="small">{t("apps.signIn")}</p>
+      ) : (
+        <>
+          {code ? (
+            <div className="stack">
+              <p style={{ margin: 0 }}>{t("apps.code")}</p>
+              <p className="num" style={{ fontSize: "2rem", letterSpacing: "0.15em", margin: 0 }} aria-live="polite">{code.code}</p>
+              <span className="small">{t("apps.expires", { time: new Date(code.until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}</span>
+            </div>
+          ) : (
+            <button
+              className="btn primary"
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setErr(null);
+                setBusy(true);
+                try {
+                  setCode({ code: await createPairingCode("poortwachter"), until: Date.now() + PAIRING_MINUTES * 60_000 });
+                } catch (x) {
+                  fail(x);
+                }
+                setBusy(false);
+              }}
+            >
+              {busy ? t("apps.pairing") : t("apps.pair")}
+            </button>
+          )}
+          {err && <span className="error">{err}</span>}
+          {list && list.length === 0 && !code && <p className="small">{t("apps.none")}</p>}
+          {list?.map((c) => (
+            <div className="row" key={c.id}>
+              <span className="grow">
+                <b>{c.name}</b>
+                <br />
+                <span className="small">
+                  {t("apps.connected", { date: t.date(Date.parse(c.created_at)) })} · {c.last_used_at ? t("apps.lastUsed", { date: t.date(Date.parse(c.last_used_at)) }) : t("apps.neverUsed")}
+                </span>
+              </span>
+              <button
+                className="btn small ghost"
+                type="button"
+                onClick={async () => {
+                  try {
+                    await disconnect(c.id);
+                    toast(t("apps.disconnected"));
+                    await load();
+                  } catch (x) {
+                    fail(x);
+                  }
+                }}
+              >
+                {t("apps.disconnect")}
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+    </section>
+  );
+}
+
 function AccessCodeSection() {
   const user = useStore((s) => s.user);
   const features = useStore((s) => s.features);

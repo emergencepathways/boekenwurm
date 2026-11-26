@@ -24,6 +24,8 @@
   Cache-Control: no-cache
 /version.json
   Cache-Control: no-store
+/connect.json
+  Cache-Control: no-cache
 
 # The free page-reading model changes rarely; the dictionary is rebuilt with each deploy.
 /tesseract/*

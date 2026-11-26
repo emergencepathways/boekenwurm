@@ -172,6 +172,22 @@ await ctx.route("**/rest/v1/rpc/redeem_code", async (r) => {
   await r.fulfill({ status: ok ? 200 : 400, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
     body: JSON.stringify(ok ? "google_page_reading" : { code: "22023", message: "That code isn't valid" }) });
 });
+// Connected apps (migration 0013), mocked: one pairing code, and a connection list the test fills in.
+const apps = { list: [], codes: 0, deleted: 0 };
+await ctx.route("**/rest/v1/rpc/create_pairing_code", async (r) => {
+  apps.codes++;
+  await r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify("K7QM-3XPA") });
+});
+await ctx.route("**/rest/v1/app_connections*", async (r) => {
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" };
+  if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors });
+  if (r.request().method() === "DELETE") {
+    apps.list = [];
+    apps.deleted++;
+    return r.fulfill({ status: 204, headers: cors });
+  }
+  await r.fulfill({ status: 200, contentType: "application/json", headers: cors, body: JSON.stringify(apps.list) });
+});
 await ctx.route("**/rest/v1/feature_access*", (r) => r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
   body: JSON.stringify([...(vision.redeemed ? [{ feature: "google_page_reading" }] : []), ...(vision.admin ? [{ feature: "admin" }] : [])]) }));
 await ctx.route("**/rest/v1/page_read_usage*", (r) => r.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
@@ -866,6 +882,24 @@ await page.getByRole("button", { name: "Use code" }).click();
 await page.getByText("Google page reading is on.", { exact: true }).waitFor();
 check(true, "the right code turns on Google page reading");
 await shot("18-access-code");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+
+step("connected apps: pair Poortwachter with a code, see it, disconnect it");
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Settings" }).click();
+await page.getByRole("heading", { name: "Connected apps" }).waitFor();
+check(await page.getByText("No apps connected.").isVisible(), "nothing connected at first");
+await page.getByRole("button", { name: "Pair Poortwachter" }).click();
+await page.getByText("K7QM-3XPA").waitFor();
+check(apps.codes === 1 && (await page.getByText(/Valid until/).isVisible()), "a pairing code, and how long it is valid");
+await shot("18b-pairing-code");
+apps.list = [{ id: "c0000000-0000-4000-8000-000000000001", app: "poortwachter", name: "Poortwachter on laptop", created_at: new Date().toISOString(), last_used_at: null }];
+await page.getByText("Poortwachter is connected.").waitFor({ timeout: 10000 });
+check(await page.getByText("Poortwachter on laptop").isVisible(), "once the app pairs, the code goes and the connection shows");
+check((await page.getByText("K7QM-3XPA").count()) === 0, "the used code is no longer shown");
+await page.getByRole("button", { name: "Disconnect" }).click();
+await page.getByText("No apps connected.").waitFor();
+check(apps.deleted === 1, "Disconnect removes the connection");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 
 step("photo flow: camera explanation, then a library photo fallback");

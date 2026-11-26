@@ -19,6 +19,12 @@ function versionFile(): Plugin {
     apply: "build",
     generateBundle() {
       this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ id: BUILD_ID }) });
+      // Where connected apps (Poortwachter) find this deployment's database: the same two public values the app is
+      // built with (row-level security and the apps' own tokens protect the data). docs/CONNECTED_APPS.md.
+      const url = process.env.VITE_SUPABASE_URL, key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      if (url && key) {
+        this.emitFile({ type: "asset", fileName: "connect.json", source: JSON.stringify({ api: 1, supabase_url: url, publishable_key: key }) });
+      }
     },
   };
 }

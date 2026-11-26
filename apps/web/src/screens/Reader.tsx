@@ -14,7 +14,7 @@ import { db } from "../lib/db.ts";
 import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
 import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
-import { bookFinished, checkAchievements, pagesRead as pagesReadMilestone, paragraphRead, streakBonus } from "../lib/play.ts";
+import { bookFinished, checkAchievements, pagesRead as pagesReadMilestone, paragraphRead, rankNow, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
 import { ADMIN, usePhotoPages } from "../lib/features.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
@@ -63,6 +63,8 @@ interface RS {
   xp: number;
   /** This session is in unlimited lookup mode. */
   lookupMode: boolean;
+  /** Active reading time of this session (engine activity.ts): on screen, with input in the last two minutes. */
+  clock: E.ActiveClock;
 }
 
 export function Reader({ bookId }: { bookId: string }) {
@@ -81,6 +83,7 @@ export function Reader({ bookId }: { bookId: string }) {
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
     sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null, xp: 0, lookupMode: false,
+    clock: E.startClock(Date.now()),
   }).current;
   const inflight = useRef(new Map<number, Promise<void>>()).current;
 
@@ -119,6 +122,22 @@ export function Reader({ bookId }: { bookId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
+  // Active reading time for connected apps: any input restarts the two-minute window; ticks count time on screen.
+  useEffect(() => {
+    const visible = () => document.visibilityState === "visible";
+    const input = () => void (r.clock = E.noteInput(r.clock, Date.now(), visible()));
+    const tick = () => void (r.clock = E.tickClock(r.clock, Date.now(), visible()));
+    const events = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
+    for (const ev of events) window.addEventListener(ev, input, { passive: true, capture: true });
+    document.addEventListener("visibilitychange", tick);
+    const t = setInterval(tick, 15000);
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, input, { capture: true });
+      document.removeEventListener("visibilitychange", tick);
+      clearInterval(t);
+    };
+  }, [r]);
+
   // Keep the "Undo tap" button honest: it disappears when the 5 seconds are up.
   useEffect(() => {
     const t = setInterval(() => r.sel != null && r.session?.current && bump(), 1000);
@@ -147,6 +166,7 @@ export function Reader({ bookId }: { bookId: string }) {
       : E.startSession(rules(), { id: crypto.randomUUID() });
     r.lookupMode = lookupMode();
     r.startedAt = Date.now();
+    r.clock = E.startClock(r.startedAt);
     r.sentences = {};
     r.summary = null;
     r.sel = null;
@@ -339,10 +359,18 @@ export function Reader({ bookId }: { bookId: string }) {
     }
   }
 
+  /** What connected apps get with a session: active time, the level of the text read, and the reader's rank. */
+  function sessionExtras() {
+    const clock = E.tickClock(r.clock, Date.now(), document.visibilityState === "visible");
+    const matchedMode = r.book?.position.mode === "match" && mode === "match";
+    const textLevel = (matchedMode ? getState().profile.progress.level : r.book?.level ?? null) as E.CefrLevel | null;
+    return { activeSeconds: E.activeSeconds(clock), textLevel, readerRank: rankNow().rank };
+  }
+
   async function finish(kind: "complete" | "ended" | "lookup", streakLength: number) {
     const s = r.session!;
     r.session = null;
-    const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : kind === "lookup" ? "left" : "strike", sentences: r.sentences, lookupMode: r.lookupMode });
+    const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : kind === "lookup" ? "left" : "strike", sentences: r.sentences, lookupMode: r.lookupMode, ...sessionExtras() });
     r.summary = { kind, streakLength, list, paragraphs: s.results.length };
     void checkAchievements(); // words looked up count once the session is recorded
     if (r.pos >= r.text!.paragraphs.length && r.book?.source !== "photo") r.pos = 0;
@@ -375,7 +403,7 @@ export function Reader({ bookId }: { bookId: string }) {
     r.session = null;
     if (!s.results.length && !s.reveals.length && !s.current?.reveals.length) return;
     const withCurrent = s.current ? { ...s, reveals: [...s.reveals, ...s.current.reveals], current: null } : s;
-    await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences, lookupMode: r.lookupMode });
+    await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences, lookupMode: r.lookupMode, ...sessionExtras() });
     void checkAchievements();
   }
 

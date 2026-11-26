@@ -21,7 +21,8 @@ owner asks, and update the design doc and the tests together.
   `diary.ts` (the 20 prompts, one entry a day, weekly reminder, free writing),
   `xp.ts` (XP and ranks A0–C2), `achievements.ts` (tiered badges), `play.ts` (the synced play record and its merge),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
-  `definitions.ts` (English/Dutch), `hexbound.ts` (the secret Mörk Borg game mode, docs/HEXBOUND.md). No dependencies, so it ports to Lua for KOReader.
+  `definitions.ts` (English/Dutch), `hexbound.ts` (the secret Mörk Borg game mode, docs/HEXBOUND.md),
+  `activity.ts` (active reading time for connected apps). No dependencies, so it ports to Lua for KOReader.
 - `packages/dutch/` — base forms (`lemma.ts`), twin of `services/ingest/boekenwurm_ingest/lemma.py`; both must pass
   `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
 - `packages/ai/` — model-agnostic level work: book grading, matching a paragraph to a level, word-in-context;
@@ -38,6 +39,8 @@ owner asks, and update the design doc and the tests together.
   20 a day for the whole account, with no reading on the device past it (migration 0004), and the owner's alert at
   200 pages in a month (`_shared/alerts.ts`, migration 0012: email via Resend, push to the owner's phone). In each, `handler.ts` is plain TypeScript, tested under Node, and `index.ts` is the Deno
   entry; `_shared/common.ts` has what they share (CORS, the reader's token, claiming a daily use).
+- `docs/CONNECTED_APPS.md` — apps a reader pairs (Poortwachter): pairing codes, the daily summary of numbers (never
+  text), the calendar feed (`supabase/functions/calendar/`), migration 0013.
 - `docs/ARCHITECTURE.md` — the hosted app: installable web app (no app stores), React + Vite, Supabase (EU), email
   link + Google sign-in, sync, camera flow, free mode vs. the reader's own Claude key.
 - Branch `playtest-v1` — the playtest as the owner tested it, kept as the reference.

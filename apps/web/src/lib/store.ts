@@ -215,6 +215,11 @@ export interface FinishedSession {
   lookupMode?: boolean;
   /** A turn of the Hex-bound Collector game: its words join the word book and reviews, but nothing else (no streak, no session row). */
   game?: boolean;
+  /** Active reading time in seconds (engine activity.ts), for connected apps. */
+  activeSeconds?: number;
+  /** The level of the text read (the matched level in match mode, else the book's level) and the reader's rank then. */
+  textLevel?: E.CefrLevel | null;
+  readerRank?: string | null;
 }
 
 /**
@@ -265,6 +270,9 @@ export async function recordFinished(f: FinishedSession): Promise<{ list: E.Stud
     token_earned: s.tokenEarned,
     ended_by: f.endedBy,
     results: s.results,
+    active_seconds: Math.max(0, Math.min(86400, Math.round(f.activeSeconds ?? 0))),
+    text_level: f.textLevel ?? null,
+    reader_rank: f.readerRank ?? null,
   };
   const outbox = ((await db.get<SessionRow[]>("kv", "sessionOutbox")) ?? []).concat(f.game ? [] : [row]);
 

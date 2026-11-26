@@ -496,6 +496,24 @@ export const en = {
   "loc.partial": "A few less-used screens are still in English while the translation grows.",
   "loc.changed": "Language: {name}",
 
+  // ---------------------------------------------------------------- connected apps (Account → Settings)
+  "apps.title": "Connected apps",
+  "apps.lead": "Let an app such as Poortwachter see your daily numbers: pages read, active reading minutes, cards reviewed, and whether you wrote in your diary. Never your books, words or diary text.",
+  "apps.signIn": "Sign in first: apps connect to your account.",
+  "apps.pair": "Pair Poortwachter",
+  "apps.pairing": "Making a code…",
+  "apps.code": "Type this code into Poortwachter (Settings → Boekenwurm). It works once.",
+  "apps.expires": "Valid until {time}",
+  "apps.paired": "Poortwachter is connected.",
+  "apps.none": "No apps connected.",
+  "apps.connected": "Connected {date}",
+  "apps.lastUsed": "last used {date}",
+  "apps.neverUsed": "not used yet",
+  "apps.disconnect": "Disconnect",
+  "apps.disconnected": "Disconnected: that app can no longer see anything.",
+  "apps.notReady": "Connected apps aren't set up yet (the database needs migration 0013).",
+  "apps.error": "That didn't work. Check your connection and try again.",
+
   // ---------------------------------------------------------------- privacy (About)
   "privacy.summary": "**Privacy**: what Boekenwurm keeps, and where",
   "privacy.device": "**On this device:** your books, reading progress, words, flashcards and settings, and a game in progress if you play one. Your **diary** stays only here: Boekenwurm never receives or stores it.",
@@ -505,6 +523,7 @@ export const en = {
   "privacy.vision": "**Book photos** (access-code holders only): each page photo is sent to Google Cloud Vision to be read, up to 20 pages a day for your whole account. It stays on this device only until its page is read and checked, then it is deleted. The text read from it stays in your book so you can read it here, and is left out when you export your data. If your account reaches 200 pages in a month, Emergence Pathways is told, with your account email.",
   "privacy.claude": "**Anthropic (Claude)**: only if you add your own Claude key (Experimental), the text a feature needs.",
   "privacy.reminder": "**Weekly reminder**: if you turn it on, this phone's notification address and your time zone, nothing you write.",
+  "privacy.apps": "**Apps you connect** (such as Poortwachter): only if you pair one, a daily summary of numbers: pages, active reading minutes, cards reviewed, whether you wrote in your diary (never the text), and your rank.",
   "privacy.fonts": "**Fonts** are part of the app: opening it sends nothing to a font service.",
   "privacy.ltState": "LanguageTool for your diary: **{state}**",
   "privacy.ltSince": " (since {date})",

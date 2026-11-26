@@ -73,6 +73,14 @@ export function rankFor(totalXp: number): RankStatus {
   return { rank: RANKS[i], next, into, span, share: next ? into / span : 1 };
 }
 
+/**
+ * Is a text at or above the reader's rank? For connected apps (Poortwachter counts reading only at or above the
+ * reader's level). A text without a level never counts; every set level counts for an A0 reader.
+ */
+export function isAtOrAboveRank(textLevel: CefrLevel | null | undefined, rank: Rank): boolean {
+  return textLevel != null && RANKS.indexOf(textLevel) >= RANKS.indexOf(rank);
+}
+
 /** Is a book's level a level or more above the reader's rank? A0 counts as below A1. */
 export function isAboveRank(bookLevel: CefrLevel | null | undefined, rank: Rank): boolean {
   return bookLevel != null && RANKS.indexOf(bookLevel) > RANKS.indexOf(rank);

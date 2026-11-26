@@ -138,6 +138,10 @@ export interface SessionRow {
   token_earned: boolean;
   ended_by: "strike" | "end_of_book" | "left";
   results: unknown[];
+  /** Active reading time (engine activity.ts), the level of the text read and the reader's rank, for connected apps (migration 0013). */
+  active_seconds?: number;
+  text_level?: CefrLevel | null;
+  reader_rank?: string | null;
 }
 
 /** A reader's own imported word list (e.g. from their textbook). Kept on the device. */

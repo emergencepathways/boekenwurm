@@ -390,6 +390,139 @@ do $$ declare r record; d date := date_trunc('month', current_date)::date; begin
 end $$;
 reset role;
 
+-- connected apps (migration 0013): pairing, the daily summary, the calendar feed
+reset role;
+delete from reading_sessions where user_id = '00000000-0000-0000-0000-00000000000a';
+delete from cards where user_id = '00000000-0000-0000-0000-00000000000a';
+insert into books (id, user_id, source, title, level) values
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'epub', 'Testboek', 'B1');
+insert into paragraphs (id, user_id, book_id, ord, page_number, text, countable) values
+  ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', 0, 10, 'Een.', 120),
+  ('30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', 1, 10, 'Twee.', 120),
+  ('30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', 2, 11, 'Drie.', 120),
+  ('30000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', 3, null, 'Vier.', 300),
+  ('30000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', 4, null, 'Vijf.', 250);
+-- at level: B1 text for an A2 reader, 10 active minutes, pages 10 and 11
+-- below level: A1 text for an A2 reader, 5 active minutes, 550 words without page numbers = 2 pages
+-- outside the day: doesn't count at all
+insert into reading_sessions (id, user_id, started_at, ended_at, preset, level, paragraphs, results, active_seconds, text_level, reader_rank) values
+  ('40000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', '2026-11-26 09:00+00', '2026-11-26 09:20+00', 'standard', 'A2', 3,
+   '[{"paragraphId":"30000000-0000-0000-0000-000000000001"},{"paragraphId":"30000000-0000-0000-0000-000000000002"},{"paragraphId":"30000000-0000-0000-0000-000000000003"}]', 600, 'B1', 'A2'),
+  ('40000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000a', '2026-11-26 12:00+00', '2026-11-26 12:10+00', 'standard', 'A2', 2,
+   '[{"paragraphId":"30000000-0000-0000-0000-000000000004"},{"paragraphId":"30000000-0000-0000-0000-000000000005"}]', 300, 'A1', 'A2'),
+  ('40000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', '2026-11-25 12:00+00', '2026-11-25 12:10+00', 'standard', 'A2', 1,
+   '[{"paragraphId":"30000000-0000-0000-0000-000000000001"}]', 900, 'B1', 'A2');
+insert into cards (user_id, lemma, last_review) values
+  ('00000000-0000-0000-0000-00000000000a', 'huis', '2026-11-26 10:00+00'),
+  ('00000000-0000-0000-0000-00000000000a', 'fiets', '2026-11-26 11:00+00'),
+  ('00000000-0000-0000-0000-00000000000a', 'kaas', '2026-11-25 11:00+00');
+update profiles set progress = '{"play": {"diaryDays": ["2026-11-24", "2026-11-26"]}}'
+  where user_id = '00000000-0000-0000-0000-00000000000a';
+
+set role anon;
+do $$ begin
+  perform create_pairing_code('poortwachter');
+  raise exception 'FAIL: anon made a pairing code';
+exception when insufficient_privilege then raise notice 'ok: only signed-in readers make pairing codes';
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+create temp table pair as select create_pairing_code('poortwachter') as code;
+grant select on pair to anon;
+do $$ begin
+  if (select code from pair) !~ '^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$' then
+    raise exception 'FAIL: pairing code looks like %', (select code from pair);
+  end if;
+  raise notice 'ok: pairing codes look like XXXX-XXXX, without look-alike characters';
+end $$;
+
+reset role;
+set role anon;
+do $$ begin
+  perform claim_pairing_code('ZZZZ-ZZZZ', 'x');
+  raise exception 'FAIL: a wrong code was accepted';
+exception when invalid_parameter_value then raise notice 'ok: a wrong pairing code is refused';
+end $$;
+create temp table conn as select claim_pairing_code(lower(replace((select code from pair), '-', ' ')), 'Poortwachter on laptop') as j;
+do $$ begin
+  if length((select j ->> 'token' from conn)) <> 90 then raise exception 'FAIL: token length'; end if;
+  perform claim_pairing_code((select code from pair), 'again');
+  raise exception 'FAIL: a code was used twice';
+exception when invalid_parameter_value then raise notice 'ok: a pairing code works once (case, dashes and spaces ignored)';
+end $$;
+do $$ begin
+  perform 1 from app_connections;
+  raise exception 'FAIL: anon read connections';
+exception when insufficient_privilege then raise notice 'ok: apps cannot list connections';
+end $$;
+
+do $$ declare r jsonb; begin
+  r := connection_summary((select j ->> 'token' from conn), '2026-11-26 01:00+00', '2026-11-27 01:00+00', '2026-11-26');
+  if (r ->> 'sessions')::int <> 2 then raise exception 'FAIL: sessions %', r; end if;
+  if (r ->> 'paragraphs')::int <> 5 or (r ->> 'paragraphs_at_level')::int <> 3 then raise exception 'FAIL: paragraphs %', r; end if;
+  if (r ->> 'pages')::int <> 4 or (r ->> 'pages_at_level')::int <> 2 then raise exception 'FAIL: pages %', r; end if;
+  if (r ->> 'active_minutes')::numeric <> 15 or (r ->> 'active_minutes_at_level')::numeric <> 10 then raise exception 'FAIL: minutes %', r; end if;
+  if (r ->> 'cards_reviewed')::int <> 2 then raise exception 'FAIL: cards %', r; end if;
+  if not (r ->> 'diary_done')::boolean then raise exception 'FAIL: diary %', r; end if;
+  if r ->> 'rank' <> 'A2' then raise exception 'FAIL: rank %', r; end if;
+  raise notice 'ok: summary: 4 pages (2 at level), 15 active minutes (10 at level), 2 cards, diary written';
+  r := connection_summary((select j ->> 'token' from conn), '2026-11-27 01:00+00', '2026-11-28 01:00+00', '2026-11-27');
+  if (r ->> 'pages')::int <> 0 or (r ->> 'diary_done')::boolean then raise exception 'FAIL: an empty day %', r; end if;
+  raise notice 'ok: a day without reading is all zeros';
+end $$;
+do $$ begin
+  perform connection_summary('not-a-token', now() - interval '1 day', now(), current_date);
+  raise exception 'FAIL: a wrong token got a summary';
+exception when invalid_authorization_specification then raise notice 'ok: a wrong token gets nothing';
+end $$;
+do $$ begin
+  perform connection_summary((select j ->> 'token' from conn), now() - interval '10 days', now(), current_date);
+  raise exception 'FAIL: a 10-day summary was allowed';
+exception when invalid_parameter_value then raise notice 'ok: summaries cover at most three days';
+end $$;
+
+create temp table feed as select put_app_calendar((select j ->> 'token' from conn), E'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n') as secret;
+do $$ declare s2 text; begin
+  if length((select secret from feed)) <> 60 then raise exception 'FAIL: no feed secret'; end if;
+  if put_app_calendar((select j ->> 'token' from conn), E'BEGIN:VCALENDAR\r\nX-V:2\r\nEND:VCALENDAR\r\n') is not null then
+    raise exception 'FAIL: the address changed on an update';
+  end if;
+  if app_calendar_ics((select secret from feed)) !~ 'X-V:2' then raise exception 'FAIL: the feed is not the latest'; end if;
+  s2 := put_app_calendar((select j ->> 'token' from conn), E'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n', true);
+  if app_calendar_ics((select secret from feed)) is not null or app_calendar_ics(s2) is null then
+    raise exception 'FAIL: a new address did not replace the old one';
+  end if;
+  perform put_app_calendar((select j ->> 'token' from conn), 'hello');
+  raise exception 'FAIL: a non-calendar was stored';
+exception when invalid_parameter_value then raise notice 'ok: the calendar feed: one secret address, updated in place, replaceable; only iCalendar';
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+do $$ begin
+  if exists (select 1 from app_connections) then raise exception 'FAIL: B sees A''s connections'; end if;
+  delete from app_connections;
+  raise notice 'ok: readers cannot see or delete each other''s connections';
+end $$;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  if (select count(*) from app_connections) <> 1 then raise exception 'FAIL: A cannot see the connection'; end if;
+  if (select name from app_connections) <> 'Poortwachter on laptop' then raise exception 'FAIL: connection name'; end if;
+  delete from app_connections;
+  raise notice 'ok: a reader sees their connection and can disconnect it';
+end $$;
+reset role;
+set role anon;
+do $$ begin
+  perform connection_summary((select j ->> 'token' from conn), now() - interval '1 day', now(), current_date);
+  raise exception 'FAIL: a disconnected app still got a summary';
+exception when invalid_authorization_specification then raise notice 'ok: once disconnected, the token opens nothing';
+end $$;
+reset role;
+
 -- deleting an account removes everything
 delete from auth.users where id = '00000000-0000-0000-0000-00000000000a';
 select 'rows left for A: ' || (select count(*) from books where user_id = '00000000-0000-0000-0000-00000000000a')

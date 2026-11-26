@@ -16,3 +16,8 @@ was a draft; the notice itself is now shown to readers in full (Account → Priv
   Resend naming the reader's account email (legitimate interest: cost control of a paid-for service). Resend is a US
   service: confirm the transfer basis (EU-US Data Privacy Framework certification or standard contractual clauses)
   and add Resend to the processor list.
+- **Connected apps (2026-11-26):** a reader can pair an app (first: Poortwachter, the owner's own study gate) that
+  then receives a daily summary of numbers only (pages, active reading minutes, cards reviewed, whether a diary entry
+  counted that day, rank), never text. Basis: performance of the service the reader asked for. The `diary_done` flag
+  reveals only that an entry was written, not its content; confirm that this needs no separate consent. Active
+  reading time is a new per-session measurement: confirm it is covered by the notice as written.

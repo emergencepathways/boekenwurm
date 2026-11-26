@@ -166,7 +166,13 @@ async function pushSessions(sb: SB, userId: string) {
   if (!outbox.length) return;
   const known = new Set(getState().books.map((b) => b.id));
   const rows = outbox.map((r) => ({ ...r, user_id: userId, book_id: r.book_id && known.has(r.book_id) ? r.book_id : null }));
-  check(await sb.from("reading_sessions").upsert(rows, { onConflict: "id", ignoreDuplicates: true }));
+  let res = await sb.from("reading_sessions").upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+  // Before migration 0013 the server has no columns for active time and levels: send the rows without them.
+  if (res.error && /active_seconds|text_level|reader_rank/.test(res.error.message ?? "")) {
+    const plain = rows.map(({ active_seconds: _a, text_level: _t, reader_rank: _r, ...rest }) => rest);
+    res = await sb.from("reading_sessions").upsert(plain, { onConflict: "id", ignoreDuplicates: true });
+  }
+  check(res);
   const now = (await db.get<SessionRow[]>("kv", "sessionOutbox")) ?? [];
   await db.put("kv", now.slice(outbox.length), "sessionOutbox");
 }
