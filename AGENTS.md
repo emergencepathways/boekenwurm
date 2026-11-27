@@ -19,8 +19,8 @@ They were built for the owner's own use: pairing Poortwachter, a daily summary o
 The app gate (`docs/APP_GATE.md`) may be removed before launch with `scripts/remove-app-gate.sh`. Keep everything of it
 in `apps/web/src/gate/` and `apps/web/test/gate/`, or between `APPGATE-REMOVE-START` / `APPGATE-REMOVE-END` markers,
 and build nothing else on it.
-<!-- APPGATE-REMOVE-END -->
 
+<!-- APPGATE-REMOVE-END -->
 ## The one hard rule
 
 Private content (the owner's textbook and books) never enters the repository. See `CLAUDE.md`.

@@ -40,4 +40,3 @@ was a draft; the notice itself is now shown to readers in full (Account → Priv
   list outside Boekenwurm's processing, and (2) whether the purpose (helping the reader limit their social media use
   through study) needs anything beyond the notice text if the feature is ever offered to readers.
 <!-- APPGATE-REMOVE-END -->
-

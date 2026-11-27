@@ -22,8 +22,8 @@ between `APPGATE-REMOVE-START` and `APPGATE-REMOVE-END` (or ends with `APPGATE-R
 such as a Markdown table row). `scripts/remove-app-gate.sh --check` lists what is left of it; without `--check` it
 removes it. Its privacy rules: which apps are gated, the counts and the gate's own cards stay on the device; the app's
 name only ever travels after `#`. Never build other features on it.
-<!-- APPGATE-REMOVE-END -->
 
+<!-- APPGATE-REMOVE-END -->
 Read `docs/DESIGN.md` before changing behaviour. The checkpoint rules there are the owner's; change them only when the
 owner asks, and update the design doc and the tests together.
 
