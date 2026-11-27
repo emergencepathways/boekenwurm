@@ -12,6 +12,18 @@ submission.** The plan, file by file, is `docs/PRELAUNCH.md`; everything involve
 approve, tag or submit a public release while `scripts/prelaunch-check.sh` fails, and don't build new features on
 connected apps.
 
+<!-- APPGATE-REMOVE-START -->
+## The app gate: an experiment that may be removed before launch
+
+The app gate (`docs/APP_GATE.md`: iPhone Shortcuts send the owner here before TikTok and the like, for a few minutes of
+reading and cards) is for the owner's own use. The owner may decide to remove it before launch, so keep it removable
+in one step: everything new goes in `apps/web/src/gate/` or `apps/web/test/gate/`, and any line it needs elsewhere sits
+between `APPGATE-REMOVE-START` and `APPGATE-REMOVE-END` (or ends with `APPGATE-REMOVE-LINE` where a block can't go,
+such as a Markdown table row). `scripts/remove-app-gate.sh --check` lists what is left of it; without `--check` it
+removes it. Its privacy rules: which apps are gated, the counts and the gate's own cards stay on the device; the app's
+name only ever travels after `#`. Never build other features on it.
+
+<!-- APPGATE-REMOVE-END -->
 Read `docs/DESIGN.md` before changing behaviour. The checkpoint rules there are the owner's; change them only when the
 owner asks, and update the design doc and the tests together.
 

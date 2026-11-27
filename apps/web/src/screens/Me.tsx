@@ -26,6 +26,9 @@ import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
 import { pageReaderFor } from "../lib/pagereader.ts";
 import { startGame } from "../lib/hexbound.ts";
+// APPGATE-REMOVE-START (docs/APP_GATE.md)
+import { AppGateEntry } from "../gate/index.tsx";
+// APPGATE-REMOVE-END
 import { allowLink, clearLinkRequest, disconnect, exportConnections, forgetConnections, linkRequest, listConnections, NotReady, startUrl, type Connection } from "../lib/connections.ts";
 
 /** The Account tab's categories. New features go into one of these. */
@@ -191,6 +194,9 @@ export function Me() {
           <ClaudeSection />
           <AccessCodeSection />
           <ConnectedApps />
+          {/* APPGATE-REMOVE-START */}
+          <AppGateEntry />
+          {/* APPGATE-REMOVE-END */}
         </div>
       )}
 
@@ -296,6 +302,9 @@ function Privacy() {
         <li>{t.rich("privacy.claude")}</li>
         <li>{t.rich("privacy.reminder")}</li>
         <li>{t.rich("privacy.apps")}</li>
+        {/* APPGATE-REMOVE-START */}
+        <li>{t.rich("privacy.gate")}</li>
+        {/* APPGATE-REMOVE-END */}
         <li>{t.rich("privacy.fonts")}</li>
       </ul>
       <div className="row">

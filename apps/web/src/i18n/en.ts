@@ -534,6 +534,9 @@ export const en = {
   "privacy.claude": "**Anthropic (Claude)**: not used for readers. Only on the app owner's own account, while it's being tested, Claude explains tapped words (the word and its sentence) and helps read photographed pages, with her own key.",
   "privacy.reminder": "**Weekly reminder**: if you turn it on, this phone's notification address and your time zone, nothing you write.",
   "privacy.apps": "**Apps you connect** (Poortwachter, for now only on the owner's account): only after you allow it, today's numbers: pages, active reading minutes (measured only while connected), cards reviewed, whether you wrote in your diary (never the text).",
+  // APPGATE-REMOVE-START (docs/APP_GATE.md)
+  "privacy.gate": "**App gate** (an experiment, owner's account only): which apps you gate, how often each one sent you to the gate (last 30 days), its settings and your own gate cards stay **only on this device**, never synced. The app's name reaches Boekenwurm after “#” in the address, which isn't sent to a server.",
+  // APPGATE-REMOVE-END
   "privacy.fonts": "**Fonts** are part of the app: opening it sends nothing to a font service.",
   "privacy.ltState": "LanguageTool for your diary: **{state}**",
   "privacy.ltSince": " (since {date})",

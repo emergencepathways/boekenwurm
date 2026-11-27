@@ -11,6 +11,12 @@ measure active reading time or share anything with other apps.
 **Agents and reviewers:** do not approve, tag or submit a public release (web launch, App Store, Google Play) while
 `scripts/prelaunch-check.sh` finds anything. Do not build new features on connected apps.
 
+<!-- APPGATE-REMOVE-START -->
+**Also decide on the app gate** (`docs/APP_GATE.md`), an experiment for the owner's own use. It isn't a blocker:
+nothing of it reaches the servers. To keep it for readers, have its privacy text reviewed (`docs/LEGAL-REVIEW.md`); to
+remove it, run `scripts/remove-app-gate.sh` (it takes this paragraph out too).
+
+<!-- APPGATE-REMOVE-END -->
 ## Removal steps
 
 1. **Database.** Copy `supabase/prelaunch/remove_connected_apps.sql` into `supabase/migrations/` with the next

@@ -17,6 +17,9 @@ import { PhotoBook } from "./screens/PhotoBook.tsx";
 import { InstallHelp } from "./screens/InstallHelp.tsx";
 import { Welcome } from "./screens/Welcome.tsx";
 import { parseLinkRequest, saveLinkRequest } from "./lib/connections.ts";
+// APPGATE-REMOVE-START (docs/APP_GATE.md: the app gate, removed in one step by scripts/remove-app-gate.sh)
+import { GateRoot, useGateRoute } from "./gate/index.tsx";
+// APPGATE-REMOVE-END
 
 const TABS: Array<[Tab, Key, () => React.JSX.Element]> = [
   ["home", "tab.home", Icon.home],
@@ -36,6 +39,9 @@ export function App() {
   const language = useStore((s) => s.profile.settings.language);
   const photoPages = usePhotoPages();
   const game = useStore((s) => s.game);
+  // APPGATE-REMOVE-START
+  const gateRoute = useGateRoute();
+  // APPGATE-REMOVE-END
   useEffect(() => applyLanguage(language), [language]);
 
   useEffect(() => {
@@ -59,6 +65,10 @@ export function App() {
   useEffect(() => applyTextSize(textSize), [textSize]);
 
   if (!ready) return <div className="app" aria-busy="true" />;
+  // APPGATE-REMOVE-START
+  // Sent here by an iPhone Shortcut ("/#gate=TikTok") or opening the gate's setup: the gate, until it's left.
+  if (gateRoute) return <GateRoot />;
+  // APPGATE-REMOVE-END
   // The secret Mörk Borg mode: while a character lives, the app is only the game (lib/hexbound.ts).
   if (game) return <Hexbound />;
   if (!onboarded) return <Welcome />;

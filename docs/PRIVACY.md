@@ -21,6 +21,7 @@
 | That your account reached 200 page readings in a month, and when | Supabase (EU); the alert by email to Emergence Pathways | So Emergence Pathways can see heavy use early and contact you | As long as you have an account |
 | Apps you connect (such as Poortwachter): the app's name, when you allowed it, when it last asked for today's numbers | Supabase (EU) | So you can see and disconnect them | Until you disconnect the app, it goes 90 days unused, or you erase your account |
 | **Only while an app is connected:** how long you actively read in each session (time with the book on screen and a tap, page turn or scroll in the last 2 minutes), the level of the text and your rank then | With your reading sessions | For the numbers the connected app receives | Until your last connected app is disconnected or expires, then deleted |
+| **App gate** (an experiment, on the owner's account only): the apps you choose to gate, how often each one sent you to the gate and how often you unlocked it, the gate's settings, and the cards you make for it | **Only on your device** (in the browser you use the gate in); never synced or sent anywhere | So the gate works and can show you your counts | Counts: **30 days**, then deleted. Apps, settings and cards: until you delete them (App gate → Delete all app gate data) or clear the browser's data <!-- APPGATE-REMOVE-LINE (docs/APP_GATE.md) --> |
 | Text read from photographed pages | On your device, and in your account if you sign in | So you can read the book here, on all your devices | Until you delete the book or erase your data; **not included in exports** (see "Your rights") |
 
 ## Services that receive data, and when
@@ -46,6 +47,11 @@
   Nothing from earlier days (yesterday only for apps whose day ends after midnight), and never book titles, book
   text, words or diary entries. Disconnect it any time, and it sees nothing more; unused for 90 days, it disconnects
   by itself. Active reading time is measured only while an app is connected, and deleted when the last one goes.
+- **The app gate** (an experiment, on the owner's account only) sends nothing anywhere. Your phone's Shortcut opens <!-- APPGATE-REMOVE-LINE -->
+  Boekenwurm with the app's name after “#” in the address (`/#gate=TikTok`); browsers don't send that part to a <!-- APPGATE-REMOVE-LINE -->
+  server, so neither Boekenwurm's host nor its database learns which apps you gate. The time an app stays unlocked is <!-- APPGATE-REMOVE-LINE -->
+  kept by your own Shortcut, in your own iCloud Drive. Paragraphs you read and Boekenwurm flashcards you answer at the <!-- APPGATE-REMOVE-LINE -->
+  gate are kept like any other reading and review (above). <!-- APPGATE-REMOVE-LINE -->
 - **Web Push services** (Apple, Google or Mozilla, depending on your device): if you turn on the weekly reminder, a
   short reminder message is sent through your device's push service.
 
