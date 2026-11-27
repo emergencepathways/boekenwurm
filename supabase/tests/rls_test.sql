@@ -539,14 +539,15 @@ end $$;
 reset role;
 
 -- today's reading (UTC day), once connected: at level (B1 text, A2 reader, 10 min, pages 10 and 11) and below
--- level (A1 text, 5 min, 550 words without page numbers = 2 pages); yesterday's session doesn't count
-insert into reading_sessions (id, user_id, started_at, ended_at, preset, level, paragraphs, results, active_seconds, text_level, reader_rank) values
-  ('40000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', current_date + interval '1 minute', current_date + interval '21 minutes', 'standard', 'A2', 3,
-   '[{"paragraphId":"30000000-0000-0000-0000-000000000001"},{"paragraphId":"30000000-0000-0000-0000-000000000002"},{"paragraphId":"30000000-0000-0000-0000-000000000003"}]', 600, 'B1', 'A2'),
-  ('40000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000a', current_date + interval '2 minutes', current_date + interval '12 minutes', 'standard', 'A2', 2,
+-- level (A1 text, 5 min, 550 words without page numbers = 2 pages); yesterday's session doesn't count.
+-- The app records paragraphs by their place in the book ("p0" = ord 0); older sessions used the row's uuid (0016).
+insert into reading_sessions (id, user_id, book_id, started_at, ended_at, preset, level, paragraphs, results, active_seconds, text_level, reader_rank) values
+  ('40000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', current_date + interval '1 minute', current_date + interval '21 minutes', 'standard', 'A2', 3,
+   '[{"paragraphId":"p0"},{"paragraphId":"p1"},{"paragraphId":"p2"},{"paragraphId":"p999"},{"paragraphId":"x; drop table books"}]', 600, 'B1', 'A2'),
+  ('40000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000a', null, current_date + interval '2 minutes', current_date + interval '12 minutes', 'standard', 'A2', 2,
    '[{"paragraphId":"30000000-0000-0000-0000-000000000004"},{"paragraphId":"30000000-0000-0000-0000-000000000005"}]', 300, 'A1', 'A2'),
-  ('40000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', current_date - interval '12 hours', current_date - interval '11 hours', 'standard', 'A2', 1,
-   '[{"paragraphId":"30000000-0000-0000-0000-000000000001"}]', 900, 'B1', 'A2');
+  ('40000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-000000000001', current_date - interval '12 hours', current_date - interval '11 hours', 'standard', 'A2', 1,
+   '[{"paragraphId":"p0"}]', 900, 'B1', 'A2');
 insert into cards (user_id, lemma, last_review) values
   ('00000000-0000-0000-0000-00000000000a', 'huis', current_date + interval '3 minutes'),
   ('00000000-0000-0000-0000-00000000000a', 'fiets', current_date + interval '4 minutes'),
