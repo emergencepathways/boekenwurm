@@ -27,3 +27,17 @@ was a draft; the notice itself is now shown to readers in full (Account → Priv
   the measuring: consent at pairing, withdrawn by disconnecting. Because the owner decided to remove the feature
   before launch, a full review of it is only needed if that decision changes; please confirm the removal plan is
   enough (deleting the data with the columns and tables, and the notice text).
+<!-- APPGATE-REMOVE-START (docs/APP_GATE.md) -->
+- **App gate (2026-11-27), an experiment on the owner's account; may be removed before launch in one step
+  (`scripts/remove-app-gate.sh`).** Designed so that nothing new reaches Boekenwurm's servers: the list of gated apps
+  (which can reveal special-category data, e.g. a dating or religious app), the per-app counts and the reader's own
+  gate cards are kept only on the device, counts for 30 days; the app's name travels in the URL fragment, which is
+  not sent in HTTP requests, so it is not in Cloudflare's or Supabase's logs; the unlock time is kept by the reader's
+  own Shortcut in their iCloud Drive. Reading and flashcard answers at the gate go into the existing tables, covered
+  by export and erase. The device-only data is outside Boekenwurm's servers, so it is not in the account export; the
+  gate has its own "Delete all app gate data", and wiping the device's data removes it too. Basis: performance of the
+  service the reader turned on. Please confirm (1) the fragment approach and device-only storage keep the gated-app
+  list outside Boekenwurm's processing, and (2) whether the purpose (helping the reader limit their social media use
+  through study) needs anything beyond the notice text if the feature is ever offered to readers.
+<!-- APPGATE-REMOVE-END -->
+
