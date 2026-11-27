@@ -1,37 +1,26 @@
 /**
  * The reader, ported from the playtest (branch playtest-v1): tap-to-reveal, strikes, streaks, streak tokens,
- * the level-up offer and badges, the end-of-session study list, and, with the reader's own Claude key,
- * Match my level (with Show original) and words in their sentence.
+ * the level-up offer and badges, and the end-of-session study list. The text is always the book's own: Claude no
+ * longer rewrites paragraphs or explains words (removed 2026-11-27, DESIGN.md).
  */
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode, type RefObject } from "react";
 import * as E from "@boekenwurm/engine";
-import * as AI from "@boekenwurm/ai";
 import { pagesFinished } from "@boekenwurm/books";
 import { bookById, getState, loadText, recordFinished, saveBook, saveMeaning, updateProfile, useStore } from "../lib/store.ts";
 import { fetchRemoteText } from "../lib/sync.ts";
-import { claude, AiError } from "../lib/claude.ts";
-import { db } from "../lib/db.ts";
-import { hash, isOldForm, langOf, nameTest, sentenceAround, tokenize, type Token } from "../lib/text.ts";
-import { compoundMeaning, lookup, listLemmas } from "../lib/words.ts";
+import { nameTest, sentenceAround, type Token } from "../lib/text.ts";
+import { compoundMeaning, lookup } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
 import { bookFinished, checkAchievements, pagesRead as pagesReadMilestone, paragraphRead, rankNow, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
-import { ADMIN, usePhotoPages } from "../lib/features.ts";
+import { usePhotoPages } from "../lib/features.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
-import { knownShare } from "../lib/books.ts";
-import { knownLemmas } from "../lib/store.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
 import { close, open, setTab } from "../nav.ts";
 import { SECTION_SIZE } from "../lib/pages.ts";
 import type { Book, BookText, Meaning, Paragraph } from "../lib/types.ts";
 import { Icon, Sheet, toast } from "../ui.tsx";
 import { t as tt, useT } from "../lib/i18n.ts";
-
-type Matched =
-  | { status: "pending" }
-  | { status: "done"; changed: boolean; text: string; tokens?: Token[]; originalLevel: string | null }
-  | { status: "failed"; note: string };
-type Explained = { status: "pending" } | { status: "done"; data: AI.Explanation } | { status: "error"; error: string };
 
 interface RS {
   book: Book | null;
@@ -44,14 +33,9 @@ interface RS {
   sel: number | null;
   sentences: Record<string, string>;
   summary: { kind: "complete" | "ended" | "lookup"; streakLength: number; list: E.StudyItem[]; paragraphs: number } | null;
-  matched: Map<number, Matched>;
-  explained: Map<string, Explained>;
-  waiting: boolean;
-  showOriginal: boolean;
   /** Words being looked up (no dictionary meaning yet), or found to have none: base form -> state. */
   lookups: Map<string, "pending" | "none" | "offline" | "limit" | "signin">;
-  explaining: Map<string, Promise<AI.Explanation | null>>;
-  modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "match" } | { kind: "goto" } | { kind: "font" } | null;
+  modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "goto" } | { kind: "font" } | null;
   /**
    * Looking at a paragraph without penalty: one before the current one ("Previous"), or the one just finished, from
    * the session summary ("Re-read"). Taps show meanings but cost no fout (strike) and don't count; the session is untouched.
@@ -73,19 +57,15 @@ export function Reader({ bookId }: { bookId: string }) {
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const progress = useStore((s) => s.profile.progress);
   const settings = useStore((s) => s.profile.settings);
-  const hasKey = useStore((s) => s.hasKey);
-  // Match my level is experimental: only the owner's admin account sees it (lib/features.ts).
-  const admin = useStore((s) => s.features.includes(ADMIN));
   const font = useStore((s) => s.profile.settings.font);
   const textSize = useStore((s) => s.profile.settings.textSize);
   const meanings = useStore((s) => s.meanings);
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
-    sel: null, sentences: {}, summary: null, matched: new Map(), explained: new Map(), explaining: new Map(), lookups: new Map(), waiting: false, showOriginal: false, modal: null, look: null, lastRead: null, xp: 0, lookupMode: false,
+    sel: null, sentences: {}, summary: null, lookups: new Map(), modal: null, look: null, lastRead: null, xp: 0, lookupMode: false,
     clock: E.startClock(Date.now()),
   }).current;
-  const inflight = useRef(new Map<number, Promise<void>>()).current;
 
   // ---------------------------------------------------------------- loading
   useEffect(() => {
@@ -150,15 +130,11 @@ export function Reader({ bookId }: { bookId: string }) {
 
   // ---------------------------------------------------------------- helpers
   const book = r.book;
-  const mode = admin ? (book?.position.mode ?? "original") : "original";
   const look = (surface: string) => lookup(surface, { meanings: getState().meanings });
   /** The paragraph on screen: the current one, or the one being looked back at. */
   const at = (): number => r.look?.ord ?? r.pos;
   const original = (): Paragraph => r.text!.paragraphs[at()];
-  const para = (): { text: string; tokens: Token[]; matched: boolean } => {
-    const m = mode === "match" ? r.matched.get(at()) : null;
-    return m && m.status === "done" && m.changed && m.tokens ? { text: m.text, tokens: m.tokens, matched: true } : { ...original(), matched: false };
-  };
+  const para = (): { text: string; tokens: Token[] } => original();
   const lemmasOf = (p: { tokens: Token[] }) => p.tokens.filter((t) => t.k === "word").map((t) => look(t.t).lemma);
   const rules = () => E.rulesFor(getState().profile.settings.preset);
   /** Unlimited lookup mode: on in the settings, and unlocked by a Bronze badge. */
@@ -181,31 +157,14 @@ export function Reader({ bookId }: { bookId: string }) {
     if (!r.text) return;
     if (r.pos >= r.text.paragraphs.length) r.pos = 0;
     r.sel = null;
-    r.showOriginal = false;
-    if (r.book?.position.mode === "match") {
-      for (const ahead of [1, 2]) void ensureMatched(r.pos + ahead); // the next pages are prepared while this one is read
-      const m = r.matched.get(r.pos);
-      if (!m || m.status === "pending") {
-        r.waiting = true;
-        const pos = r.pos;
-        void ensureMatched(pos).then(() => {
-          if (r.pos !== pos || !r.waiting || !r.session) return;
-          r.waiting = false;
-          r.session = E.beginParagraph(r.session, `p${pos}`, lemmasOf(para()));
-          bump();
-        });
-        return;
-      }
-    }
-    r.waiting = false;
     r.session = E.beginParagraph(r.session!, `p${r.pos}`, lemmasOf(para()));
   }
 
   // ---------------------------------------------------------------- tapping and turning
   /**
    * A tap reveals a word. It counts (a strike, a word to study) only when a meaning is found: the dictionary or the
-   * reader's word list at once, otherwise Google Translate, the word's two parts as a compound, or Claude with the
-   * reader's key. When none finds one, the tap is free (lib/meaning.ts).
+   * reader's word list at once, otherwise Google Translate, or the word's two parts as a compound. When none finds
+   * one, the tap is free (lib/meaning.ts).
    */
   function tap(i: number) {
     if (!r.session?.current && !r.look) return;
@@ -215,10 +174,9 @@ export function Reader({ bookId }: { bookId: string }) {
       const d = look(tok.t);
       // Looking back: the meaning is shown, nothing counts.
       if (r.look) {
-        if (d.meaning) void explain(i);
-        else void findMeaning(i, d.lemma, tok.t, { free: true });
-      } else if (d.meaning) countTap(i, d.lemma, tok.t);
-      else void findMeaning(i, d.lemma, tok.t);
+        if (!d.meaning) void findMeaning(d.lemma, tok.t, { free: true });
+      } else if (d.meaning) countTap(d.lemma, tok.t);
+      else void findMeaning(d.lemma, tok.t);
     }
     bump();
   }
@@ -241,7 +199,6 @@ export function Reader({ bookId }: { bookId: string }) {
     if (!r.text || ord < 0) return;
     r.look = { ord, kind, selBefore: r.look ? r.look.selBefore : r.sel };
     r.sel = null;
-    if (r.book?.position.mode === "match") void ensureMatched(ord).then(bump);
     bump();
   }
 
@@ -253,15 +210,14 @@ export function Reader({ bookId }: { bookId: string }) {
     bump();
   }
 
-  function countTap(i: number, lemma: string, surface: string) {
+  function countTap(lemma: string, surface: string) {
     if (!r.session?.current) return;
     const before = E.status(r.session).used;
     r.session = E.reveal(r.session, { lemma, surface, at: Date.now() });
     if (E.status(r.session).used > before) r.sentences[lemma] ??= sentenceAround(para().text, surface);
-    void explain(i);
   }
 
-  async function findMeaning(i: number, lemma: string, surface: string, opts: { free?: boolean } = {}) {
+  async function findMeaning(lemma: string, surface: string, opts: { free?: boolean } = {}) {
     const state = r.lookups.get(lemma);
     if (state === "pending" || state === "none") return; // "offline" tries again
     r.lookups.set(lemma, "pending");
@@ -273,16 +229,12 @@ export function Reader({ bookId }: { bookId: string }) {
     const t = await translateWord(surface).catch((): TranslateResult => ({ ok: false, reason: "offline" }));
     if (t.ok) meaning = { en: t.text, nl: null, from: "translation", word, ...(t.shared ? { shared: true } : {}) };
     meaning ??= compoundMeaning(surface);
-    if (!meaning && getState().hasKey) {
-      const x = await explain(i);
-      if (x && (x.meaningEn || x.meaningNl)) meaning = { en: x.meaningEn || null, nl: x.meaningNl || null, from: "claude", word };
-    }
     if (meaning) {
       r.lookups.delete(lemma);
       // Saved for this reader (device and account), so the word is never looked up again.
       await saveMeaning(lemma, meaning);
       // Count it only if the reader is still on the paragraph they tapped in (never when looking back).
-      if (!opts.free && !r.look && r.session?.current?.paragraphId === where) countTap(i, lemma, surface);
+      if (!opts.free && !r.look && r.session?.current?.paragraphId === where) countTap(lemma, surface);
     } else if (!t.ok && (t.reason === "limit" || t.reason === "signin")) r.lookups.set(lemma, t.reason);
     else r.lookups.set(lemma, !t.ok && t.reason === "offline" && !navigator.onLine ? "offline" : "none");
     bump();
@@ -299,11 +251,11 @@ export function Reader({ bookId }: { bookId: string }) {
   }
 
   /** The reader typed a meaning: it is saved like any other, and the tap counts. */
-  async function typedMeaning(i: number, lemma: string, surface: string, text: string) {
+  async function typedMeaning(lemma: string, surface: string, text: string) {
     const meaning = text.trim().slice(0, 300);
     if (!meaning) return;
     r.lookups.delete(lemma);
-    if (!r.look) countTap(i, lemma, surface);
+    if (!r.look) countTap(lemma, surface);
     bump();
     await saveMeaning(lemma, { en: meaning, nl: null, from: "manual", word: surface.toLowerCase() });
   }
@@ -345,7 +297,7 @@ export function Reader({ bookId }: { bookId: string }) {
     const atEnd = r.pos >= r.text!.paragraphs.length;
     void savePosition(atEnd ? r.text!.paragraphs.length : r.pos);
     // XP for the paragraph read: double on a streak, a quarter when it ends the run, × 1.5 above the reader's rank.
-    const textLevel = (read.matched ? getState().profile.progress.level : r.book?.level ?? null) as E.CefrLevel | null;
+    const textLevel = (r.book?.level ?? null) as E.CefrLevel | null;
     r.xp += await paragraphRead({
       book: r.book!, textLevel, failed: out.kind === "ended", streak, lookupMode: r.lookupMode, words: read.tokens.filter((t) => t.k === "word").length,
       // A run in lookup mode has no fouten, so it doesn't count towards the Streak badge.
@@ -371,8 +323,7 @@ export function Reader({ bookId }: { bookId: string }) {
   function sessionExtras() {
     if (!getState().appsConnected) return {};
     const clock = E.tickClock(r.clock, Date.now(), document.visibilityState === "visible");
-    const matchedMode = r.book?.position.mode === "match" && mode === "match";
-    const textLevel = (matchedMode ? getState().profile.progress.level : r.book?.level ?? null) as E.CefrLevel | null;
+    const textLevel = (r.book?.level ?? null) as E.CefrLevel | null;
     return { activeSeconds: E.activeSeconds(clock), textLevel, readerRank: rankNow().rank };
   }
 
@@ -414,95 +365,6 @@ export function Reader({ bookId }: { bookId: string }) {
     const withCurrent = s.current ? { ...s, reveals: [...s.reveals, ...s.current.reveals], current: null } : s;
     await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences, lookupMode: r.lookupMode, ...sessionExtras() });
     void checkAchievements();
-  }
-
-  // ---------------------------------------------------------------- Claude: Match my level and words in context
-  function knownShareOf(t: string) {
-    return knownShare(t, knownLemmas(listLemmas()));
-  }
-
-  function ensureMatched(pos: number): Promise<void> {
-    if (!r.text || pos >= r.text.paragraphs.length || r.book?.position.mode !== "match") return Promise.resolve();
-    const have = r.matched.get(pos);
-    if (have && have.status !== "pending") return Promise.resolve();
-    if (inflight.has(pos)) return inflight.get(pos)!;
-    const target = getState().profile.progress.level;
-    const model = getState().profile.settings.models.match;
-    const orig = r.text.paragraphs[pos];
-    const key = `m|${bookId}|${hash(orig.text)}|${target}|${model}`;
-    r.matched.set(pos, { status: "pending" });
-    const job = (async (): Promise<Matched> => {
-      const cached = await db.get<Matched>("cache", key);
-      if (cached) return cached;
-      const names = orig.tokens.filter((t) => t.k === "name").map((t) => t.t);
-      const checks: AI.MatchChecks = { names, language: (t) => langOf(t).lang, isOldForm, knownShare: knownShareOf };
-      let prompt = AI.matchPrompt(orig.text, target as AI.Cefr, names);
-      let problems: string[] = [];
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const result = AI.parseMatch(await claude(prompt, model), orig.text);
-        problems = AI.validateMatch(orig.text, result, checks);
-        if (!problems.length) {
-          const value: Matched = { status: "done", changed: result.changed, text: result.text, originalLevel: result.originalLevel };
-          await db.put("cache", value, key);
-          return value;
-        }
-        prompt = { ...prompt, user: `${prompt.user}\n\nYour previous version had these problems: ${problems.join(" ")} Fix them.` };
-      }
-      return { status: "failed", note: `Couldn't match this paragraph to ${target}: ${problems.join(" ")} Showing the original.` };
-    })()
-      .catch((e): Matched => ({ status: "failed", note: e instanceof AiError ? e.message : "Something went wrong while matching this paragraph. Showing the original." }))
-      .then((v) => {
-        if (v.status === "done" && v.changed) v = { ...v, tokens: tokenize(v.text, r.isName) };
-        r.matched.set(pos, v);
-        inflight.delete(pos);
-        if (v.status === "failed" && pos === r.pos) toast(v.note, 5000);
-      });
-    inflight.set(pos, job);
-    return job;
-  }
-
-  function explain(i: number): Promise<AI.Explanation | null> {
-    const tok = para().tokens[i];
-    const k = `${at()}|${i}|${para().matched ? "m" : "o"}`;
-    if (!getState().hasKey || tok.k !== "word") return Promise.resolve(null);
-    const have = r.explaining.get(k);
-    if (have) return have;
-    const sentence = sentenceAround(para().text, tok.t);
-    const level = getState().profile.progress.level;
-    const model = getState().profile.settings.models.words;
-    const cacheKey = `x|${hash(sentence)}|${tok.t.toLowerCase()}|${level}|${model}`;
-    const lemma = look(tok.t).lemma;
-    r.explained.set(k, { status: "pending" });
-    const job = (async () => {
-      const cached = await db.get<AI.Explanation>("cache", cacheKey);
-      if (cached) return cached;
-      const data = AI.parseExplanation(await claude(AI.explainPrompt(tok.t, sentence, level as AI.Cefr), model), tok.t);
-      await db.put("cache", data, cacheKey);
-      return data;
-    })()
-      .then((data) => {
-        r.explained.set(k, { status: "done", data });
-        // The meaning in this sentence becomes the back of the word's flashcard.
-        void saveMeaning(lemma, { en: data.meaningEn || null, nl: data.meaningNl || null, from: "claude" });
-        return data;
-      })
-      .catch((e) => {
-        r.explained.set(k, { status: "error", error: e instanceof AiError ? e.message : "Couldn't explain this word." });
-        return null;
-      })
-      .finally(bump);
-    r.explaining.set(k, job);
-    return job;
-  }
-
-  async function setMode(next: "original" | "match") {
-    const b = bookById(bookId)!;
-    r.book = await saveBook({ ...b, position: { ...b.position, mode: next } });
-    r.modal = null;
-    r.matched.clear();
-    void leave();
-    startNewSession();
-    bump();
   }
 
   // ---------------------------------------------------------------- keys and swipes
@@ -547,9 +409,6 @@ export function Reader({ bookId }: { bookId: string }) {
     );
   if (!book || !r.text) return <main className="screen full reader"><TopBar title={book?.title ?? ""} /><div className="spinner" /></main>;
 
-  const levelIdx = (l: string | null) => (l ? E.LEVELS.indexOf(l as E.CefrLevel) : -1);
-  const above = book.level != null && levelIdx(book.level) > levelIdx(progress.level);
-
   return (
     <main className="screen full reader">
       <TopBar
@@ -559,32 +418,18 @@ export function Reader({ bookId }: { bookId: string }) {
             {hasPages() ? tr("reader.page", { n: pageAt(r.pos) ?? "?" }) : tr("reader.gotoShort")}
           </button>
         }
-        right={
-          <>
-            {admin && (above || mode === "match") && (
-              <button className="btn small" type="button" onClick={() => ((r.modal = { kind: "match" }), bump())}>
-                {mode === "match" ? `Matched to ${progress.level}` : "Match my level"}
-              </button>
-            )}
-          </>
-        }
       />
       {r.look ? (
         renderLook()
       ) : r.summary ? (
         renderSummary()
-      ) : r.waiting || !r.session?.current ? (
-        <article className="sheet">
-          <div className="folio"><span>{book.title}</span><span className="num">{r.pos + 1} / {r.text.paragraphs.length}</span></div>
-          <p className="para muted" aria-live="polite">Matching this paragraph to {progress.level}…</p>
-          <div className="actions"><button className="btn small ghost" type="button" onClick={() => void setMode("original")}>Read the original instead</button></div>
-        </article>
+      ) : !r.session?.current ? (
+        <div className="spinner" />
       ) : (
         renderPage()
       )}
       {r.modal?.kind === "offer" && progress.offer && renderOffer()}
       {r.modal?.kind === "badge" && renderBadge(r.modal.badge)}
-      {r.modal?.kind === "match" && renderMatch()}
       {r.modal?.kind === "goto" && renderGoto()}
       {r.modal?.kind === "font" && (
         <Sheet label={tr("reader.fontTitle")} onClose={() => ((r.modal = null), bump())}>
@@ -684,7 +529,7 @@ export function Reader({ bookId }: { bookId: string }) {
     return !E.passes(E.revealedCount(s), s.current.allowance, s.rules);
   }
 
-  function renderSheet(p: { text: string; tokens: Token[]; matched: boolean }, revealed: Set<string>, onStreak: boolean) {
+  function renderSheet(p: { text: string; tokens: Token[] }, revealed: Set<string>, onStreak: boolean) {
     return (
       <article
         className="sheet"
@@ -700,7 +545,6 @@ export function Reader({ bookId }: { bookId: string }) {
           <span>{book!.title}</span>
           <span className="num">{pageAt(r.pos) != null ? `${tr("reader.page", { n: pageAt(r.pos)! })} · ` : ""}{r.pos + 1} / {r.text!.paragraphs.length}</span>
         </div>
-        {mode === "match" && renderMatchedLine(p.matched)}
         <div className="parawrap" ref={paraRef}>
         <p className="para" lang="nl" dir="ltr">
           {p.tokens.map((t, i) =>
@@ -722,9 +566,6 @@ export function Reader({ bookId }: { bookId: string }) {
         </p>
         {r.sel != null && <WordPopover wrap={paraRef} index={r.sel} onClose={closeWord}>{renderDefinition(onStreak)}</WordPopover>}
         </div>
-        {r.showOriginal && p.matched && (
-          <div className="original"><span className="label">{tr("reader.original")}</span><p lang="nl" dir="ltr">{original().text}</p></div>
-        )}
         <div className="defhint" aria-hidden={r.sel != null} style={{ visibility: r.sel == null ? "visible" : "hidden" }}>{renderDefinition(onStreak, true)}</div>
         <div className="actions turnrow">
           <button className="btn ghost prevbtn" type="button" disabled={r.pos === 0} onClick={() => lookBack("previous", r.pos - 1)}>{tr("reader.previous")}</button>
@@ -755,8 +596,7 @@ export function Reader({ bookId }: { bookId: string }) {
             <span>{book!.title}</span>
             <span className="num">{pageAt(l.ord) != null ? `${tr("reader.page", { n: pageAt(l.ord)! })} · ` : ""}{l.ord + 1} / {r.text!.paragraphs.length}</span>
           </div>
-          {mode === "match" && renderMatchedLine(p.matched)}
-          <div className="parawrap" ref={paraRef}>
+            <div className="parawrap" ref={paraRef}>
           <p className="para" lang="nl" dir="ltr">
             {p.tokens.map((t, i) =>
               t.k === "punct" || t.k === "number" ? (
@@ -802,23 +642,6 @@ export function Reader({ bookId }: { bookId: string }) {
     );
   }
 
-  function renderMatchedLine(matched: boolean) {
-    const m = r.matched.get(at());
-    if (matched)
-      return (
-        <div className="matched">
-          <span className="chip">Matched to {progress.level}</span>
-          {m?.status === "done" && m.originalLevel && <span className="muted">original about {m.originalLevel}</span>}
-          <button className="btn small ghost" type="button" onClick={() => ((r.showOriginal = !r.showOriginal), bump())}>
-            {r.showOriginal ? "Hide original" : "Show original"}
-          </button>
-        </div>
-      );
-    if (m?.status === "done") return <div className="matched"><span className="chip">Already at your level</span></div>;
-    if (m?.status === "failed") return <div className="matched"><span className="chip warn">Original</span><span className="muted small">{m.note}</span></div>;
-    return null;
-  }
-
   function renderDefinition(onStreak: boolean, hint = false) {
     if (hint || r.sel == null) return <span className="note">{tr("reader.tapHint")}</span>;
     const tok = para().tokens[r.sel];
@@ -836,8 +659,6 @@ export function Reader({ bookId }: { bookId: string }) {
     const m = d.meaning;
     const lifetime = wordbook[d.lemma]?.reveals ?? 0;
     const why = lang === "nl" ? tr(onStreak ? "reader.dutchStreak" : "reader.dutchB1") : "";
-    const k = `${at()}|${r.sel}|${para().matched ? "m" : "o"}`;
-    const x = r.explained.get(k);
     const lookup = r.lookups.get(d.lemma);
     return (
       <>
@@ -847,7 +668,7 @@ export function Reader({ bookId }: { bookId: string }) {
           {lifetime > 0 && <span className="lemma">{tr("reader.revealedBefore", { n: lifetime })}</span>}
           {canUndo && <button className="btn small ghost undo" type="button" onClick={undo}>{tr("reader.undo")}</button>}
         </div>
-        {m && m.from !== "claude" ? (
+        {m ? (
           lang === "nl" && m.nl ? <div className="meaning nl" lang="nl" dir="ltr">{m.nl}</div> : m.en ? (
             <>
               <div className="meaning" lang="en" dir="ltr">{m.en}</div>
@@ -870,30 +691,16 @@ export function Reader({ bookId }: { bookId: string }) {
           <LimitPrompt
             why={lookup}
             word={tok.t}
-            hasKey={hasKey}
-            onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)}
-            onAddKey={() => setTab("me", "claude")}
+            onSave={(text) => void typedMeaning(d.lemma, tok.t, text)}
             onSignIn={() => setTab("me", "account")}
           />
-        ) : lookup === "none" && x?.status !== "done" ? (
+        ) : lookup === "none" ? (
           <>
             <span className="note">{tr("reader.noMeaning")}</span>
-            <TypeMeaning word={tok.t} onSave={(text) => void typedMeaning(r.sel!, d.lemma, tok.t, text)} />
+            <TypeMeaning word={tok.t} onSave={(text) => void typedMeaning(d.lemma, tok.t, text)} />
           </>
         ) : null}
         {why && <span className="note">{why}</span>}
-        {x?.status === "pending" && <span className="note">{tr("reader.checkingSentence")}</span>}
-        {x?.status === "error" && <span className="note">{x.error}</span>}
-        {x?.status === "done" && (
-          <div className="ctx">
-            <span className="label">{tr("reader.inSentence")}</span>
-            <div className={`meaning ${lang === "nl" && x.data.meaningNl ? "nl" : ""}`}>
-              {x.data.lemma && <b lang="nl">{x.data.lemma}: </b>}
-              {lang === "nl" && x.data.meaningNl ? <span lang="nl">{x.data.meaningNl}</span> : x.data.meaningEn || x.data.meaningNl}
-            </div>
-            {x.data.note && <span className="note">{x.data.note}</span>}
-          </div>
-        )}
       </>
     );
   }
@@ -972,7 +779,6 @@ export function Reader({ bookId }: { bookId: string }) {
     const accept = async () => {
       const res = E.acceptLevelUp(getState().profile.progress, Date.now());
       await updateProfile((p) => ({ ...p, progress: res.progress }));
-      r.matched.clear();
       r.modal = res.newBadges.length ? { kind: "badge", badge: res.newBadges[res.newBadges.length - 1] } : null;
       bump();
     };
@@ -1023,50 +829,17 @@ export function Reader({ bookId }: { bookId: string }) {
       />
     );
   }
-
-  function renderMatch() {
-    const sc = book!.scan;
-    return (
-      <Sheet label="Match my level" onClose={() => ((r.modal = null), bump())}>
-        <h2 className="big" style={{ fontSize: "1.35rem" }}>Read this book at {progress.level}</h2>
-        {sc?.level && (
-          <div className="stats">
-            <div className="stat"><span className="label">Book level</span><b>About {sc.level}</b></div>
-            {sc.wordMatch != null && <div className="stat"><span className="label">Words you know</span><b className="num">{Math.round(sc.wordMatch * 100)}%</b></div>}
-            <div className="stat"><span className="label">At your level</span><b className="num">{Math.round(sc.withinReach * 100)}%</b></div>
-          </div>
-        )}
-        {hasKey ? (
-          <p className="muted" style={{ margin: 0 }}>
-            Each paragraph above {progress.level} is rewritten at your level when you reach it, using your Claude key: about one request per
-            paragraph, prepared two ahead so there's no waiting. Every rewrite is checked (names kept, nothing added, modern Dutch), and the original
-            is always one tap away.
-          </p>
-        ) : (
-          <p className="muted" style={{ margin: 0 }}>Matching paragraphs to your level uses your own Claude key. Add it under Account → Experimental → Claude.</p>
-        )}
-        <div className="actions">
-          {hasKey && mode !== "match" && <button className="btn primary" type="button" onClick={() => void setMode("match")}>Match my level</button>}
-          {mode === "match" && <button className="btn" type="button" onClick={() => void setMode("original")}>Read the original</button>}
-          {!hasKey && <button className="btn primary" type="button" onClick={() => setTab("me", "claude")}>Add my key</button>}
-          <button className="btn ghost" type="button" onClick={() => ((r.modal = null), bump())}>Close</button>
-        </div>
-      </Sheet>
-    );
-  }
 }
 
 /**
  * Google Translate can't be asked: today's 200 lookups are used up (they come back at midnight), or the reader isn't
- * signed in (the allowance belongs to an account). The reader can sign in, add their Claude key, or look the word
- * up themselves and type its meaning. Until then this tap stays free.
+ * signed in (the allowance belongs to an account). The reader can sign in, or look the word up themselves and type
+ * its meaning. Until then this tap stays free.
  */
-function LimitPrompt({ why, word, hasKey, onSave, onAddKey, onSignIn }: {
+function LimitPrompt({ why, word, onSave, onSignIn }: {
   why: "limit" | "signin";
   word: string;
-  hasKey: boolean;
   onSave: (text: string) => void;
-  onAddKey: () => void;
   onSignIn: () => void;
 }) {
   return (
@@ -1084,7 +857,6 @@ function LimitPrompt({ why, word, hasKey, onSave, onAddKey, onSignIn }: {
       )}
       <div className="actions">
         {why === "signin" && <button className="btn small primary" type="button" onClick={onSignIn}>Sign in</button>}
-        {!hasKey && <button className="btn small" type="button" onClick={onAddKey}>Connect Claude</button>}
         <a className="btn small" href={`https://translate.google.com/?sl=nl&tl=en&op=translate&text=${encodeURIComponent(word)}`} target="_blank" rel="noopener noreferrer">
           Look it up ↗
         </a>

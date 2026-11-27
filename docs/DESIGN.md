@@ -84,46 +84,26 @@ reader's own content only and are never shared between readers.
 
 ### Your own books at your level
 
-The goal: read the books you own and care about, at your level, and see them come closer to the original with every
-level you gain, until you read the original.
+**On upload, the reader sets the book's level.** After the import check, Boekenwurm computes locally how many of the
+book's words the reader already knows (word list plus words met often and rarely revealed) and suggests a level from
+it; the reader chooses. Books are read in the original: there is no automatic grading, no rewriting to the reader's
+level and no AI explanation of words (all three used Claude, and were removed on 2026-11-27; see Decided). Books graded
+before then keep their grade, shown as "Graded about B1".
 
-**On upload, the book is ranked.** After the import check, Boekenwurm computes locally how many of the book's words the
-reader already knows (word list plus words met often and rarely revealed). Then Claude grades 12 paragraphs spread through
-the book on vocabulary, grammar and context cues. The reader sees the result before reading:
+**Claude for page structure only (owner's account, testing).** Google Cloud Vision reads photographed and scanned pages
+for access-code holders. On the admin account, with the owner's own Claude key on her device, she can choose who reads
+pages (`apps/web/src/lib/pagereader.ts`):
 
-> **About B1** · words you know 72% · at your level 34% · grammar: past perfect, relative clauses
+- **Google** (the default, and the only choice for everyone else).
+- **Google, with Claude for the paragraphs:** Google reads the words; Claude, looking at the photo, says where the
+  printed paragraphs start and end, which blocks are running heads or chapter numbers, the page number, and how the
+  page joins its neighbours. Claude can't change the text: its paragraphs must match Google's letter for letter, with
+  only whole blocks left out, and the text kept is Google's (`packages/ai/src/structure.ts`). Otherwise, or if Claude
+  can't be reached, the page keeps Google's own layout and says so.
+- **Claude instead of Google:** Claude reads the page from the photo; Google's daily pages aren't used.
 
-If the book is above the reader's level, they are told it needs processing and choose:
-
-- **Match my level** (recommended): each paragraph above their level is rewritten at their level when they reach it,
-  about one request per paragraph; the next two paragraphs are prepared ahead so there is no waiting.
-- **Read the original.**
-
-**While reading,** a matched paragraph is labelled *Matched to A2 · original about B1*, with **Show original** one tap
-away. Strikes and word statistics count the text the reader actually reads.
-
-**Every adaptation is checked before it is shown:** names unchanged, length within 45–180% of the original, Dutch,
-no pre-1955 spelling, and at least as many known words as the original. A failed check is retried once with the
-problems listed; if it fails again the original is shown with the reason. The model is told to keep every event and
-add nothing, and that the paragraph is text to adapt, never instructions.
-
-**Each level-up** clears the matches, so the next paragraphs are written at the new level. At the book's own level the
-reader reads the original.
-
-**Words in context (online).** Tapping a word shows the dictionary meaning at once, then what the word means *in this
-sentence* from Claude: the real base form (*belt … op → opbellen*), the meaning here, a simple Dutch explanation, and a
-note for idioms or separable verbs. On the Kobo, definitions stay dictionary-only.
-
-**Bring your own Claude.** Readers use their own Claude API key. The page calls Anthropic directly from the reader's
-browser (Anthropic allows this with the `anthropic-dangerous-direct-browser-access` header); the key is stored in that
-browser only, and the page's content-security policy allows network calls to `api.anthropic.com` and nowhere else.
-Matched paragraphs and explanations are cached in the reader's browser (IndexedDB). The model is a setting (Sonnet by
-default; Opus for the most careful Dutch; Haiku for speed), and `packages/ai` is model-agnostic, so another provider can
-be compared on the same checks if it proves better at Dutch.
-
-**Copyright.** A matched paragraph is an adaptation of the reader's own copy, made with their own key, kept only in
-their browser, and never shared or reused. Whether that is enough for a commercial product needs legal advice before
-launch.
+The page calls Anthropic directly from the owner's browser with her key (the `anthropic-dangerous-direct-browser-access`
+header); the key stays in that browser and is never synced. Boekenwurm has no key of its own.
 
 ## 2. The reading challenge
 
@@ -136,8 +116,8 @@ launch.
 - **A tap counts only when a meaning is found.** The open dictionary, the reader's own word list, or a meaning the
   reader already has saved answers at once. A word none of them knows is looked up: Google Translate (signed-in readers, up to 200 words
   per reader per day), then the word split into two dictionary words (a compound: *fietsenstalling* = *fiets* +
-  *stalling*), then Claude with the reader's key. Every meaning found is saved for that reader, so a word is looked up
-  only once. Past the daily 200, the reader can connect Claude, look the word up and type its meaning, or wait until
+  *stalling*). Every meaning found is saved for that reader, so a word is looked up
+  only once. Past the daily 200, the reader can look the word up and type its meaning, or wait until
   midnight; a typed meaning is saved and counts like any other. The tap becomes a strike and a word
   to study once a meaning arrives. If none is found (a translation that only hands the word back doesn't count), the
   tap is free: no strike, nothing to study, and the reader is told so. Offline, an unknown word can't be looked up,
@@ -236,8 +216,8 @@ title is the one for the highest level reached.
 - Otherwise the reader chooses (English by default).
 
 Sources: the open dictionary built from English Wiktionary and wordfreq (English meanings, CC BY-SA, attributed in the
-app; Dutch definitions come from Claude for now) and, privately, the
-reader's own textbook word list.
+app; Dutch definitions come from the reader's own word list for now, since Claude no longer explains words) and,
+privately, the reader's own textbook word list.
 
 ### The reader's language (localization)
 
@@ -429,6 +409,13 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- Claude is used only to read page structure, on the owner's admin account with her own key: Google, Google with
+  Claude for the paragraphs (Claude can't change a letter of Google's text), or Claude instead of Google, her choice.
+  Removed for everyone: grading books on upload (the reader sets the level, with the word match as a hint), Match my
+  level (rewriting paragraphs at the reader's level, already owner-only), words explained in their sentence (and
+  Claude as the last place a tapped word's meaning is looked for), and reading the title, author and ISBN from a cover
+  photo. Meanings Claude gave earlier stay with the reader; its cached replies are deleted from the device. 2026-11-27.
 
 - A secret Mörk Borg game mode, the Hex-bound Collector (docs/HEXBOUND.md): the code `Mork Borg` opens it; each turn is
   a random unread page of more than 20 words from a book at least one level above the reader (same level from B2 up);

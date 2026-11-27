@@ -3,8 +3,8 @@
  * (test/meaning.test.ts).
  *
  * A tap only counts (a strike, a word to study) when a real meaning is found: the open dictionary, then Google
- * Translate, then the word split into two dictionary words (a Dutch compound), then Claude with the reader's key.
- * If none of them finds one, the tap is free.
+ * Translate, then the word split into two dictionary words (a Dutch compound). If none of them finds one, the tap
+ * is free.
  */
 
 const letters = (s: string) => s.normalize("NFC").toLowerCase().replace(/[^\p{L}]+/gu, "");

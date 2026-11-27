@@ -1,18 +1,18 @@
 /**
- * Turning what was imported into a book on the shelf: paragraphs with tap tokens, the book's level (graded with
- * the reader's Claude key, or set by the reader in free mode), and photographed pages read with Claude or on the
- * device.
+ * Turning what was imported into a book on the shelf: paragraphs with tap tokens, the book's level (set by the
+ * reader, with the share of its words they know as a hint), and photographed pages, read by Google, by Google with
+ * Claude sorting out the paragraphs, or by Claude (lib/pagereader.ts).
  */
 import * as AI from "@boekenwurm/ai";
 import type { CefrLevel } from "@boekenwurm/engine";
 import { joinShortBlocks, type PageText, type StitchedParagraph } from "@boekenwurm/books";
-import { claude, claudeVision, AiError, hasKey } from "./claude.ts";
-import { db } from "./db.ts";
-import { countable, hash, isOldForm, langOf, nameTest, tokenize } from "./text.ts";
+import { claudeVision, AiError, hasKey } from "./claude.ts";
+import { countable, isOldForm, langOf, nameTest, tokenize } from "./text.ts";
 import { lookup, listLemmas } from "./words.ts";
 import { getState, knownLemmas } from "./store.ts";
 import { readPageOnDevice } from "./ocr.ts";
-import { explainGoogleError, GOOGLE_PAGES, hasFeature, PAGE_READS_PER_DAY, readPageWithGoogle } from "./features.ts";
+import { ADMIN, explainGoogleError, GOOGLE_PAGES, hasFeature, PAGE_READS_PER_DAY, readPageWithGoogle } from "./features.ts";
+import { pageReaderFor, type PageReader } from "./pagereader.ts";
 import { downscale, toBase64, CLAUDE_SIDE, OCR_SIDE } from "./images.ts";
 import type { Book, BookText, Paragraph } from "./types.ts";
 
@@ -49,39 +49,17 @@ export function knownShare(text: string, known: Set<string>): number | null {
   return words.filter((t) => known.has(lookup(t.t).lemma)).length / words.length;
 }
 
-export interface Grading {
-  wordMatch: number | null;
-  level: AI.BookLevel | null;
-  error: string | null;
-}
-
 /**
- * The local word match always; with a key, Claude grades 12 paragraphs spread through the book
- * (DESIGN.md, "Your own books at your level"). Results are cached per book text and model.
+ * The share of the book's words the reader knows: a hint for the level they choose. Books are no longer graded by
+ * Claude (removed 2026-11-27, DESIGN.md).
  */
-export async function gradeBook(text: BookText, onlyLocal = false): Promise<Grading> {
+export function wordMatchOf(text: BookText): number | null {
   const known = knownLemmas(listLemmas());
-  const shares = text.paragraphs.map((p) => knownShare(p.text, known));
-  const valid = shares.filter((x): x is number => x != null);
-  const wordMatch = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
-  if (onlyLocal || !hasKey()) return { wordMatch, level: null, error: null };
-  const { profile } = getState();
-  const model = profile.settings.models.match;
-  const key = `g|${hash(text.paragraphs.map((p) => p.text.slice(0, 80)).join("|"))}|${text.paragraphs.length}|${model}`;
-  try {
-    let grades = await db.get<AI.ParagraphGrade[]>("cache", key);
-    if (!grades) {
-      const picks = AI.samplePositions(text.paragraphs.length, 12).map((i) => ({ id: `p${i}`, text: text.paragraphs[i].text, wordMatch: shares[i] }));
-      grades = AI.parseGrades(await claude(AI.gradePrompt(picks), model), picks.map((p) => p.id));
-      await db.put("cache", grades, key);
-    }
-    return { wordMatch, level: AI.bookLevel(grades, profile.progress.level as AI.Cefr, wordMatch), error: null };
-  } catch (e) {
-    return { wordMatch, level: null, error: e instanceof AiError ? e.message : "Couldn't grade this book." };
-  }
+  const valid = text.paragraphs.map((p) => knownShare(p.text, known)).filter((x): x is number => x != null);
+  return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
 }
 
-/** The level suggested from the word match alone (free mode): a hint, never a verdict. */
+/** The level suggested by the word match: a hint, never a verdict. */
 export function hintFromWordMatch(wordMatch: number | null): CefrLevel | null {
   if (wordMatch == null) return null;
   if (wordMatch >= 0.95) return "A1";
@@ -100,21 +78,28 @@ export interface PageResult {
   /** 0–1; under 0.8 the photo should be retaken (on-device reading). */
   quality: number;
   problems: string[];
-  by: "claude" | "google" | "device";
+  by: "claude" | "google" | "google+claude" | "device";
   model: string | null;
   /** Read on the device although the reader has Google page reading (today's 20 used, or Google unreachable). */
   fallback?: string;
 }
 
+/** Who reads pages on this device now: Google, Google with Claude, Claude, or the device (lib/pagereader.ts). */
+export function currentPageReader(): PageReader {
+  const st = getState();
+  return pageReaderFor(st.profile.settings.pageReader, { admin: hasFeature(ADMIN), hasKey: hasKey(), google: hasFeature(GOOGLE_PAGES) });
+}
+
 export async function readPhotoPage(
   photo: Blob,
   seq: number,
-  useClaude: boolean,
   onProgress?: (p: number, s: string) => void,
   range: { lastPage?: number | null } = {},
 ): Promise<PageResult> {
-  if (useClaude) {
-    const model = getState().profile.settings.models.vision;
+  const reader = currentPageReader();
+  const model = getState().profile.settings.models.vision;
+  if (reader === "claude") {
+    onProgress?.(0, "reading with Claude");
     const img = await downscale(photo, CLAUDE_SIDE);
     const reading = AI.parsePage(await claudeVision(AI.pagePrompt({ mediaType: "image/jpeg", data: await toBase64(img) }), model));
     const problems = [
@@ -130,18 +115,48 @@ export async function readPhotoPage(
   // Google page reading (an access code): Google Cloud Vision reads the page, at most 20 pages a day for the whole
   // account (the read-page function enforces it). There is no fallback to reading on the device: it isn't good enough
   // to give readers (owner, 2026-11-20). A page Google can't read now fails, and can be read again later.
-  if (hasFeature(GOOGLE_PAGES)) {
+  if (reader === "google" || reader === "google+claude") {
     onProgress?.(0, "reading with Google");
     const g = await readPageWithGoogle(img, seq, range);
-    if (g.ok) return { ...g.page, problems: readingProblems(g.page.page, g.page.quality), by: "google", model: "cloud-vision" };
-    throw new Error(
-      g.reason === "limit" ? `Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Read this page again tomorrow.`
-      : g.reason === "offline" ? "You're offline, so Google couldn't read this page. Read it again when you're back online."
-      : `Google couldn't read this page. Try reading it again.${g.ok === false && g.detail ? ` ${explainGoogleError(g.detail)}` : ""}`,
-    );
+    if (!g.ok)
+      throw new Error(
+        g.reason === "limit" ? `Today's ${PAGE_READS_PER_DAY} pages are used, for all your books. Read this page again tomorrow.`
+        : g.reason === "offline" ? "You're offline, so Google couldn't read this page. Read it again when you're back online."
+        : `Google couldn't read this page. Try reading it again.${g.detail ? ` ${explainGoogleError(g.detail)}` : ""}`,
+      );
+    const google: PageResult = { ...g.page, problems: readingProblems(g.page.page, g.page.quality), by: "google", model: "cloud-vision" };
+    if (reader === "google") return google;
+    onProgress?.(0.5, "arranging with Claude");
+    return arrangeWithClaude(google, photo, model, range);
   }
   const r = await readPageOnDevice(img, seq, onProgress, range);
   return { page: r.page, uncertain: r.uncertain, quality: r.quality, problems: readingProblems(r.page, r.quality), by: "device", model: null };
+}
+
+/**
+ * Google + Claude: Claude sorts Google's text into the printed paragraphs and reads the page number. The words stay
+ * Google's (packages/ai/src/structure.ts). If Claude can't be reached, or its layout changes a letter, the page keeps
+ * Google's own layout and says why.
+ */
+async function arrangeWithClaude(google: PageResult, photo: Blob, model: string, range: { lastPage?: number | null }): Promise<PageResult> {
+  const blocks = google.page.paragraphs;
+  if (!blocks.length) return google;
+  try {
+    const img = await downscale(photo, CLAUDE_SIDE);
+    const layout = AI.parseLayout(await claudeVision(AI.structurePrompt({ mediaType: "image/jpeg", data: await toBase64(img) }, blocks), model));
+    const paragraphs = AI.applyLayout(blocks, layout);
+    if (!paragraphs) return { ...google, fallback: "Claude's paragraphs didn't match Google's text, so Google's layout is kept." };
+    const pageNumber = layout.pageNumber != null && layout.pageNumber <= (range.lastPage ?? 5000) ? layout.pageNumber : google.page.pageNumber;
+    return {
+      ...google,
+      page: { ...google.page, pageNumber, paragraphs, startsMidParagraph: layout.startsMidParagraph, endsMidParagraph: layout.endsMidParagraph, endsWithHyphen: layout.endsWithHyphen },
+      problems: readingProblems({ ...google.page, paragraphs }, google.quality),
+      by: "google+claude",
+      model,
+    };
+  } catch (e) {
+    return { ...google, fallback: `${e instanceof AiError ? e.message : "Claude couldn't arrange this page."} Google's layout is kept.` };
+  }
 }
 
 /** A photo to retake: too many unsure words, or too little text found. */
@@ -150,9 +165,4 @@ function readingProblems(page: PageText, quality: number): string[] {
   const words = page.paragraphs.join(" ").match(/\p{L}+/gu) ?? [];
   if (words.length < 15) problems.push("Very little text was found on this page. Retake the photo closer and in good light.");
   return problems;
-}
-
-export async function readCover(photo: Blob): Promise<AI.CoverReading> {
-  const img = await downscale(photo, CLAUDE_SIDE);
-  return AI.parseCover(await claudeVision(AI.coverPrompt({ mediaType: "image/jpeg", data: await toBase64(img) }), getState().profile.settings.models.vision));
 }

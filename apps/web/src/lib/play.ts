@@ -83,7 +83,7 @@ export async function checkAchievements(): Promise<void> {
 
 export interface ParagraphRead {
   book: Book;
-  /** The level the text was read at: the book's, or the level Claude matched it to. */
+  /** The level the text was read at: the book's. */
   textLevel: E.CefrLevel | null;
   failed: boolean;
   streak: boolean;

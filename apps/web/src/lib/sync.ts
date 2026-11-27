@@ -8,7 +8,7 @@ import type { Progress } from "@boekenwurm/engine";
 import { supabase } from "./supabase.ts";
 import { db, wipeDevice } from "./db.ts";
 import {
-  adoptBook, adoptMeanings, adoptProfile, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook, SAVED_SOURCES,
+  adoptBook, adoptMeanings, adoptProfile, cleanSettings, getState, init, loadCover, saveBook, saveCover, setCards, setState, setWordbook, SAVED_SOURCES,
 } from "./store.ts";
 import { bookToRow, mergeProgress, rowToBook, serverWins, wordbookFrom, type BookRow, type WordStatRow } from "./merge.ts";
 import { fromRow, toRow, type CardColumns, type CardRow } from "./cards.ts";
@@ -115,7 +115,7 @@ async function syncProfile(sb: SB, userId: string) {
   // A new account (empty progress) takes this device's progress. Otherwise newer wins, and nothing earned is lost.
   const progress = mergeProgress(local.progress, local.dirty ? local.updatedAt : 0, serverProgress, serverAt);
   const useServer = serverProgress && !local.dirty && serverAt > local.updatedAt;
-  const settings = useServer ? { ...local.settings, ...(row!.settings as object) } : local.settings;
+  const settings = useServer ? cleanSettings({ ...local.settings, ...(row!.settings as object) }) : local.settings;
   const next = { ...local, progress, settings, displayName: useServer ? row!.display_name : local.displayName, onboarded: local.onboarded || Boolean(serverProgress) };
 
   if (useServer && JSON.stringify(progress) === JSON.stringify(serverProgress)) {

@@ -31,9 +31,9 @@ const dutchJs = readFileSync(join(dutchOut, "lemma.js"), "utf8").replace(/^expor
 rmSync(dutchOut, { recursive: true, force: true });
 const irregular = readFileSync(join(here, "..", "..", "data", "nl", "irregular-verbs.json"), "utf8");
 
-// packages/ai: prompts, parsing and checks for level work
+// The playtest's own frozen copy of the Claude level work (legacy/level.ts); the app and packages/ai no longer have it.
 const aiOut = mkdtempSync(join(tmpdir(), "boekenwurm-ai-"));
-execFileSync("tsc", [join(here, "..", "..", "packages", "ai", "src", "level.ts"), "--outDir", aiOut, "--target", "ES2022",
+execFileSync("tsc", [join(here, "legacy", "level.ts"), "--outDir", aiOut, "--target", "ES2022",
   "--module", "ES2022", "--moduleResolution", "bundler", "--strict", "--skipLibCheck", ...NO_TYPES], { stdio: "inherit" });
 const aiNames = [];
 const aiJs = readFileSync(join(aiOut, "level.js"), "utf8").replace(/^export\s+(function|const)\s+([A-Za-z_$][\w$]*)/gm, (_, k, n) => {

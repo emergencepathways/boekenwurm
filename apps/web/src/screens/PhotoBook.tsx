@@ -1,9 +1,10 @@
 /**
  * Photographing a printed book (ARCHITECTURE.md, "Photographing a book you own"):
- *   1. cover (Claude reads title, author and ISBN with a key; typed in free mode),
+ *   1. cover (a photo for the shelf; the reader types the title, author and ISBN),
  *   2. details: the first page to read and the last page (progress counts the pages between), the book's level, ISBN,
  *   3. pages, in sections of up to 20 photos per visit: each photo is numbered in the order taken, from the first
- *      page (lib/pages.ts), and read in the background (Claude with a key, the device for free). The number read from
+ *      page (lib/pages.ts), and read in the background by Google (lib/pagereader.ts: on the owner's account, Google
+ *      with Claude sorting out the paragraphs, or Claude, if she chooses). The number read from
  *      the photo is shown next to its page number; where they differ the reader can change it, and the pages after
  *      it follow. A retake replaces the photo in its place, so the order holds. When a section ends with a gap in the
  *      page numbers, the reader is asked: a missed page (photograph it now) or a page with no text (a picture, map,
@@ -19,7 +20,7 @@ import {
   arrange, differs, flags, inSection as countInSection, isBusy, keepEarlierOrder, keepPosition, markNoText, missingPages, nextPage, nextSection,
   numberPages, photosToDelete, stitchBook, type PageEntry, type Placed, type Range,
 } from "../lib/pages.ts";
-import { newBook, readCover, readPhotoPage, toParagraphs } from "../lib/books.ts";
+import { newBook, readPhotoPage, toParagraphs } from "../lib/books.ts";
 import { PAGE_READS_PER_DAY, pageReadsToday } from "../lib/features.ts";
 import { localDay } from "../lib/usage.ts";
 import { downscale, COVER_SIDE, OCR_SIDE } from "../lib/images.ts";
@@ -106,7 +107,7 @@ function Why({ onNext }: { onNext: () => void }) {
       <p>To add a printed book you own, you photograph its cover and then its pages. The photos turn into paragraphs to read.</p>
       <ul className="small muted" style={{ margin: 0, paddingLeft: "1.2em", display: "grid", gap: 6 }}>
         <li>Photos stay private: on this device, and their text in your own account when you're signed in.</li>
-        <li>With your Claude key, Claude reads them. Without it, they're read on this device for free.</li>
+        <li>Google reads the pages: up to {PAGE_READS_PER_DAY} a day, for all your books together.</li>
         <li>If you'd rather not allow the camera, you can pick photos from your library instead.</li>
       </ul>
       <button
@@ -237,30 +238,28 @@ function Camera({ onPhoto, busy, hint }: { onPhoto: (b: Blob) => void; busy?: bo
 
 // ---------------------------------------------------------------- 1. cover
 
+/** What the reader sees while a page is read (lib/books.ts readPhotoPage). */
+const PROGRESS: Record<string, string> = {
+  "reading with Google": "Google is reading the page…",
+  "arranging with Claude": "Claude is sorting out the paragraphs…",
+  "reading with Claude": "Claude is reading the page…",
+};
+
 function CoverStep({ onDone }: { onDone: (b: Blob, read: { title: string; author: string; isbn: string | null } | null) => void }) {
-  const hasKey = useStore((s) => s.hasKey);
   const [busy, setBusy] = useState(false);
   const take = async (photo: Blob) => {
     setBusy(true);
     const blob = await downscale(photo, COVER_SIDE).catch(() => photo);
-    let read: { title: string; author: string; isbn: string | null } | null = null;
-    if (hasKey) {
-      try {
-        read = await readCover(photo);
-      } catch (e) {
-        toast(e instanceof AiError ? e.message : "Couldn't read the cover; type the title instead.", 5000);
-      }
-    }
     setBusy(false);
-    onDone(blob, read);
+    onDone(blob, null);
   };
   return (
     <>
       <h1 className="big">The cover</h1>
       {busy ? (
-        <section className="panel"><div className="row"><span className="spinner" /><span>{hasKey ? "Reading the title and author…" : "Saving the cover…"}</span></div></section>
+        <section className="panel"><div className="row"><span className="spinner" /><span>Saving the cover…</span></div></section>
       ) : (
-        <Camera onPhoto={(b) => void take(b)} hint={hasKey ? "Fill the frame with the front cover. Claude reads the title and author." : "Fill the frame with the front cover."} />
+        <Camera onPhoto={(b) => void take(b)} hint="Fill the frame with the front cover." />
       )}
     </>
   );
@@ -436,7 +435,7 @@ function PagesStep({ bookId }: { bookId: string }) {
       const job = queue.current.shift()!;
       update(job.seq, { status: "reading" });
       try {
-        const r = await readPhotoPage(job.blob, job.seq, false, (p, s) => setProgress(s === "reading with Google" ? "Google is reading the page…" : s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…"), { lastPage: rangeRef.current.lastPage });
+        const r = await readPhotoPage(job.blob, job.seq, (p, s) => setProgress(PROGRESS[s] ?? (s === "recognizing text" ? `Reading… ${Math.round(p * 100)}%` : "Getting the Dutch reading model ready…")), { lastPage: rangeRef.current.lastPage });
         // Unsure words don't hold a page back: it is used at once and flagged for an optional quick check.
         const status: PageEntry["status"] = r.problems.length ? "check" : "done";
         await persist(update(job.seq, { status, page: r.page, problems: r.problems, uncertain: r.uncertain, by: r.by, fallback: r.fallback }));
@@ -824,7 +823,7 @@ function CheckPage({ placed, reasons, position, total, bookId, version, onSave, 
           <div className="small muted">
             {position >= 0 ? `${position + 1} of ${total} to check · ` : ""}
             {entry.status === "done" ? "Read" : entry.status === "failed" ? "Couldn't be read" : "Needs a retake"}
-            {entry.by === "device" ? " on this device" : entry.by === "claude" ? " by Claude" : entry.by === "google" ? " by Google" : ""}
+            {entry.by === "device" ? " on this device" : entry.by === "claude" ? " by Claude" : entry.by === "google+claude" ? " by Google, paragraphs by Claude" : entry.by === "google" ? " by Google" : ""}
           </div>
         </div>
       </div>

@@ -8,8 +8,8 @@ Two principles:
 - **A web app, not a store app.** Boekenwurm runs in the browser on any phone, tablet or computer, and is designed to
   look and feel like an installed app. Readers add it to their home screen (iOS: Share → Add to Home Screen; Android:
   the browser's install prompt). No App Store, no Google Play, no Apple developer account.
-- **No AI on Boekenwurm's budget.** Every Claude request uses the reader's own API key, from their own device. There is
-  no Boekenwurm key and no server that calls a model. Without a key, everything still works in free mode (below).
+- **No AI on Boekenwurm's budget.** There is no Boekenwurm key and no server that calls a model. Claude is used only to
+  read page structure, on the owner's account with her own key, while it's tested (below); readers never need a key.
 
 The playtest that came before is kept on the branch `playtest-v1` (also deployed from there if needed) as a reference
 for every behaviour the app must keep.
@@ -23,22 +23,23 @@ for every behaviour the app must keep.
  │   screens: Home · Reader · Add book · Camera · Study · Me    │
  │   packages/engine   strikes, streaks, tokens, badges         │
  │   packages/dutch    base forms                               │
- │   packages/ai       prompts, parsing, checks (Claude)        │
+ │   packages/ai       page reading prompts and checks (Claude) │
  │   packages/books    page stitching, PDF text, free OCR       │
  │   Tesseract.js      free page reading on the device          │
  │   local store: IndexedDB (everything works offline)          │
  └───────────────┬──────────────────────────────┬───────────────┘
-                 │ sync when signed in          │ reader's own Claude key
+                 │ sync when signed in          │ owner's own Claude key
                  ▼                              ▼
- Supabase (EU, Frankfurt)                Anthropic API (optional)
-   Auth: email link, Google                page photos → paragraphs
-   Postgres: books, progress, words        book level, matching, words
-   Storage: covers, page photos, EPUB/PDF  in their sentence
+ Supabase (EU, Frankfurt)                Anthropic API (owner only)
+   Auth: email link, Google                page photos → paragraphs,
+   Postgres: books, progress, words        or Google's text → the
+   Storage: covers, page photos, EPUB/PDF  printed paragraphs
    Row-level security: own rows only
+   Edge Functions: Google Translate, Google Cloud Vision
 ```
 
-There is no server of our own. The app is static files on a CDN; Supabase is the backend; Claude is called from the
-reader's device with the reader's key. That keeps hosting close to free, keeps book text out of anything we run, and
+There is no server of our own. The app is static files on a CDN; Supabase is the backend; Claude, where used, is
+called from the owner's device with her key. That keeps hosting close to free, keeps book text out of anything we run, and
 leaves one clear place to add a server later (a Supabase Edge Function) if a feature ever needs one.
 
 ## Choices and why
@@ -52,37 +53,30 @@ leaves one clear place to add a server later (a Supabase Edge Function) if a fea
 | Accounts, database, files | Supabase, EU region | Postgres + auth + private storage in one; row-level security; GDPR-friendly; generous free tier; open source, so no lock-in |
 | Sign-in | Email link (magic link) + Google | No passwords to manage; Google is one tap on Android and works on iOS. Sign in with Apple needs a paid Apple developer account, so it's left out; any Apple user can use the email link |
 | Offline and speed | Local-first: IndexedDB is the source of truth on the device; changes sync to Supabase in the background | Reading never waits for the network; works on a train |
-| Page photos → text | With a key: Claude vision. Free: Tesseract.js on the device (Dutch model) | Claude is the most accurate for Dutch; the free route costs nothing and works offline, with a check step for unsure words |
+| Page photos → text | Google Cloud Vision (access code); on the owner's account, optionally with Claude sorting the paragraphs, or Claude instead | Vision copies Dutch letters well but gets layouts wrong; Claude reads layouts well, so it may only regroup Google's text, never change it |
 | Default dictionary | Wiktionary (via the wiktextract/kaikki.org extract) + wordfreq frequencies | Both CC BY-SA (commercial use with attribution). Frequency bands give a rough CEFR level per word |
 | Textbook tracking | Private import from the reader's own copy | Publisher content never ships with the app |
 
-## Who pays for AI, and free mode
+## Who pays for AI
 
-Boekenwurm never spends its owner's money on a reader's AI use. Claude features run only with a key the reader adds
-under **Me → Claude**:
+Boekenwurm never spends its owner's money on AI, and readers need no AI key. Claude did more for readers with their
+own key (grading books, Match my level, words in their sentence, reading covers); that was removed on 2026-11-27
+(DESIGN.md, Decided). What is left is page reading, on the admin account only, with the owner's own key from the
+Claude Console (console.anthropic.com), stored on her device (not synced) and sent only to Anthropic:
 
-- The key comes from the reader's own account on the Claude Console (console.anthropic.com), billed by Anthropic to
-  them, pay as you go. A Claude.ai chat subscription is billed separately from the API; some paid plans include monthly
-  API credits, so readers should check theirs.
-- The key is stored on the reader's device only (not synced to Supabase) and sent only to Anthropic.
-- The app suggests setting a monthly spending limit in the Console, and shows an estimate before costly actions
-  ("about 210 pages, one request each").
+| Who reads a page (`lib/pagereader.ts`) | What happens |
+|---|---|
+| Google (default; everyone with an access code) | Google Cloud Vision reads the page, 20 pages a day per account |
+| Google, with Claude for the paragraphs | Google reads the words; Claude, with the photo and Google's blocks, returns the paragraphs; they must match Google's letters exactly (whole blocks may be dropped), and the text kept is Google's (`packages/ai/src/structure.ts`) |
+| Claude instead of Google | Claude reads the page from the photo (`packages/ai/src/photo.ts`); Google's daily pages aren't used |
 
-| Feature | Free | With your Claude key |
-|---|---|---|
-| Read EPUB, text PDF, sample story | ✅ | ✅ |
-| Strikes, streaks, tokens, badges, study, sync | ✅ | ✅ |
-| Word meanings | Dictionary meaning | Dictionary, plus the meaning in this sentence |
-| Photographed pages → paragraphs | On the device (Tesseract.js), then check the words it was unsure of | Claude: more accurate, no checking step |
-| Scanned PDF pages | On the device | Claude |
-| Cover → title, author | Typed by the reader | Read from the cover photo |
-| ISBN | Typed, or scanned from the barcode where the browser supports it | Read from the cover photo |
-| Book level | Set by the reader (A1–C2), with the word-list match shown as a hint | Graded on upload (vocabulary, grammar, context) |
-| Match my level | — | ✅ |
+Book levels are set by the reader on upload, with the share of the book's words they know as a hint. Covers are
+photographed for the shelf; the title, author and ISBN are typed (or the ISBN scanned from the barcode where the
+browser supports it).
 
-The free page reading uses Tesseract.js and its Dutch model (both Apache-2.0), downloaded once (about 4 MB) and cached.
-`packages/books/ocr.ts` turns its lines into the same page shape as Claude's reading and PDF pages, so all are
-stitched the same way.
+The on-device page reader uses Tesseract.js and its Dutch model (both Apache-2.0), downloaded once (about 4 MB) and
+cached; it isn't offered to readers (DESIGN.md, 2026-11-20). `packages/books/ocr.ts` turns its lines into the same page
+shape as Google's and Claude's readings and PDF pages, so all are stitched the same way.
 
 **Google page reading (access code, a test of a future paid tier).** Readers who entered an access code (Me → Access
 code; migration 0004) have their page photos read by Google Cloud Vision's document text detection instead of on the
@@ -125,8 +119,8 @@ Bottom tab bar, like a native app: **Home · Study · Words · Account**. The re
   free writing, entries on this device, the weekly reminder).
 - **Account** — four categories (new features join one of them): **Achievements** (rank and badges, earned and in
   progress), **Reading** (reading settings and word lookups), **Settings** (sign-in and sync, localization, name,
-  install, connection check, export and delete my data, about and updates), **Experimental** (Claude key and models,
-  access code), **Privacy** (the full privacy notice: docs/PRIVACY.md itself, bundled at build time).
+  install, connection check, export and delete my data, about and updates), **Experimental** (access code; on the admin
+  account, the Claude key and who reads pages), **Privacy** (the full privacy notice: docs/PRIVACY.md itself, bundled at build time).
 
 **Languages.** The app's own text lives in message catalogs (`apps/web/src/i18n/en.ts` is the source; `uk.ts`, `ar.ts`
 translate it; a missing key falls back to English). `lib/i18n.ts` fills in `{placeholders}`, picks plural forms with
@@ -144,15 +138,14 @@ remains only as the code holder's fallback past today's 20 Google pages.
 Page photos are deleted from the device once their page is read and checked (`lib/pages.ts` `photosToDelete`), and
 the data export lists photographed books without their text (`lib/export.ts`); see docs/PRIVACY.md.
 
-1. **Cover** (required): take a photo. With a key, Claude reads the title and author from it; in free mode the reader
-   types them. Either way the reader confirms before saving.
+1. **Cover** (required): take a photo, for the shelf. The reader types the title and author.
 2. **Details**: the **first page to read** and the **last page** (both required). Books often have title pages,
    contents and a prologue before the story; the reader starts where they want, prologue included or not, and
    progress counts only those pages (pages 9 to 212 are 204 pages). Then the book's level (A1–C2, required for now)
    and ISBN (optional).
 3. **Pages, in sections of up to 20 photos.** Each visit to the camera is one section, capped at 20 photos so a
    sitting stays manageable; at 20 the camera closes and offers the review, then reading. Each photo is read in the
-   background: one Claude request per page with a key, or on-device recognition in free mode.
+   background by Google Cloud Vision (on the owner's account, also by Claude if she chooses: `lib/pagereader.ts`).
 4. **Pages are numbered in the order they are taken** (`apps/web/src/lib/pages.ts`): first page 7, so the second
    photo is page 8, whatever number can or can't be read on it. Reading printed page numbers proved unreliable with
    stylised fonts, so the number read from the photo (on the device: a full-page pass, then a digits-only pass over
@@ -212,8 +205,8 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
 |---|---|---|
 | EPUB | ✅ | ✅ (same import check) |
 | PDF with text | Python tool for the textbook only | ✅ `packages/books/pdf.ts` (pdf.js): paragraphs from line gaps, running heads and page numbers removed, hyphenation joined |
-| PDF scanned (images) | — | Detected (no text layer) and read like photos (Claude or on-device) |
-| Photos of pages | — | ✅ Claude vision with a key; on-device recognition free |
+| PDF scanned (images) | — | Detected (no text layer) and read like photos (access code) |
+| Photos of pages | — | ✅ Google Cloud Vision (access code); Claude on the owner's account |
 | Kobo store books (DRM) | — | Not possible; DRM-free files only |
 
 ## Word lists
@@ -225,7 +218,7 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   The app loads it in the background, the service worker keeps it for offline use, and Me → About carries the
   attribution. Both sources are CC BY-SA 4.0, and so is the built file.
 - A word that is mostly a form of a commoner word (*was* → *zijn*) maps to that word; its own meaning (*laundry*) is
-  kept but ranked lower. Dutch-language explanations still come from Claude; a Dutch Wiktionary build can add them later.
+  kept but ranked lower. Dutch-language definitions come from the reader's own word list; a Dutch Wiktionary build can add them later.
 - **Common words:** the first 5,000 lemmas of that dictionary (it is written most common first) are the common-words
   list, added in one tap from the Words tab; nothing extra is downloaded.
 - **Your own lists (private):** paste, .txt/.csv/.tsv, Excel (.xlsx, read with JSZip), Anki (.apkg: JSZip plus
@@ -276,9 +269,9 @@ Conflicts resolve last-write-wins per row, except counters (`word_stats`), which
   `select u.email, t.day, t.words from translation_usage t join auth.users u on u.id = t.user_id order by t.day desc;`
 - Content-security policy: scripts from the app only; network to Supabase (including the translate and read-page
   functions), `api.anthropic.com`, and the one-time download of the free text-recognition model.
-- Page photos leave the device only for a reader's own Claude key (to Anthropic) or, for access-code holders, to Google
-  Cloud Vision through the read-page function, which doesn't store them. Everyone else's are read on the device.
-- The Claude key never leaves the device except to Anthropic; it is not synced to Supabase. Boekenwurm has no key of
+- Page photos leave the device only for access-code holders, to Google Cloud Vision through the read-page function,
+  which doesn't store them, and, on the owner's account if she chooses, to Anthropic with her own key.
+- The owner's Claude key never leaves her device except to Anthropic; it is not synced to Supabase. Boekenwurm has no key of
   its own and no server that calls a model.
 - Readers can export everything (JSON) and delete their account and all files (GDPR).
 - Book text, photos and matched versions are private to their owner; nothing is shared between readers.

@@ -3,7 +3,7 @@
  * and Supabase is synced in the background when the reader is signed in.
  *
  * Stores: kv (profile, word book, cards, outbox…), books, texts (paragraphs per book), blobs (covers, page
- * photos), cache (Claude replies: matched paragraphs, explanations, grades).
+ * photos), cache (unused since Claude stopped grading, matching and explaining on 2026-11-27; emptied at start).
  */
 const NAME = "boekenwurm-app";
 const VERSION = 1;

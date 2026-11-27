@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { coverPrompt, normalizeIsbn, pagePrompt, parseCover, parsePage, validatePage } from "../src/photo.ts";
+import { normalizeIsbn, pagePrompt, parsePage, validatePage } from "../src/photo.ts";
 
 const img = { mediaType: "image/jpeg" as const, data: "AAAA" };
 
@@ -37,11 +37,4 @@ test("ISBNs are kept only with a valid check digit", () => {
   assert.equal(normalizeIsbn("9780306406158"), null);
   assert.equal(normalizeIsbn("0-306-40615-2"), "0306406152");
   assert.equal(normalizeIsbn("not an isbn"), null);
-});
-
-test("cover replies give title, author and a checked ISBN", () => {
-  assert.match(coverPrompt(img).system, /Never invent/);
-  const c = parseCover('{"title": "  Een   boek ", "author": "Test Auteur", "isbn": "978 0 306 40615 7"}');
-  assert.deepEqual(c, { title: "Een boek", author: "Test Auteur", isbn: "9780306406157" });
-  assert.equal(parseCover('{"title": "X", "isbn": "123"}').isbn, null);
 });

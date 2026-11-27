@@ -37,8 +37,8 @@
 - **Resend** (an email service): if your account reaches 200 page readings in a calendar month, Emergence Pathways
   receives one email about it, with your account's email address, so we can contact you about your use. Nothing is
   blocked by it.
-- **Anthropic (Claude)**: only if you add your own Claude API key (Account → Experimental), the text a feature needs
-  (for example a paragraph to match to your level). Your key stays on your device.
+- **Anthropic (Claude)**: not used for readers. Only on the app owner's own account, while it is being tested, page
+  photos (and the text Google read from them) are sent to Claude with her own key, to read the page's paragraphs.
 - **Apps you connect** (Poortwachter; for now only on the owner's account): **only after you read what it will
   receive and allow it** (Account → Experimental → Connected apps), that app can ask for **today's** numbers: pages read and active reading minutes (also counted for
   reading at or above your level), flashcards reviewed, and whether you wrote in your diary today (never the text).

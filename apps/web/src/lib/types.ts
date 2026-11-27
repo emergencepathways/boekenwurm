@@ -1,5 +1,5 @@
 import type { CefrLevel, Preset, Progress, ReviewCard, WordBook } from "@boekenwurm/engine";
-import type { BookLevel } from "@boekenwurm/ai";
+import type { PageReaderChoice } from "./pagereader.ts";
 import type { Token, VerdictKind } from "./text.ts";
 
 /** "sample" is in the database enum from the playtest era; the app no longer creates it. */
@@ -16,7 +16,11 @@ export interface Book {
   isbn: string | null;
   level: CefrLevel | null;
   levelSource: "reader" | "graded" | null;
-  scan: (BookLevel & { verdict?: VerdictKind; note?: string }) | null;
+  /**
+   * A level Claude graded the book at, from before grading was removed (2026-11-27); kept for books graded then.
+   * New books have none.
+   */
+  scan: { level?: string; wordMatch?: number | null; withinReach?: number; grammar?: string[]; verdict?: VerdictKind; note?: string } | null;
   status: BookStatus;
   /** Last printed page of the book (progress runs firstPage..pageCount). */
   pageCount: number | null;
@@ -58,9 +62,10 @@ export interface BookText {
 export interface Settings {
   preset: Preset;
   defPref: "en" | "nl";
-  models: { match: string; words: string; vision: string };
-  /** The free route reads photos on the device even with a key. */
-  preferFreeReading: boolean;
+  /** The Claude model that reads pages (the owner's admin account only, lib/pagereader.ts). */
+  models: { vision: string };
+  /** Who reads photographed pages: Google by default; Claude only for the admin account with a key (lib/pagereader.ts). */
+  pageReader?: PageReaderChoice;
   /** Colour-coded text: words coloured by how often they were revealed in the last 14 days. Off by default. */
   colorText?: boolean;
   /** Cards in a review set, 20–50 (30 by default). */
@@ -82,8 +87,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   preset: "standard",
   defPref: "en",
-  models: { match: "claude-sonnet-5-5", words: "claude-sonnet-5-5", vision: "claude-sonnet-5-5" },
-  preferFreeReading: false,
+  models: { vision: "claude-sonnet-5-5" },
 };
 
 export interface Profile {
@@ -108,7 +112,10 @@ export interface WordDelta {
   untapped?: number;
 }
 
-/** A meaning shown on a tapped word or a flashcard: from the reader's word list, the open dictionary or Claude. */
+/**
+ * A meaning shown on a tapped word or a flashcard: from the reader's word list, the open dictionary, Google Translate,
+ * a compound, or the reader. "claude" marks meanings Claude gave before 2026-11-27; they are kept and shown like the rest.
+ */
 export interface Meaning {
   en: string | null;
   nl: string | null;

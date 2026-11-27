@@ -2,8 +2,11 @@
  * Calls to Claude with the reader's own API key, straight from their device to api.anthropic.com.
  * Boekenwurm has no key of its own and no server that calls a model (ARCHITECTURE.md, "Who pays for AI").
  * The key is kept on this device only and is never synced to Supabase.
+ *
+ * Claude only reads page photos now, for the owner's admin account (lib/pagereader.ts); grading books, matching
+ * paragraphs, explaining words and reading covers were removed on 2026-11-27 (DESIGN.md).
  */
-import type { Prompt, VisionPrompt } from "@boekenwurm/ai";
+import type { VisionPrompt } from "@boekenwurm/ai";
 
 const KEY_STORE = "boekenwurm-claude-key";
 
@@ -77,7 +80,6 @@ async function call(system: string, content: Content, maxTokens: number, model: 
   return (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
 }
 
-export const claude = (p: Prompt, model: string, signal?: AbortSignal) => call(p.system, p.user, p.maxTokens, model, signal);
 export const claudeVision = (p: VisionPrompt, model: string, signal?: AbortSignal) => call(p.system, p.content, p.maxTokens, model, signal);
 
 /** A tiny request to check that the key and model work. */

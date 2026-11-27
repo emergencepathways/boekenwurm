@@ -24,6 +24,7 @@ import { LANGUAGES, languageOf, translate, useT, type Key, type Lang } from "../
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import type { BookText, Settings } from "../lib/types.ts";
 import { booksForExport } from "../lib/export.ts";
+import { pageReaderFor } from "../lib/pagereader.ts";
 import { startGame } from "../lib/hexbound.ts";
 import { allowLink, clearLinkRequest, disconnect, exportConnections, forgetConnections, linkRequest, listConnections, NotReady, startUrl, type Connection } from "../lib/connections.ts";
 
@@ -479,7 +480,7 @@ function LookupsSection() {
         <span className="num">{used} of {limit}</span>
         <span className="bar grow" aria-label={`${used} of ${limit} lookups used today`}><i style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} /></span>
       </div>
-      <p className="small">Your saved meanings: <span className="num">{saved.toLocaleString()}</span> words (from Google, Claude, or typed by you).</p>
+      <p className="small">Your saved meanings: <span className="num">{saved.toLocaleString()}</span> words (found by Google or Claude, or typed by you).</p>
     </section>
   );
 }
@@ -657,24 +658,35 @@ function AccessCodeSection() {
 
 // ---------------------------------------------------------------- Claude
 
+/**
+ * Claude reads page photos for the owner's admin account only, with her own key (lib/pagereader.ts). It does nothing
+ * else since 2026-11-27 (DESIGN.md). Anyone else who saved a key earlier is told it is no longer used, and can remove it.
+ */
 function ClaudeSection() {
   const hasKey = useStore((s) => s.hasKey);
-  const models = useStore((s) => s.profile.settings.models);
-  const preferFree = useStore((s) => s.profile.settings.preferFreeReading);
+  const admin = useStore((s) => s.features.includes(ADMIN));
+  const google = useStore((s) => s.features.includes(GOOGLE_PAGES));
+  const model = useStore((s) => s.profile.settings.models.vision);
+  const choice = useStore((s) => s.profile.settings.pageReader ?? "google");
   const [key, setKey] = useState("");
   const [testing, setTesting] = useState(false);
-  const setModel = (k: keyof Settings["models"], v: string) =>
-    void updateProfile((x) => ({ ...x, settings: { ...x.settings, models: { ...x.settings.models, [k]: v } } }));
+  const setSetting = (patch: Partial<Settings>) => void updateProfile((x) => ({ ...x, settings: { ...x.settings, ...patch } }));
+  if (!admin)
+    return hasKey ? (
+      <section className="panel" id="claude">
+        <h2>Claude</h2>
+        <p>Boekenwurm no longer uses Claude, so the Claude key saved on this device isn't used. You can remove it.</p>
+        <button className="btn small" type="button" onClick={() => (setClaudeKey(""), toast("Key removed from this device."))}>Remove key</button>
+      </section>
+    ) : null;
+  const effective = pageReaderFor(choice, { admin, hasKey, google });
   return (
     <section className="panel" id="claude">
-      <h2>Claude</h2>
+      <h2>Claude: reading pages</h2>
       <p>
-        Book levels, word meanings in their sentence, and reading photographed pages use your own Claude API key. It stays on
-        this device (never synced) and is sent only to Anthropic. Without it, everything else works for free.
-      </p>
-      <p className="small">
-        Get a key at console.anthropic.com → API keys. API use is billed by Anthropic to your account, separately from a Claude.ai
-        subscription. Set a monthly spending limit there (Settings → Limits).
+        For your account only, while it's being tested: Claude can help Google read photographed and scanned pages, with
+        your own Claude API key. The key stays on this device (never synced) and is sent only to Anthropic. Claude is used
+        for nothing else.
       </p>
       <form className="row" onSubmit={(e) => (e.preventDefault(), setClaudeKey(key.trim()), setKey(""), toast(key.trim() ? "Key saved on this device." : "Key removed."))}>
         <input
@@ -698,7 +710,7 @@ function ClaudeSection() {
             onClick={async () => {
               setTesting(true);
               try {
-                await testKey(models.words);
+                await testKey(model);
                 toast("Your Claude key works.");
               } catch (e) {
                 toast((e as Error).message, 5000);
@@ -711,24 +723,33 @@ function ClaudeSection() {
           <button className="btn small ghost" type="button" onClick={() => (setClaudeKey(""), toast("Key removed from this device."))}>Remove key</button>
         </div>
       )}
-      {(
-        [
-          ["match", "Book level and matching"],
-          ["words", "Words in context"],
-          ["vision", "Reading photos"],
-        ] as const
-      ).map(([k, label]) => (
-        <label key={k} className="field">
-          <span>{label}</span>
-          <select value={models[k]} onChange={(e) => setModel(k, e.target.value)}>
-            {MODELS.map(([id, name, note]) => <option key={id} value={id}>{name}: {note}</option>)}
-          </select>
-        </label>
-      ))}
-      <label className="row small">
-        <input type="checkbox" checked={preferFree} onChange={(e) => void updateProfile((x) => ({ ...x, settings: { ...x.settings, preferFreeReading: e.target.checked } }))} />
-        Read photographed pages on this device even with a key (free, a little less accurate)
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }} disabled={!hasKey}>
+        <legend className="label">Who reads pages</legend>
+        {(
+          [
+            ["google", "Google", `Google Cloud Vision reads each page (${PAGE_READS_PER_DAY} pages a day).`],
+            ["google+claude", "Google, with Claude for the paragraphs", "Google reads the words; Claude looks at the photo and sorts them into the printed paragraphs and finds the page number. Claude can't change a word: if it tries, Google's layout is kept."],
+            ["claude", "Claude instead of Google", "Claude reads the page from the photo. Google's daily pages aren't used."],
+          ] as const
+        ).map(([id, name, note]) => (
+          <label key={id} style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10, alignItems: "start" }}>
+            <input type="radio" name="page-reader" checked={choice === id} onChange={() => setSetting({ pageReader: id })} style={{ marginTop: 4 }} />
+            <span><b>{name}</b><br /><span className="small muted">{note}</span></span>
+          </label>
+        ))}
+      </fieldset>
+      {!hasKey && <p className="small">Save your key to choose Claude. Until then Google reads every page.</p>}
+      {hasKey && choice === "google+claude" && effective !== choice && <p className="small">Google + Claude needs Google page reading (an access code), so Google alone reads pages for now.</p>}
+      <label className="field">
+        <span>Claude model for pages</span>
+        <select value={model} onChange={(e) => setSetting({ models: { vision: e.target.value } })}>
+          {MODELS.map(([id, name, note]) => <option key={id} value={id}>{name}: {note}</option>)}
+        </select>
       </label>
+      <p className="small">
+        Get a key at console.anthropic.com → API keys. API use is billed by Anthropic to your account, separately from a
+        Claude.ai subscription. Set a monthly spending limit there (Settings → Limits).
+      </p>
     </section>
   );
 }

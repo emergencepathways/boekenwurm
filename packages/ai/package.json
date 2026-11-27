@@ -1,7 +1,7 @@
 {
   "name": "@boekenwurm/ai",
   "version": "0.1.0",
-  "description": "Model-agnostic level work for Boekenwurm: book grading, level matching, word-in-context explanations.",
+  "description": "Model-agnostic page reading for Boekenwurm: a page photo into paragraphs, or Google's reading into the page's printed paragraphs.",
   "type": "module",
   "private": true,
   "exports": { ".": "./src/index.ts" },

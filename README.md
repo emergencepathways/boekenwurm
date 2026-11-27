@@ -11,8 +11,7 @@ them before, and a flashcard review of exactly those words.
   itself (not the metadata) to keep out non-Dutch text and pre-1955 spelling.
 - **Words that don't stick, found for you.** Every word counts its reveals against its encounters.
 - **Dutch definitions on a streak**, and always from B1.
-- **Your books at your level.** On upload, a book is ranked (*About B1 · words you know 72%*). Above your level,
-  each paragraph can be matched to your level as you read, with the original one tap away. Bring your own Claude key.
+- **Your own books.** On upload you set the book's level, with the share of its words you already know as a hint.
 - **Words in context**: what a word means in this sentence, not just in the dictionary.
 - **Flashcards built in**, with export to Anki (`.apkg` or AnkiConnect) and CSV.
 

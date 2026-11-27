@@ -14,6 +14,7 @@ import { hasKey } from "./claude.ts";
 import { newCard, upgradeCard } from "./cards.ts";
 import {
   DEFAULT_SETTINGS,
+  type Settings,
   type Book,
   type BookText,
   type CardState,
@@ -119,7 +120,19 @@ export interface WordListInfo {
 }
 const infoOf = (l: WordList): WordListInfo => ({ id: l.id ?? "textbook", name: l.name, source: l.source ?? "textbook", added: l.added ?? 0, size: Object.keys(l.entries).length });
 
+/**
+ * Settings saved by an older version, brought up to date: the Claude models for grading, matching and words, and the
+ * "read on this device even with a key" switch, are gone with those features (2026-11-27).
+ */
+export function cleanSettings(saved: Partial<Settings> | undefined): Settings {
+  const { preferFreeReading: _free, ...rest } = (saved ?? {}) as Partial<Settings> & { preferFreeReading?: boolean };
+  return { ...DEFAULT_SETTINGS, ...rest, models: { vision: saved?.models?.vision ?? DEFAULT_SETTINGS.models.vision } };
+}
+
 export async function init(): Promise<void> {
+  // Replies kept from Claude features that were removed (grades, matched paragraphs, word explanations): nothing reads
+  // them any more, so they leave the device (2026-11-27).
+  void db.clear("cache");
   const [profile, stored, wordbook, meanings, examples, cards, oldList, savedLists] = await Promise.all([
     db.get<Profile>("kv", "profile"),
     db.all<Book>("books"),
@@ -137,7 +150,7 @@ export async function init(): Promise<void> {
   setWordLists(lists);
   setState({
     ready: true,
-    profile: profile ? { ...freshProfile(), ...profile, settings: { ...DEFAULT_SETTINGS, ...profile.settings, models: { ...DEFAULT_SETTINGS.models, ...profile.settings?.models } } } : freshProfile(),
+    profile: profile ? { ...freshProfile(), ...profile, settings: cleanSettings(profile.settings) } : freshProfile(),
     books: sortBooks(stored.filter((b) => b.id !== LEGACY_SAMPLE_ID)),
     wordbook: wordbook ?? {},
     meanings: meanings ?? {},
@@ -195,10 +208,10 @@ export const saveCover = (bookId: string, blob: Blob) => db.put("blobs", blob, `
 
 export async function deleteBook(id: string): Promise<void> {
   setState({ books: state.books.filter((b) => b.id !== id) });
-  // Everything of the book on this device: its text, cover, page photos and their readings, cached adaptations.
+  // Everything of the book on this device: its text, cover, page photos and their readings.
   await Promise.all([
     db.del("books", id), db.del("texts", id), db.del("blobs", `cover:${id}`), db.delPrefix("blobs", `page:${id}:`),
-    db.del("kv", `pages:${id}`), db.delPrefix("cache", `m|${id}|`),
+    db.del("kv", `pages:${id}`),
   ]);
   const gone = ((await db.get<string[]>("kv", "deletedBooks")) ?? []).concat(id);
   await db.put("kv", gone, "deletedBooks");
@@ -303,12 +316,12 @@ export async function recordToken(s: Session): Promise<boolean> {
 
 // ---------------------------------------------------------------- words and cards
 
-/** Meanings the reader's account keeps (word_meanings): found by Google or Claude, or typed by the reader. */
+/** Meanings the reader's account keeps (word_meanings): found by Google, given by Claude before 2026-11-27, or typed by the reader. */
 export const SAVED_SOURCES: ReadonlyArray<Meaning["from"]> = ["translation", "claude", "manual"];
 
 export async function saveMeaning(lemma: string, m: Meaning, opts: { sync?: boolean } = {}): Promise<void> {
   const have = state.meanings[lemma];
-  // A meaning the reader typed is theirs; Claude's (in a sentence) beats a bare translation.
+  // A meaning the reader typed is theirs; one Claude gave earlier (in a sentence, before 2026-11-27) beats a bare translation.
   if (have?.from === "manual" && m.from !== "manual") return;
   if (have?.from === "claude" && m.from !== "claude" && m.from !== "manual") return;
   const meanings = { ...state.meanings, [lemma]: m };

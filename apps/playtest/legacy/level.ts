@@ -1,3 +1,5 @@
+// Frozen for the playtest (a reference, not hosted): the Claude level work it was built with. The app no longer
+// grades books, matches paragraphs or explains words (DESIGN.md, 2026-11-27); packages/ai keeps only page reading.
 /**
  * Level work done by a language model: grading a book, matching a paragraph to the
  * reader's level, and explaining a word in its sentence.

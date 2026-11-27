@@ -28,7 +28,7 @@ export interface PageEntry {
   page: PageText | null;
   problems: string[];
   uncertain: string[];
-  by: "claude" | "google" | "device" | null;
+  by: "claude" | "google" | "google+claude" | "device" | null;
   /** Read on the device although the reader has Google page reading: shown as a gentle flag. */
   fallback?: string;
   /** The photo was deleted once the page was read and checked (photosToDelete); the text read from it stays. */

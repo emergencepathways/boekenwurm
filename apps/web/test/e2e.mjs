@@ -76,28 +76,30 @@ const DICT = {
 };
 
 // ---------------------------------------------------------------- Claude, mocked
-const calls = { grade: 0, match: 0, explain: 0 };
+// Claude only reads page structure now, on the owner's account (lib/pagereader.ts). Any other request is counted, so
+// the test can say Claude was never asked for anything else.
+const calls = { page: 0, structure: 0, other: 0, blocks: "" };
 async function mockClaude(route) {
   const body = JSON.parse(route.request().postData() || "{}");
   const sys = body.system || "";
-  const user = typeof body.messages?.[0]?.content === "string" ? body.messages[0].content : "";
+  const content = body.messages?.[0]?.content;
+  const textPart = Array.isArray(content) ? content.find((c) => c.type === "text")?.text ?? "" : String(content ?? "");
   let text = "ok";
-  if (/grade the reading level/i.test(sys)) {
-    calls.grade++;
-    const ids = [...user.matchAll(/id="(p\d+)"/g)].map((m) => m[1]);
-    text = JSON.stringify(ids.map((id) => ({ id, level: "B1", grammar: ["relative clauses"], context: "" })));
-  } else if (/adapt one paragraph/i.test(sys)) {
-    calls.match++;
-    const orig = user.match(/<paragraph>\n([\s\S]*?)\n<\/paragraph>/)[1];
-    text = JSON.stringify({ original_level: "B1", changed: true, text: orig.replace(/flink gestegen zijn/, "veel hoger zijn").replace(/aandachtig/, "goed") });
-  } else if (/explain one Dutch word/i.test(sys)) {
-    calls.explain++;
-    const word = user.match(/Word: (.*)/)[1];
-    text = JSON.stringify({ lemma: word.toLowerCase(), meaning_en: `meaning of ${word}`, meaning_nl: `uitleg van ${word}`, note: "" });
-  }
+  if (/check the layout of one printed page/i.test(sys)) {
+    calls.structure++;
+    calls.blocks = textPart;
+    // The Sem aan zee page: Google read the chapter number "1" as text and the opening as two paragraphs. Claude
+    // leaves the number out and joins the two, as printed; the words are Google's.
+    const blocks = [...textPart.matchAll(/^\[\d+\] (.*)$/gm)].map((m) => m[1]).filter((b) => !/^\d+$/.test(b));
+    text = JSON.stringify({ page_number: 5, paragraphs: [blocks.join(" ")], starts_mid_paragraph: false, ends_mid_paragraph: false, ends_with_hyphen: false });
+  } else if (/read a photograph of one printed page/i.test(sys)) {
+    calls.page++;
+    text = JSON.stringify({ page_number: null, paragraphs: [], problems: [] });
+  } else if (!/Reply with the single word: ok/.test(sys)) calls.other++;
   await route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
     body: JSON.stringify({ content: [{ type: "text", text }] }) });
 }
+const claudeCalls = () => calls.page + calls.structure + calls.other;
 
 // ---------------------------------------------------------------- the run
 const browser = await chromium.launch({ executablePath: existsSync("/usr/bin/google-chrome") ? "/usr/bin/google-chrome" : undefined });
@@ -291,7 +293,7 @@ check(await page.getByRole("heading", { name: "Weekly diary challenge" }).isVisi
 check(await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).locator(".dot").isVisible(), "the Words tab is marked too");
 await shot("02-home-empty");
 
-step("add an EPUB without a Claude key: import check, the reader chooses the level");
+step("add an EPUB: import check, the reader chooses the level");
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.locator('input[type=file][accept*="epub"]').setInputFiles(marktPath);
 await page.getByText("Ready to read").waitFor();
@@ -348,7 +350,7 @@ await tapWord(page.locator(".para .w", { hasText: /^hele$/ }));
 await page.getByText(/You've used today's 200 Google Translate lookups/).waitFor();
 check(translated.length === 2, "over the limit, nothing is sent to Google");
 check((await used()) === pips0 + 1, "and the tap doesn't count yet");
-check(await page.getByRole("button", { name: "Connect Claude" }).isVisible(), "the reader can connect Claude");
+check((await page.getByRole("button", { name: "Connect Claude" }).count()) === 0, "Claude isn't offered for meanings any more");
 check((await page.getByRole("link", { name: /Look it up/ }).getAttribute("href")).includes("text=hele"), "or look the word up themselves");
 await shot("04c-limit");
 await page.getByLabel("Meaning of hele").fill("whole");
@@ -823,47 +825,42 @@ check(true, "and back to fouten");
 await page.getByRole("button", { name: "Home" }).first().click();
 await page.locator(".hello").waitFor();
 
-step("Me: add a Claude key (mocked) and check the connection");
+step("Me: Claude isn't offered to readers; a key saved earlier can be removed; check the connection");
+await page.evaluate(() => (localStorage.setItem("boekenwurm-claude-key", "sk-ant-old-key"), window.dispatchEvent(new Event("boekenwurm:key"))));
 await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
 await page.getByRole("tab", { name: "Experimental" }).click();
-await page.getByLabel("Claude API key").fill("sk-ant-test-key");
-await page.locator("#claude").getByRole("button", { name: "Save" }).click();
-check(await page.getByText(/saved/).first().isVisible(), "key saved on this device");
+check(!(await page.getByLabel("Claude API key").isVisible()), "readers get no Claude key field");
+check(await page.getByText("Boekenwurm no longer uses Claude, so the Claude key saved on this device isn't used. You can remove it.").isVisible(), "a key saved earlier: the reader is told it isn't used");
+await page.locator("#claude").getByRole("button", { name: "Remove key" }).click();
+check(await page.evaluate(() => localStorage.getItem("boekenwurm-claude-key")) === null && (await page.locator("#claude").count()) === 0, "and can remove it from the device");
 await page.getByRole("tab", { name: "Settings" }).click();
-check(!(await page.getByLabel("Claude API key").isVisible()), "Claude lives under Experimental, not Settings");
 await page.getByRole("button", { name: "Run check" }).click();
 await page.locator(".checklist, .verdict").first().waitFor({ timeout: 15000 });
 check(await page.getByText(/Not reachable|Sign-in service/).first().isVisible(), "connection check reports Supabase unreachable here");
 check(await page.getByText(/12 Dutch words and 3 word forms/).isVisible(), "the dictionary and its credits are shown under About");
 await shot("07-me");
 
-step("add an EPUB with a key: graded level, Match my level (admin only), words in context");
+step("add an EPUB: the reader sets the level (no grading, no Match my level), words show their meanings only");
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.locator('input[type=file][accept*="epub"]').setInputFiles(epubPath);
-await page.getByText("About B1").waitFor({ timeout: 15000 });
-check(!(await page.getByRole("button", { name: "Match my level" }).isVisible()), "Match my level is hidden from readers");
-vision.admin = true; // the owner's account: experimental settings
-await page.reload();
-await page.locator(".continue").waitFor();
-await page.getByRole("button", { name: "Add a book" }).click();
-await page.locator('input[type=file][accept*="epub"]').setInputFiles(epubPath);
 await page.getByText("Ready to read").waitFor();
-await page.getByText("About B1").waitFor({ timeout: 15000 });
-check(calls.grade === 1, "Claude graded the book once");
-await shot("08-add-graded");
-await page.getByRole("button", { name: "Match my level" }).click();
-await page.locator(".chip", { hasText: "Matched to A2" }).waitFor({ timeout: 15000 });
-check(calls.match >= 1, "paragraphs matched to the reader's level");
-await page.getByRole("button", { name: "Show original" }).click();
-check(await page.locator(".original").isVisible(), "the original is one tap away");
+check(await page.getByText(/Choose the level this book feels like to you/).isVisible(), "the reader chooses the book's level");
+check((await page.getByText(/About B1|Ranking this book/).count()) === 0, "the book isn't graded");
+await page.getByRole("group", { name: "Book level" }).getByRole("button", { name: "B1" }).click();
+check((await page.getByRole("button", { name: "Match my level" }).count()) === 0, "above the reader's level, nothing offers to rewrite it");
+await shot("08-add-level");
+await page.getByRole("button", { name: "Add to my books" }).click();
 await tapWord(page.locator(".para .w:not(.name)").first());
-await page.getByText("In this sentence").waitFor({ timeout: 15000 });
-check(calls.explain >= 1, "word explained in its sentence");
-await shot("09-matched");
+check((await page.getByText(/In this sentence|Checking this sentence/).count()) === 0 && (await page.getByText(/Matched to|Show original/).count()) === 0, "the reader shows the book's own text and the word's meaning, nothing from Claude");
+check(claudeCalls() === 0, "Claude was never asked anything for a reader");
+await shot("09-reader-b1");
 await page.getByRole("button", { name: "Back to Home" }).click();
 check((await page.locator(".bookbtn").count()) === 2, "both books are on the shelf");
 check((await page.locator(".continue").textContent()).includes("Testboek"), "Continue reading points at the book opened last");
+vision.admin = true; // the owner's account from here (connected apps); Claude still needs her key on this device
+await page.reload();
+await page.locator(".continue").waitFor();
 
 step("delete a book from its ••• button");
 await page.getByRole("button", { name: /Options for Marktdag/ }).click();
@@ -940,7 +937,7 @@ await shot("11-camera-why");
 
 // ---------------------------------------------------------------- a printed book, photographed out of order
 // Page photos are drawn here (invented Dutch text, a printed page number at the foot) and read by the free
-// on-device reader, exactly as on a phone. Claude is off for this book (free mode).
+// on-device reader, exactly as on a phone.
 const STORY = {
   9: ["Het was nog vroeg toen Lotte haar fiets uit de schuur haalde en naar het station reed om de trein te halen.", "Op het perron stonden al veel mensen te wachten, de meesten met een kop koffie in hun hand."],
   10: ["De trein kwam precies op tijd en Lotte vond een plek bij het raam, naast een oude man met een krant.", "Buiten zag ze de weilanden voorbij schieten, met koeien en hier en daar een molen in de verte."],
@@ -971,7 +968,6 @@ async function coverPhoto() {
 }
 
 step("photograph a printed book: first page 9, last page 212");
-await page.evaluate(() => (localStorage.removeItem("boekenwurm-claude-key"), window.dispatchEvent(new Event("boekenwurm:key"))));
 await page.getByRole("button", { name: "Take photo" }).click();
 await page.locator("input[type=file][multiple]").setInputFiles(await coverPhoto());
 await page.getByLabel("Title").fill("Een dag van Lotte");
@@ -1103,11 +1099,23 @@ await shot("17-section-full");
 await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").length === 0, null, { timeout: 300000 });
 
 
+step("the owner's account: Claude can help Google with the paragraphs, with her own key");
+await page.getByRole("button", { name: /Done/ }).first().click();
+check(claudeCalls() === 0, "photographed pages were read by Google alone, Claude never asked");
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Experimental" }).click();
+await page.getByLabel("Claude API key").waitFor();
+check(await page.getByRole("radio", { name: /Google, with Claude for the paragraphs/ }).isDisabled(), "without a key on this device, Claude can't be chosen");
+await page.getByLabel("Claude API key").fill("sk-ant-test-key");
+await page.locator("#claude").getByRole("button", { name: "Save" }).click();
+await page.getByRole("radio", { name: /Google, with Claude for the paragraphs/ }).check();
+check(await page.getByRole("radio", { name: /Google, with Claude for the paragraphs/ }).isChecked(), "she chooses Google with Claude for the paragraphs");
+await shot("17b-owner-page-reader");
+
 step("Google page reading: the page number at the foot; a new book shares today's 20; nothing read on the device");
 // From here Google sees the Sem aan zee page; two of today's 20 pages are left.
 vision.marked = false;
 vision.used = 18;
-await page.getByRole("button", { name: /Done/ }).first().click();
 await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.getByRole("button", { name: /Photograph a book/ }).click();
@@ -1125,7 +1133,17 @@ await page.waitForFunction(() => document.querySelectorAll(".thumb .spinner").le
 check(vision.calls === callsBefore + 1 && vision.sentJpeg, "the photo was sent to the read-page function as a JPEG");
 check((await thumbs())[0] === "p. 5 (read 5)", "the page number at the foot is read; the chapter number above the text isn't taken for it");
 await page.locator(".thumb").first().click();
-check(await page.getByText(/Read by Google/).isVisible(), "the page says it was read by Google");
+check(await page.getByText(/Read by Google, paragraphs by Claude/).isVisible(), "the page says Google read it and Claude set out its paragraphs");
+check(calls.structure === 1 && /\[1\] 1\n\[2\] De bus naar het strand/.test(calls.blocks), "Claude was sent the photo and Google's blocks, once");
+const sem = await page.evaluate(async () => {
+  const db = await new Promise((ok) => { const r = indexedDB.open("boekenwurm-app"); r.onsuccess = () => ok(r.result); });
+  const get = (op) => new Promise((ok) => { const r = op(db.transaction("kv").objectStore("kv")); r.onsuccess = () => ok(r.result); });
+  const keys = (await get((s) => s.getAllKeys())).filter((k) => String(k).startsWith("pages:"));
+  const entries = (await Promise.all(keys.map((k) => get((s) => s.get(k))))).flat();
+  return entries.find((e) => e.by === "google+claude")?.page?.paragraphs ?? null;
+});
+check(JSON.stringify(sem) === JSON.stringify(["De bus naar het strand vertrok om negen uur precies, en Sem zat helemaal achterin bij het raam. Hij had zijn emmer en schep al op schoot, want hij wilde meteen een kasteel bouwen."]),
+  "the chapter number is left out and the two blocks are one printed paragraph, in Google's words");
 await page.getByRole("button", { name: "Close" }).click();
 vision.refuse = "Cloud Vision API has not been used in project 123 before or it is disabled.";
 await page.locator("input[type=file][multiple]").setInputFiles(await pagePhoto(10));
@@ -1145,7 +1163,10 @@ check(await page.getByText("Today's 20 pages are used, for all your books. Photo
 await shot("19-daily-limit");
 await page.getByRole("button", { name: /^Start reading/ }).click();
 await page.locator(".para").first().waitFor();
-check((await page.locator(".para").first().textContent()).startsWith("1 De bus naar het strand"), "the chapter number is read together with its first paragraph");
+// Google alone reads the chapter number together with its first paragraph (packages/books vision tests); with Claude
+// arranging the page, it is left out and the page's two blocks are one paragraph, as printed.
+const firstPara = (await page.locator(".para").first().textContent()).trim();
+check(firstPara.startsWith("De bus naar het strand") && firstPara.includes("Hij had zijn emmer"), "Claude's layout is what's read: no chapter number, one printed paragraph");
 
 step("20 pages read: a milestone unlocks with 100 XP (books without page numbers: 250 words a page)");
 {
