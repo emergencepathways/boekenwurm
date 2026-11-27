@@ -111,6 +111,31 @@ pages (`apps/web/src/lib/pagereader.ts`):
 The page calls Anthropic directly from the owner's browser with her key (the `anthropic-dangerous-direct-browser-access`
 header); the key stays in that browser and is never synced. Boekenwurm has no key of its own.
 
+### Claude as a paid tier (open question, costs checked 2026-11-27)
+
+Today Claude runs on the owner's own key. If it becomes part of a paid tier, Boekenwurm would hold the key in an Edge
+Function (like Google's) and count every use against the reader, which CLAUDE.md forbids until the owner decides.
+Costs per use, from list prices (Claude Haiku 5.5 $0.10 / $0.50 and Sonnet 5.5 $2 / $10 per million input / output
+tokens; Cloud Vision document text $1.50 per 1,000 pages after 1,000 free a month; Cloud Translation $20 per million
+characters after 500,000 free a month):
+
+| Use | Tokens (about) | Haiku 5.5 | Sonnet 5.5 | Google |
+|---|---|---|---|---|
+| A word in its sentence | 300 in, 80 out | $0.00007 | $0.0014 | Translate, one word (~8 characters): $0.00016 |
+| A page read by Claude | 1,900 in (photo ~1,600), 650 out | $0.0005 | $0.010 | Vision: $0.0015 |
+| Google + Claude for the paragraphs | 2,550 in, 650 out | $0.0006 + Vision | $0.0116 + Vision | |
+
+Per reader per month, with today's daily limits (20 pages, 200 words) as the worst case:
+
+| Reader | Words explained | Pages | Haiku (Claude first, Google + Claude pages) | Sonnet, same |
+|---|---|---|---|---|
+| Typical: 5 pages a day read, 100 photographed | 1,500 | 100 | about $0.32 | about $3.40 |
+| At every daily limit | 6,000 | 600 | about $1.70 | about $16.30 |
+
+So a tier is only safe on Haiku (or with Sonnet behind a tight monthly budget), and with Haiku, Claude first is
+cheaper than Google Translate past Google's free characters. Haiku's Dutch page reading still has to be compared with
+Sonnet's on the owner's own pages before deciding.
+
 ## 2. The reading challenge
 
 ### Tapping
