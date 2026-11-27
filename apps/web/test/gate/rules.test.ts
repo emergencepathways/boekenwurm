@@ -78,17 +78,24 @@ test("the app's name comes after #gate=, cleaned and at most 40 characters", () 
   assert.equal(R.gateAppFromHash("#gate=X+Twitter"), "X Twitter");
   assert.equal(R.gateAppFromHash("#gate=<script>alert(1)</script>"), "scriptalert1script");
   assert.equal(R.gateAppFromHash(`#gate=${"a".repeat(60)}`), "a".repeat(40));
-  assert.equal(R.gateAppFromHash("#gate=%E0%A4%A"), "an app"); // broken encoding
-  assert.equal(R.gateAppFromHash("#gate"), "an app");
+  assert.equal(R.gateAppFromHash("#gate=%E0%A4%A"), "a gated app"); // broken encoding
+  assert.equal(R.gateAppFromHash("#gate"), "a gated app"); // an automation that doesn't pass the app on
+  assert.equal(R.gateAppFromHash("#gate="), "a gated app");
   assert.equal(R.gateAppFromHash("#gate-setup"), null);
   assert.equal(R.gateAppFromHash("#privacy"), null);
   assert.equal(R.gateAppFromHash(""), null);
   assert.equal(R.isSetupHash("#gate-setup"), true);
+  assert.deepEqual(R.setupHash("#gate-setup"), { verified: false });
+  assert.deepEqual(R.setupHash("#gate-setup=ok"), { verified: true });
+  assert.equal(R.setupHash("#gate-setup=yes"), null);
 });
 
-test("the unlock link runs the Unlock Shortcut with minutes|app link", () => {
-  assert.equal(R.unlockUrl(15, "tiktok://"), "shortcuts://run-shortcut?name=Boekenwurm%20Unlock&input=text&text=15%7Ctiktok%3A%2F%2F");
-  assert.equal(R.unlockUrl(60), "shortcuts://run-shortcut?name=Boekenwurm%20Unlock&input=text&text=60%7C");
+test("one shared Shortcut: unlock|minutes|app link, and test; the hand-built pair: minutes|app link", () => {
+  assert.equal(R.unlockUrl(15, "tiktok://"), "shortcuts://run-shortcut?name=Boekenwurm%20Gate&input=text&text=unlock%7C15%7Ctiktok%3A%2F%2F");
+  assert.equal(R.unlockUrl(60), "shortcuts://run-shortcut?name=Boekenwurm%20Gate&input=text&text=unlock%7C60%7C");
+  assert.equal(R.testUrl(), "shortcuts://run-shortcut?name=Boekenwurm%20Gate&input=text&text=test");
+  assert.equal(R.unlockUrl(15, "tiktok://", "pair"), "shortcuts://run-shortcut?name=Boekenwurm%20Unlock&input=text&text=15%7Ctiktok%3A%2F%2F");
+  assert.equal(R.unlockUrl(60, null, "pair"), "shortcuts://run-shortcut?name=Boekenwurm%20Unlock&input=text&text=60%7C");
   // Anything that isn't an app's own link is dropped: no web pages, scripts or other Shortcuts.
   for (const bad of ["https://evil.example", "javascript:alert(1)", "data:text/html,x", "shortcuts://run-shortcut?name=x", "tiktok://<x>", "nope"])
     assert.equal(R.safeAppLink(bad), null, bad);

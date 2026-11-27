@@ -8,24 +8,59 @@ sends them to Boekenwurm first, for a few minutes of reading and cards, before t
 
 ## How it works on an iPhone
 
-Boekenwurm is a web app, so it can't block apps itself. Apple's Shortcuts app does the gating, with two Shortcuts and
-one automation per app that the reader builds once (the setup screen lists every step, with the address to copy):
+Boekenwurm is a web app, so it can't block apps itself. Apple's Shortcuts app does the gating, with **one Shortcut,
+"Boekenwurm Gate"**, that has the app-open automation inside it (possible since iOS 27, which lets a shared Shortcut
+carry its automation). It does three jobs, told apart by what it receives:
 
-1. **An automation per app** ("When TikTok is opened, run immediately") runs the **Boekenwurm Gate** Shortcut with the
-   app's name.
-2. **Boekenwurm Gate** reads `Boekenwurm/unlocked-until.txt` in the reader's iCloud Drive (Shortcuts folder). Before
-   that time, it stops and the app opens normally: switching away and back within the window never brings the gate
-   back. After it, it opens `https://…/#gate=TikTok` in Safari.
-3. The reader does a review. When it's done, "Unlock" opens
-   `shortcuts://run-shortcut?name=Boekenwurm%20Unlock&input=text&text=15|tiktok://`.
-4. **Boekenwurm Unlock** writes now + 15 minutes (or 60) into the file, then opens the app's link if one was given.
+| Input | From | It does |
+|---|---|---|
+| an app (or nothing) | its own automation, "When TikTok is opened" | Before the unlock time in `boekenwurm-unlocked-until.txt` (iCloud Drive, Shortcuts folder): nothing, the app opens. After it: opens `https://…/#gate=TikTok` in Safari. |
+| `unlock|15|tiktok://` | this page, "Unlock" after a review | Writes now + 15 minutes (or 60) into the file, then opens the app's link if there is one. |
+| `test` | the setup's "Test the Shortcut" | Opens `https://…/#gate-setup=ok`: the setup shows "✓ It works". |
 
-This is the soft version, like one sec on iOS: turning off an automation gets round it. A hard block needs Apple's
+This is the soft version, like one sec on iOS: turning off the automation gets round it. A hard block needs Apple's
 Screen Time API (Family Controls), which only a native app approved by Apple can use; that is for later.
 
 The gate runs in **Safari**, because Shortcuts opens links there. Safari keeps its own copy of the site's data,
 separate from the app on the home screen: the reader signs in once in Safari, and the gate then sees the same books
 and words through the account.
+
+## Setting up (Account → Experimental → App gate, or `/#gate-setup` in Safari)
+
+A wizard of four steps; everything else has defaults and lives under **Settings**.
+
+1. **Safari**: warns if opened from the home screen; offers sign-in.
+2. **Apps**: tap TikTok, Instagram…; others by name (and their link, to reopen them).
+3. **Shortcut**: "Add to Shortcuts" opens the shared Shortcut's iCloud link (`SHARED_SHORTCUT_URL` in
+   `src/gate/rules.ts`). In Apple's import screen the reader ticks the same apps and leaves the automation on. If "Add
+   Shortcut" doesn't respond (a known iOS 27 bug, reported by one sec), "Skip Setup", then turn the automation on.
+4. **Test**: runs the Shortcut with `test`; it opens `#gate-setup=ok`, the setup marks it working (also in a new
+   tab) and drops the `=ok` from the address. The setup then shows when it was tested and when an app last sent the
+   reader here, so a Shortcut that stopped working shows.
+
+**iPhones on iOS 26 or older** can't add automations from a link: "My iPhone has iOS 26 or older" switches to the
+two Shortcuts built by hand ("Boekenwurm Gate" and "Boekenwurm Unlock", receiving `15|tiktok://`) with one automation
+per app; the unlock link follows that choice. Gates set up before 2026-11-27 keep that mode.
+
+### The shared Shortcut: the owner builds it once (iOS 27)
+
+Until `SHARED_SHORTCUT_URL` is set, step 3 shows this recipe on the owner's account. Build it, share it with
+**Copy iCloud Link** (automation included), and put the link in `src/gate/rules.ts`.
+
+1. New shortcut **Boekenwurm Gate**; it receives Text (and Apps, if offered); with no input, Continue.
+2. Add a trigger (action library → Automation): **App** → the apps → **Is Opened** → Run Immediately, notifications off.
+3. **If** Shortcut Input begins with `unlock|`: Split Text by `|` → item 2 → Adjust Date (add minutes to Current
+   Date) → Format Date (ISO 8601, with time) → Save File to Shortcuts, `boekenwurm-unlocked-until.txt`, Ask Where off,
+   Overwrite on → item 3 of the split: if it has any value, Open URLs → Stop This Shortcut. End If.
+4. **If** Shortcut Input is `test`: Open URLs `https://boekenwurm.pages.dev/#gate-setup=ok` → Stop This Shortcut.
+   End If.
+5. Get File from Folder (Shortcuts, `boekenwurm-unlocked-until.txt`, Error If Not Found off) → Get Dates from Input
+   → **If** Dates is after Current Date: Stop This Shortcut. End If.
+6. URL Encode Shortcut Input → Open URLs `https://boekenwurm.pages.dev/#gate=` + URL Encoded Text.
+7. Setup: an import question on the trigger's apps ("Which apps should open Boekenwurm first?").
+
+While building, check whether Shortcut Input carries the app's name when the trigger fires. If it doesn't, the gate
+says "a gated app", counts all apps as one, and reopens the app only when one app is gated.
 
 ## The review
 
@@ -80,8 +115,8 @@ for the reviewer.
 
 Everything is in two folders, and the rest of the app reaches it only at lines marked `APPGATE-REMOVE`:
 
-- `apps/web/src/gate/`: `rules.ts` (the rules, pure), `decks.ts` (my cards, pure), `state.ts` (device storage, the
-  address, reading's next paragraph), `Gate.tsx` (start → review → done), `Reading.tsx`, `Cards.tsx`, `Setup.tsx`,
+- `apps/web/src/gate/`: `rules.ts` (the rules and the Shortcut's links, pure), `decks.ts` (my cards, pure), `state.ts` (device storage, the
+  address, reading's next paragraph), `Gate.tsx` (start → review → done), `Reading.tsx`, `Cards.tsx`, `Setup.tsx` (the wizard and Settings),
   `index.tsx` (what the app imports), `gate.css`.
 - `apps/web/test/gate/`: the rules and cards in numbers.
 - Marked lines: `apps/web/src/App.tsx` (the route), `apps/web/src/screens/Me.tsx` (the Experimental entry and the
@@ -92,8 +127,8 @@ The gate's own screens are in English only, like the other experiments; only its
 
 ## Removing it
 
-1. On the iPhone, in Safari: App gate → **Delete all app gate data**. Then delete the two Boekenwurm Shortcuts and
-   the app automations.
+1. On the iPhone, in Safari: App gate → Settings → **Delete all app gate data**. Then delete the Boekenwurm Gate
+   Shortcut (and Boekenwurm Unlock and the automations, if built by hand).
 2. In the repo: `scripts/remove-app-gate.sh`. It deletes the two folders and this file, cuts every marked block and
    line, checks nothing is left (`--check` does only that), and deletes itself.
 3. Run every test suite (`CLAUDE.md`, Commands) and commit ("Remove the app gate").

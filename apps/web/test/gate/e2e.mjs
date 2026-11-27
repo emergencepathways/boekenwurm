@@ -44,13 +44,37 @@ const shot = async (name) => shots && page.screenshot({ path: join(shots, `gate-
 
 console.log("app gate");
 
-// ---------------------------------------------------------------- setup: an app and a deck of my own cards
+// ---------------------------------------------------------------- setup: the wizard, then a deck of my own cards
 await page.goto(`${base}#gate-setup`);
 await page.getByRole("heading", { name: "App gate" }).waitFor();
-ok(true, "the setup opens at /#gate-setup, without onboarding");
-await page.getByRole("button", { name: "+ TikTok" }).click();
+await page.getByRole("heading", { name: "Use Safari, and sign in" }).waitFor();
+ok(true, "the setup opens at /#gate-setup on the wizard, without onboarding");
+await page.getByRole("button", { name: "Next: choose apps" }).click();
+ok(await page.getByRole("button", { name: "Choose at least one app" }).isDisabled(), "an app must be chosen first");
+await page.getByRole("group", { name: "Apps to gate" }).getByRole("button", { name: "TikTok", exact: true }).click();
+await page.getByRole("button", { name: "Next: add the Shortcut (1 app)" }).click();
+await page.getByRole("heading", { name: "Add the Shortcut" }).waitFor();
+ok(true, "step 3: add the Shortcut");
+await shot("wizard-shortcut");
+await page.getByRole("button", { name: "I added it: test it" }).click();
+const test = await page.getByRole("link", { name: "Test the Shortcut" }).getAttribute("href");
+ok(test === "shortcuts://run-shortcut?name=Boekenwurm%20Gate&input=text&text=test", `the test runs the Shortcut with "test" (${test})`);
+// The Shortcut answers by opening #gate-setup=ok.
+await page.evaluate(() => (location.hash = "#gate-setup=ok"));
+await page.getByRole("heading", { name: "✓ It works" }).waitFor();
+await page.waitForFunction(() => location.hash === "#gate-setup");
+ok(true, "the Shortcut's answer shows it works, and the address drops =ok");
+await page.locator(".gate-status.ok").waitFor();
+await shot("wizard-ok");
+// Safari may open the Shortcut's answer in a new tab: the same "It works".
+const tab = await ctx.newPage();
+await tab.goto(`${base}#gate-setup=ok`);
+await tab.getByRole("heading", { name: "✓ It works" }).waitFor();
+ok(true, "also when the answer opens in a new tab");
+await tab.close();
+await page.getByRole("button", { name: "Done", exact: true }).click();
 await page.getByText("tiktok://", { exact: true }).waitFor();
-ok(true, "TikTok added, with its link");
+ok(true, "then Settings, with TikTok and its link");
 await page.getByPlaceholder("e.g. Grammar, Capitals, Exam terms").fill("Capitals");
 await page.getByRole("button", { name: "Add deck" }).click();
 await page.locator("textarea").fill(["Netherlands\tAmsterdam", "Belgium\tBrussels", "France - Paris", "Germany;Berlin", "Spain\tMadrid"].join("\n"));
@@ -99,7 +123,7 @@ await shot("ready");
 await page.getByRole("button", { name: "Unlock" }).click();
 await page.getByRole("heading", { name: "TikTok is free for 15 minutes" }).waitFor();
 const href = await page.getByRole("link", { name: "Unlock TikTok" }).getAttribute("href");
-ok(href === "shortcuts://run-shortcut?name=Boekenwurm%20Unlock&input=text&text=15%7Ctiktok%3A%2F%2F", `the Unlock Shortcut with 15 minutes and TikTok's link (${href})`);
+ok(href === "shortcuts://run-shortcut?name=Boekenwurm%20Gate&input=text&text=unlock%7C15%7Ctiktok%3A%2F%2F", `the Shortcut unlocks 15 minutes and reopens TikTok (${href})`);
 await shot("done");
 
 // ---------------------------------------------------------------- the counts, and back to the app
@@ -107,6 +131,8 @@ await page.getByRole("button", { name: "Back to Boekenwurm" }).click();
 await page.waitForFunction(() => location.hash === "");
 ok(true, "back to Boekenwurm: the #gate part is gone");
 await page.evaluate(() => (location.hash = "#gate-setup"));
+await page.getByRole("tab", { name: "Settings" }).waitFor();
+ok(/Last sent here by an app/.test(await page.locator(".gate-status").innerText()), "the status shows when an app last sent the reader here");
 const row = page.locator(".gate-table tbody tr", { hasText: "TikTok" });
 await row.waitFor();
 ok((await row.locator("td").nth(1).innerText()).includes("1 · 1 unlocked"), "today: 1 attempt, 1 unlocked");
@@ -184,7 +210,7 @@ const stored = await page.evaluate(() => new Promise((res) => {
 ok(stored?.settings?.apps?.[0]?.name === "TikTok" && stored.cards.length === 5 && Object.keys(stored.log).length === 1, "apps, counts and cards are kept on the device (IndexedDB)");
 await page.getByRole("button", { name: "Delete all app gate data" }).click();
 await page.getByRole("button", { name: "Delete", exact: true }).click();
-await page.getByText("Nothing yet.").waitFor();
+await page.getByRole("heading", { name: "Use Safari, and sign in" }).waitFor(); // everything gone: back to the wizard
 const after = await page.evaluate(() => new Promise((res) => {
   const r = indexedDB.open("boekenwurm-app");
   r.onsuccess = () => {

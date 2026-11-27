@@ -53,6 +53,6 @@ git rm -q "$self"
 cat <<'EOF'
 The app gate is removed. Next:
   cd apps/web && npm test && npm run build && node test/e2e.mjs
-  then commit ("Remove the app gate"). On the iPhone, delete the two Boekenwurm Shortcuts and the app automations;
-  in Safari, the gate's data stays on that phone until Safari's website data for Boekenwurm is cleared.
+  then commit ("Remove the app gate"). On the iPhone, delete the Boekenwurm Gate Shortcut (and Boekenwurm Unlock and
+  the automations, if built by hand); the gate's data stays in Safari on that phone until its website data is cleared.
 EOF

@@ -45,3 +45,23 @@
 .gate-copy code, .gate-steps code { overflow-wrap: anywhere; background: var(--line); padding: 1px 5px; border-radius: 5px; font-size: 0.86em; }
 .gate-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .gate-table th, .gate-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+/* The setup wizard */
+.seg.gate-views { grid-template-columns: 1fr 1fr; margin: 14px 0 4px; }
+.seg.gate-views button { font: 600 0.95rem var(--ui); }
+.gate-status { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 0.9rem; line-height: 1.4; }
+.gate-status.ok { border-color: var(--leaf); }
+.gate-wizard { display: grid; gap: 4px; margin-top: 8px; }
+.gate-stepper { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.gate-stepper button { width: 100%; display: grid; justify-items: center; gap: 4px; background: none; border: 0; color: var(--muted); font: 600 0.76rem var(--ui); cursor: pointer; padding: 4px 0; }
+.gate-stepper span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); font-size: 0.85rem; }
+.gate-stepper li[aria-current="step"] button { color: var(--ink); }
+.gate-stepper li[aria-current="step"] span { background: var(--leaf); color: var(--leaf-ink); border-color: var(--leaf); }
+.gate-stepper li.done span { border-color: var(--leaf); color: var(--leaf); }
+.gate-step { gap: 14px; }
+.gate-step > .linklike { justify-self: center; }
+.gate-appgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.gate-appgrid button { min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); font: 600 0.95rem var(--ui); cursor: pointer; }
+.gate-appgrid button[aria-pressed="true"] { background: var(--leaf); color: var(--leaf-ink); border-color: var(--leaf); }
+.gate-howto { padding-left: 1.3em; margin: 0; display: grid; gap: 6px; font-size: 0.92rem; line-height: 1.45; }
+.gate-success h2 { color: var(--leaf); }
+.gate-recipe ol ol { margin-top: 6px; }

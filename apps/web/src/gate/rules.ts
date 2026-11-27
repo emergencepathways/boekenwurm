@@ -111,7 +111,10 @@ export function nextActivity(last: Activity | null, has: { paragraph: boolean; c
 
 // ---------------------------------------------------------------- the link from the Shortcut
 
-/** The app's name as the Shortcut sends it, after "#gate=": letters, digits, spaces and . - _ &, at most 40. */
+/**
+ * The app's name as the Shortcut sends it, after "#gate=": letters, digits, spaces and . - _ &, at most 40. Without
+ * one (an automation that doesn't pass the app on), "a gated app".
+ */
 export function gateAppFromHash(hash: string): string | null {
   const m = /^#gate(?:=(.*))?$/.exec(hash);
   if (!m) return null;
@@ -122,25 +125,52 @@ export function gateAppFromHash(hash: string): string | null {
     name = "";
   }
   name = name.replace(/[^\p{L}\p{N} .\-_&]/gu, "").replace(/\s+/g, " ").trim().slice(0, 40);
-  return name || "an app";
+  return name || "a gated app";
 }
 
-export const isSetupHash = (hash: string): boolean => hash === "#gate-setup";
+/** The setup screen: "#gate-setup", or "#gate-setup=ok" when the Shortcut's test called back. */
+export function setupHash(hash: string): { verified: boolean } | null {
+  if (hash === "#gate-setup") return { verified: false };
+  if (hash === "#gate-setup=ok") return { verified: true };
+  return null;
+}
+export const isSetupHash = (hash: string): boolean => setupHash(hash) !== null;
 
-// ---------------------------------------------------------------- back to the Shortcut
+// ---------------------------------------------------------------- the Shortcut
 
-/** The two Shortcuts the reader builds (docs/APP_GATE.md). */
+/**
+ * How the phone is set up (docs/APP_GATE.md):
+ * - "single" (iOS 27 and later, the default): one shared Shortcut, "Boekenwurm Gate", with the app-open automation
+ *   inside it. It does all three jobs, told apart by its input: an app's name (or nothing) from the automation,
+ *   "unlock|15|tiktok://" from this page after a review, and "test" from the setup's test.
+ * - "pair" (iOS 26 and earlier, built by hand): "Boekenwurm Gate" for the automation and "Boekenwurm Unlock",
+ *   which receives "15|tiktok://".
+ */
+export type ShortcutSetup = "single" | "pair";
+
 export const SHORTCUT_GATE = "Boekenwurm Gate";
 export const SHORTCUT_UNLOCK = "Boekenwurm Unlock";
 
 /**
- * The link that hands a passed review back to the phone: it runs the Unlock Shortcut with "minutes|app link", which
- * saves the new unlock time and opens the app again (when the reader gave its link, e.g. tiktok://).
+ * The shared "Boekenwurm Gate" Shortcut (iCloud link), built once on an iOS 27 iPhone by the recipe in
+ * docs/APP_GATE.md and shared with "Anyone". Empty until the owner has shared it: the setup then shows the recipe.
  */
-export function unlockUrl(minutes: number, appLink?: string | null): string {
-  const text = `${Math.round(minutes)}|${safeAppLink(appLink) ?? ""}`;
-  return `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_UNLOCK)}&input=text&text=${encodeURIComponent(text)}`;
+export const SHARED_SHORTCUT_URL = "";
+
+const runShortcut = (name: string, text: string) =>
+  `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=text&text=${encodeURIComponent(text)}`;
+
+/**
+ * The link that hands a passed review back to the phone: the Shortcut saves the new unlock time and opens the app
+ * again (when the reader gave its link, e.g. tiktok://).
+ */
+export function unlockUrl(minutes: number, appLink?: string | null, setup: ShortcutSetup = "single"): string {
+  const rest = `${Math.round(minutes)}|${safeAppLink(appLink) ?? ""}`;
+  return setup === "pair" ? runShortcut(SHORTCUT_UNLOCK, rest) : runShortcut(SHORTCUT_GATE, `unlock|${rest}`);
 }
+
+/** The setup's test: the Shortcut answers by opening "#gate-setup=ok", which shows it works. */
+export const testUrl = (): string => runShortcut(SHORTCUT_GATE, "test");
 
 /** An app's own link ("tiktok://"): a scheme and nothing that could be a web page or a script. */
 export function safeAppLink(link: string | null | undefined): string | null {

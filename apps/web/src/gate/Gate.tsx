@@ -188,6 +188,7 @@ function Review({ app, tier, onPassed }: { app: string; tier: R.Tier; onPassed: 
 function Done({ app, tier }: { app: string; tier: R.Tier }) {
   const minutes = R.unlockMinutes(tier);
   const link = appLink(app);
+  const setup = useGate((d) => d.settings.shortcut);
   const noted = useRef(false);
   useEffect(() => {
     if (noted.current) return;
@@ -199,10 +200,10 @@ function Done({ app, tier }: { app: string; tier: R.Tier }) {
       <p className="gate-eyebrow">Goed gedaan!</p>
       <h1 className="gate-title">{app} is free for {minutes === 60 ? "an hour" : `${minutes} minutes`}</h1>
       <p className="muted">
-        The Unlock Shortcut saves the time on your phone{link ? ` and opens ${app}` : ""}. Opening {app} again before then
+        The Shortcut saves the time on your phone{link ? ` and opens ${app}` : ""}. Opening {app} again before then
         won’t bring you back here.
       </p>
-      <a className="btn primary block" href={R.unlockUrl(minutes, link)} onClick={() => setTimeout(leaveGate, 1500)}>Unlock {app}</a>
+      <a className="btn primary block" href={R.unlockUrl(minutes, link, setup)} onClick={() => setTimeout(leaveGate, 1500)}>Unlock {app}</a>
       <p className="note">Safari may ask to open Shortcuts: allow it.</p>
       <button className="btn ghost block" type="button" onClick={leaveGate}>Back to Boekenwurm</button>
     </main>

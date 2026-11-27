@@ -35,6 +35,14 @@ export interface GateSettings {
   sources: { reading: boolean; reviews: boolean; myCards: boolean };
   /** Show the reader's own cards as multiple choice when their deck has enough answers. */
   multipleChoice: boolean;
+  /** One shared Shortcut (iOS 27+) or the hand-built pair (iOS 26 and earlier): decides the unlock link. */
+  shortcut: R.ShortcutSetup;
+}
+
+/** Whether the phone side works: the Shortcut's test called back, and when the gate last opened from it. */
+export interface GateCheck {
+  verifiedAt: number | null;
+  lastArrival: number | null;
 }
 
 export interface GateData {
@@ -43,6 +51,7 @@ export interface GateData {
   log: R.AttemptLog;
   decks: D.Deck[];
   cards: D.GateCard[];
+  check: GateCheck;
 }
 
 export const DEFAULT_SETTINGS: GateSettings = {
@@ -51,10 +60,11 @@ export const DEFAULT_SETTINGS: GateSettings = {
   reading: "unlimited",
   sources: { reading: true, reviews: true, myCards: true },
   multipleChoice: true,
+  shortcut: "single",
 };
 
 const KEY = "appGate";
-const empty = (): GateData => ({ v: 1, settings: DEFAULT_SETTINGS, log: {}, decks: [], cards: [] });
+const empty = (): GateData => ({ v: 1, settings: DEFAULT_SETTINGS, log: {}, decks: [], cards: [], check: { verifiedAt: null, lastArrival: null } });
 const today = () => localDay(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
 
 // ---------------------------------------------------------------- the store (its own, so removing the gate touches nothing else)
@@ -68,7 +78,18 @@ export function loadGate(): Promise<void> {
   return (loaded ??= (async () => {
     const saved = await db.get<GateData>("kv", KEY);
     data = saved
-      ? { ...empty(), ...saved, settings: { ...DEFAULT_SETTINGS, ...saved.settings, sources: { ...DEFAULT_SETTINGS.sources, ...saved.settings?.sources } } }
+      ? {
+          ...empty(),
+          ...saved,
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...saved.settings,
+            sources: { ...DEFAULT_SETTINGS.sources, ...saved.settings?.sources },
+            // Set up before the shared Shortcut (2026-11-27): the two Shortcuts built by hand.
+            shortcut: saved.settings?.shortcut ?? (saved.settings?.apps?.length ? "pair" : "single"),
+          },
+          check: { ...empty().check, ...saved.check },
+        }
       : empty();
     data = { ...data, log: R.prune(data.log, today()) };
     emit();
@@ -104,12 +125,23 @@ export async function deleteGateData(): Promise<void> {
 export type Route = { kind: "gate"; app: string } | { kind: "setup" } | null;
 
 let route: Route = null;
+let cameFromTestFlag = false;
+/** This visit came from the Shortcut's test ("#gate-setup=ok"): the setup shows its last step, "It works". */
+export const cameFromTest = (): boolean => cameFromTestFlag;
 const routeListeners = new Set<() => void>();
 
 function readRoute(): void {
   const hash = location.hash;
   const app = R.gateAppFromHash(hash);
-  const next: Route = app ? { kind: "gate", app } : R.isSetupHash(hash) ? { kind: "setup" } : null;
+  const setup = R.setupHash(hash);
+  cameFromTestFlag = Boolean(setup?.verified);
+  const next: Route = app ? { kind: "gate", app } : setup ? { kind: "setup" } : null;
+  // The Shortcut's test called back ("#gate-setup=ok"): the phone side works. The address drops the "=ok" so a
+  // reload doesn't count as a test.
+  if (setup?.verified) {
+    history.replaceState(history.state, "", `${location.pathname}${location.search}#gate-setup`);
+    void loadGate().then(() => markVerified());
+  }
   const opened = next?.kind === "gate" && !(route?.kind === "gate" && route.app === next.app);
   route = next;
   routeListeners.forEach((l) => l());
@@ -140,15 +172,25 @@ export const openSetup = () => void (location.hash = "#gate-setup");
 // ---------------------------------------------------------------- counts
 
 function noteShown(app: string): Promise<void> {
-  return save({ ...data, log: R.recordShown(R.prune(data.log, today()), today(), app) });
+  return save({ ...data, log: R.recordShown(R.prune(data.log, today()), today(), app), check: { ...data.check, lastArrival: Date.now() } });
 }
+
+function markVerified(): Promise<void> {
+  return save({ ...data, check: { ...data.check, verifiedAt: Date.now() } });
+}
+
+/** Setting up again (another phone, a new Shortcut): the test has to pass again. */
+export const resetCheck = () => save({ ...data, check: { verifiedAt: null, lastArrival: data.check.lastArrival } });
 
 export const notePassed = (app: string): Promise<void> => save({ ...data, log: R.recordPassed(data.log, today(), app) });
 
 export const countsFor = (app: string | undefined, days: number): R.DayCount => R.totals(data.log, today(), days, app);
 
-export const appLink = (name: string): string | null =>
-  data.settings.apps.find((a) => a.name.toLowerCase() === name.toLowerCase())?.link ?? null;
+/** The app's own link, to reopen it; with only one app gated, that one's (the automation may not say which app). */
+export function appLink(name: string): string | null {
+  const apps = data.settings.apps;
+  return apps.find((a) => a.name.toLowerCase() === name.toLowerCase())?.link ?? (apps.length === 1 ? apps[0].link : null);
+}
 
 // ---------------------------------------------------------------- the reader's own cards
 
