@@ -87,6 +87,8 @@ export interface Settings {
   languageTool?: { allowed: boolean; at: number };
   /** Reading text size; Medium by default. */
   textSize?: "small" | "medium" | "large";
+  /** A daily reading goal in pages (engine goal.ts): Home shows progress, and Boekenwurm says when it's reached. */
+  readingGoal?: { pages: number; atLevel: boolean; dayStartHour: number };
 }
 
 export const DEFAULT_SETTINGS: Settings = {

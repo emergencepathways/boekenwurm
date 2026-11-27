@@ -298,6 +298,17 @@ check(await page.getByRole("heading", { name: "Weekly diary challenge" }).isVisi
 check(await page.locator(".tabbar").getByRole("button", { name: /^Words/ }).locator(".dot").isVisible(), "the Words tab is marked too");
 await shot("02-home-empty");
 
+step("a daily reading goal: off by default; 5 pages a day shows today's progress on Home");
+check((await page.getByText(/Today's reading goal/).count()) === 0, "no goal, nothing on Home");
+await page.locator(".tabbar").getByRole("button", { name: "Account", exact: true }).click();
+await page.getByRole("tab", { name: "Reading" }).click();
+await page.getByLabel("Pages a day").selectOption("5");
+check(await page.getByLabel("Only count books at or above my level").isChecked(), "at or above your level by default, like Poortwachter");
+await page.getByLabel("My day starts at").selectOption("2");
+await page.locator(".tabbar").getByRole("button", { name: "Home", exact: true }).click();
+await page.getByText("Today's reading goal: 0 / 5 pages").waitFor();
+check(true, "Home shows today's pages toward the goal");
+
 step("add an EPUB: import check, the reader chooses the level");
 await page.getByRole("button", { name: "Add a book" }).click();
 await page.locator('input[type=file][accept*="epub"]').setInputFiles(marktPath);

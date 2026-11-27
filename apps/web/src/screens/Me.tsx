@@ -172,6 +172,7 @@ export function Me() {
           </select>
           <span className="note">{t("account.setSizeNote")}</span>
         </label>
+        <ReadingGoal />
         <div className="field">
           <label className="row">
             <input type="checkbox" checked={profile.settings.colorText === true} onChange={(e) => setSettings({ colorText: e.target.checked })} />
@@ -242,6 +243,41 @@ export function Me() {
         </div>
       )}
     </main>
+  );
+}
+
+/** Account → Reading: the daily reading goal (engine goal.ts, lib/goal.ts). */
+function ReadingGoal() {
+  const t = useT();
+  const goal = { ...E.NO_GOAL, ...(useStore((s) => s.profile.settings.readingGoal) ?? {}) };
+  const set = (patch: Partial<E.ReadingGoal>) =>
+    void updateProfile((x) => ({ ...x, settings: { ...x.settings, readingGoal: { ...goal, ...patch } } }));
+  return (
+    <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend><b>{t("account.goal")}</b></legend>
+      <label className="field">
+        <span>{t("account.goalPages")}</span>
+        <select value={goal.pages} onChange={(e) => set({ pages: Number(e.target.value) })}>
+          <option value={0}>{t("account.goalOff")}</option>
+          {[1, 2, 3, 4, 5, 6, 8, 10, 15, 20].map((n) => <option key={n} value={n}>{t.num(n)}</option>)}
+        </select>
+      </label>
+      {goal.pages > 0 && (
+        <>
+          <label className="row">
+            <input type="checkbox" checked={goal.atLevel} onChange={(e) => set({ atLevel: e.target.checked })} />
+            <span>{t("account.goalAtLevel")}</span>
+          </label>
+          <label className="field">
+            <span>{t("account.goalDay")}</span>
+            <select value={goal.dayStartHour} onChange={(e) => set({ dayStartHour: Number(e.target.value) })}>
+              {[0, 2, 4].map((h) => <option key={h} value={h}>{`${String(h).padStart(2, "0")}:00`}</option>)}
+            </select>
+          </label>
+        </>
+      )}
+      <span className="note">{t("account.goalNote")}</span>
+    </fieldset>
   );
 }
 

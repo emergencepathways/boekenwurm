@@ -11,4 +11,5 @@ export * from "./review.ts";
 export * from "./wordlist.ts";
 export * from "./diary.ts";
 export * from "./hexbound.ts";
+export * from "./goal.ts";
 export * from "./activity.ts"; // PRELAUNCH-REMOVE (docs/PRELAUNCH.md)

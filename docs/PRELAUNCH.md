@@ -34,7 +34,7 @@ remove it, run `scripts/remove-app-gate.sh` (it takes this paragraph out too).
    - `apps/web/src/lib/sync.ts`: `refreshAppsConnected()` and the column fallback in `pushSessions`
    - `apps/web/vite.config.ts`: `connect.json`; `apps/web/public/_headers`: its entry
    - `apps/web/src/i18n/en.ts`, `uk.ts`, `ar.ts`: every `apps.*` key and `privacy.apps`
-   - `packages/engine/src/activity.ts` and its test (delete), its export in `index.ts`, `isAtOrAboveRank` in `xp.ts`
+   - `packages/engine/src/activity.ts` and its test (delete), its export in `index.ts`
    - `apps/web/test/e2e.mjs`: the connected-apps mocks and step
    - `supabase/tests/rls_test.sql`: the connected-apps block (and add a check that the tables are gone)
 3. **Privacy notice.** In `docs/PRIVACY.md`, remove the connected-apps rows, the "Apps you connect" bullet, the two

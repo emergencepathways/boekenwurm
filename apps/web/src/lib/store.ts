@@ -58,6 +58,8 @@ export interface State {
   game: GameState | null;
   /** An app is connected (lib/connections.ts): only then is active reading time measured. PRELAUNCH-REMOVE. */
   appsConnected: boolean;
+  /** Today's progress toward the reading goal (lib/goal.ts); null when no goal is set. */
+  goal: E.GoalProgress | null;
 }
 
 const now = () => Date.now();
@@ -82,6 +84,7 @@ let state: State = {
   translations: null,
   features: [],
   appsConnected: false,
+  goal: null,
   pageReads: null,
   game: null,
 };

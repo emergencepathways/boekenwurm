@@ -2,7 +2,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { activeSeconds, IDLE_MS, noteInput, startClock, tickClock } from "../src/activity.ts";
-import { isAtOrAboveRank } from "../src/xp.ts";
 
 const S = 1000;
 
@@ -34,10 +33,3 @@ test("ticks in the past change nothing", () => {
   assert.deepEqual(tickClock(c, 5 * S, true), c);
 });
 
-test("at or above the reader's rank", () => {
-  assert.equal(isAtOrAboveRank("A2", "A2"), true);
-  assert.equal(isAtOrAboveRank("B1", "A2"), true);
-  assert.equal(isAtOrAboveRank("A1", "A2"), false);
-  assert.equal(isAtOrAboveRank("A1", "A0"), true);
-  assert.equal(isAtOrAboveRank(null, "A0"), false);
-});

@@ -39,6 +39,7 @@ owner asks, and update the design doc and the tests together.
 - `packages/engine/` — pure TypeScript rules: `checkpoint.ts` (strikes, streak tightening, strike minimum), `progress.ts` (streak tokens, level-up offer), `badges.ts` (level badges and titles),
   `review.ts` (flashcard pool, list words first), `wordlist.ts` (word list states, learned, common-words progress),
   `diary.ts` (the 20 prompts, one entry a day, weekly reminder, free writing),
+  `goal.ts` (the daily reading goal in pages, at or above the reader's level; today's reads stay on the device),
   `xp.ts` (XP and ranks A0–C2), `achievements.ts` (tiered badges), `play.ts` (the synced play record and its merge),
   `session.ts` (paragraph → page turn → continue/end), `words.ts` (reveals vs encounters, study list),
   `definitions.ts` (English/Dutch), `hexbound.ts` (the secret Mörk Borg game mode, docs/HEXBOUND.md),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePhotoPages } from "../lib/features.ts";
 import { bookProgress } from "@boekenwurm/books";
 import { deleteBook, dueToday, reviewedTodayCount, saveBook, useStore } from "../lib/store.ts";
@@ -9,6 +9,7 @@ import * as E from "@boekenwurm/engine";
 import { RankBar, RankShield } from "../badges.tsx";
 import { diaryRecord, todayLocal } from "../lib/play.ts";
 import { t, useT } from "../lib/i18n.ts";
+import { refreshGoal } from "../lib/goal.ts";
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -38,6 +39,10 @@ export function Home() {
   const reviewed = Math.min(reviewedTodayCount(), E.REVIEW_DAY.maxDue);
   const totalCards = Object.keys(cards).length;
   const shelf = books.filter((b) => b.status !== "archived");
+  // The daily reading goal (lib/goal.ts): today's pages toward it, refreshed when Home opens or the goal changes.
+  const goalSetting = useStore((s) => s.profile.settings.readingGoal);
+  const goal = useStore((s) => s.goal);
+  useEffect(() => void refreshGoal(), [goalSetting]);
   const last = [...shelf].filter((b) => b.position.at).sort((a, b) => (b.position.at ?? 0) - (a.position.at ?? 0))[0] ?? shelf[0];
 
   return (
@@ -91,6 +96,16 @@ export function Home() {
             <span className="small muted num">{tr("challenge.progress", { n: reviewed, max: E.REVIEW_DAY.maxDue })}</span>
           </button>
         ))}
+
+      {goal && (
+        <section className="panel" aria-live="polite">
+          <p style={{ margin: 0 }}>
+            <b>{goal.reached ? tr("goal.homeDone", { n: goal.pages, target: goal.target }) : tr("goal.home", { n: goal.pages, target: goal.target })}</b>
+            {goalSetting?.atLevel && <span className="small muted"> · {tr("goal.atLevel")}</span>}
+          </p>
+          <div className="bar" aria-hidden="true"><i style={{ width: `${Math.min(100, (goal.pages / goal.target) * 100)}%` }} /></div>
+        </section>
+      )}
 
       {diaryDue && (
         <section className="panel weekly">

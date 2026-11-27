@@ -26,6 +26,7 @@ import { close, open, setTab } from "../nav.ts";
 import { SECTION_SIZE } from "../lib/pages.ts";
 import type { Book, BookText, Meaning, Paragraph } from "../lib/types.ts";
 import { Icon, Sheet, toast } from "../ui.tsx";
+import { noteRead } from "../lib/goal.ts";
 import { t as tt, useT } from "../lib/i18n.ts";
 
 type Explained = { status: "pending" } | { status: "done"; data: AI.Explanation } | { status: "error"; error: string };
@@ -342,6 +343,15 @@ export function Reader({ bookId }: { bookId: string }) {
     }
   }
 
+  /** The daily reading goal (lib/goal.ts): add what this session read, and say so once the goal is reached. */
+  function noteGoal(s: E.Session) {
+    if (!r.book || !getState().profile.settings.readingGoal?.pages) return;
+    const atLevel = E.isAtOrAboveRank(r.book.level ?? null, rankNow().rank);
+    void noteRead(r.book, s.results.map((x) => x.paragraphId), atLevel).then(({ progress, justReached }) => {
+      if (justReached && progress) toast(tr("goal.reached", { n: progress.pages, target: progress.target }), 6000);
+    });
+  }
+
   /**
    * What connected apps get with a session: active time, the level of the text read, and the reader's rank. Only
    * while an app is connected (the reader agreed when pairing); otherwise nothing is measured or sent.
@@ -358,6 +368,7 @@ export function Reader({ bookId }: { bookId: string }) {
     const s = r.session!;
     r.session = null;
     const { list, offer } = await recordFinished({ session: s, book: r.book!, startedAt: r.startedAt, endedBy: kind === "complete" ? "end_of_book" : kind === "lookup" ? "left" : "strike", sentences: r.sentences, lookupMode: r.lookupMode, ...sessionExtras() });
+    noteGoal(s);
     r.summary = { kind, streakLength, list, paragraphs: s.results.length };
     void checkAchievements(); // words looked up count once the session is recorded
     if (r.pos >= r.text!.paragraphs.length && r.book?.source !== "photo") r.pos = 0;
@@ -391,6 +402,7 @@ export function Reader({ bookId }: { bookId: string }) {
     if (!s.results.length && !s.reveals.length && !s.current?.reveals.length) return;
     const withCurrent = s.current ? { ...s, reveals: [...s.reveals, ...s.current.reveals], current: null } : s;
     await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences, lookupMode: r.lookupMode, ...sessionExtras() });
+    noteGoal(withCurrent);
     void checkAchievements();
   }
 
