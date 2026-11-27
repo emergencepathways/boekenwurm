@@ -87,8 +87,14 @@ reader's own content only and are never shared between readers.
 **On upload, the reader sets the book's level.** After the import check, Boekenwurm computes locally how many of the
 book's words the reader already knows (word list plus words met often and rarely revealed) and suggests a level from
 it; the reader chooses. Books are read in the original: there is no automatic grading, no rewriting to the reader's
-level and no AI explanation of words (all three used Claude, and were removed on 2026-11-27; see Decided). Books graded
-before then keep their grade, shown as "Graded about B1".
+level (both used Claude, and were removed on 2026-11-27; see Decided). Books graded before then keep their grade,
+shown as "Graded about B1".
+
+**Words in their sentence (Claude access).** A tapped word shows its dictionary meaning at once, then what it means in
+this sentence: the real base form (*belt … op → opbellen*), the meaning here, a simple Dutch explanation at the
+reader's level, and a note for idioms or separable verbs. Only the word and its sentence are sent; explanations are
+cached on the device. For a word the dictionary doesn't know, Claude comes after Google Translate and compound parts,
+or before them by choice.
 
 **Claude for page structure only (owner's account, testing).** Google Cloud Vision reads photographed and scanned pages
 for access-code holders. On the admin account, with the owner's own Claude key on her device, she can choose who reads
@@ -216,7 +222,7 @@ title is the one for the highest level reached.
 - Otherwise the reader chooses (English by default).
 
 Sources: the open dictionary built from English Wiktionary and wordfreq (English meanings, CC BY-SA, attributed in the
-app; Dutch definitions come from the reader's own word list for now, since Claude no longer explains words) and,
+app; Dutch definitions come from the reader's own word list, or from Claude for readers with Claude access) and,
 privately, the reader's own textbook word list.
 
 ### The reader's language (localization)
@@ -409,6 +415,13 @@ anywhere except `private/`.
 - A licence for the code (and separately for any data the project publishes).
 
 ## Decided
+
+- Words in their sentence are back, for readers with Claude access (the owner's admin account and her own key, for
+  now): every tapped word is explained in its sentence unless she turns it off, and Claude is the last place a word's
+  meaning is looked for, or the first, if she chooses "Ask Claude before Google Translate" (it costs more on her key
+  but keeps Google's 200 a day for when Claude can't answer). The rule is `apps/web/src/lib/lookuporder.ts`. Grading,
+  Match my level and cover reading stay removed. Whether Claude features become a paid tier is open (costs below,
+  "Claude as a paid tier"). 2026-11-27.
 
 - Claude is used only to read page structure, on the owner's admin account with her own key: Google, Google with
   Claude for the paragraphs (Claude can't change a letter of Google's text), or Claude instead of Google, her choice.

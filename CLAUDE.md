@@ -33,11 +33,12 @@ owner asks, and update the design doc and the tests together.
   `activity.ts` (active reading time for connected apps; PRELAUNCH-REMOVE). No dependencies, so it ports to Lua for KOReader.
 - `packages/dutch/` — base forms (`lemma.ts`), twin of `services/ingest/boekenwurm_ingest/lemma.py`; both must pass
   `data/nl/lemma-cases.json`. `data/nl/irregular-verbs.json` is shared data.
-- `packages/ai/` — model-agnostic page reading, the only thing Claude does (owner's admin account, her own key):
-  `photo.ts` (a page photo → paragraphs), `structure.ts` (Google's text → the printed paragraphs, never changing a
-  letter), `json.ts`; prompts, defensive parsing, validation. The network call lives in the app
-  (`apps/web/src/lib/claude.ts`, `lib/pagereader.ts`). Grading, level matching, word explanations and cover reading
-  were removed on 2026-11-27: don't bring them back unless the owner asks.
+- `packages/ai/` — model-agnostic Claude work, for readers with Claude access (the owner's admin account and her own
+  key, for now): `photo.ts` (a page photo → paragraphs), `structure.ts` (Google's text → the printed paragraphs, never
+  changing a letter), `words.ts` (a word explained in its sentence), `json.ts`; prompts, defensive parsing,
+  validation. The network call lives in the app (`apps/web/src/lib/claude.ts`; who may use it: `lib/pagereader.ts`,
+  `lib/lookuporder.ts`). Grading, level matching and cover reading were removed on 2026-11-27: don't bring them back
+  unless the owner asks.
 - `packages/books/` — getting books in: `stitch.ts` (pages → paragraphs across page breaks, progress through a
   printed book), `pdf.ts` (PDF text → paragraphs, scanned-PDF detection; pdf.js passed in), `ocr.ts` (free on-device page reading:
   Tesseract lines → paragraphs, words to check).
@@ -79,7 +80,7 @@ owner asks, and update the design doc and the tests together.
 ```bash
 cd packages/engine && npm test && npx tsc --noEmit -p .        # engine (Node 22.18+ runs .ts directly)
 cd packages/dutch && npm test                                  # base forms (shared cases)
-cd packages/ai && npm test                                     # page photos, page structure
+cd packages/ai && npm test                                     # page photos, page structure, words in context
 cd packages/books && npm test                                  # stitching, progress, PDF (real-PDF tests need pdf-lib + pdfjs-dist)
 supabase/tests/run.sh                                          # schema + row-level security on local Postgres
 node --test supabase/functions/*/handler.test.ts               # Edge Functions (translate, read-page)
@@ -101,8 +102,8 @@ The owner's material, when a session has it: books in `~/Documents/Books/Dutch/`
 - Every rule change comes with a test that states the rule in numbers (see `test/checkpoint.test.ts`).
 - Keep the engine pure: no I/O, no clocks (pass `now`), no randomness.
 - Never send the owner's books or page photos to a model from a session; tests use invented text and mocked replies.
-- Never add a Boekenwurm-owned AI key or a server that calls a model: Claude runs only on the owner's own key, for
-  page reading on the admin account. The
+- Never add a Boekenwurm-owned AI key or a server that calls a model: Claude runs only on the owner's own key, on the
+  admin account (pages, words in their sentence), until the owner decides on a paid tier. The
   owner-paid Google services are decided by the owner: Cloud Translation for single tapped words (2026-11-11; never
   send more than the tapped word) and Cloud Vision for page photos of access-code holders only (2026-11-12). Keep the
   Google key in the Edge Functions only (never in the app), restricted to those two APIs, and every use counted

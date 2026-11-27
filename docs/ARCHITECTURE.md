@@ -8,8 +8,8 @@ Two principles:
 - **A web app, not a store app.** Boekenwurm runs in the browser on any phone, tablet or computer, and is designed to
   look and feel like an installed app. Readers add it to their home screen (iOS: Share → Add to Home Screen; Android:
   the browser's install prompt). No App Store, no Google Play, no Apple developer account.
-- **No AI on Boekenwurm's budget.** There is no Boekenwurm key and no server that calls a model. Claude is used only to
-  read page structure, on the owner's account with her own key, while it's tested (below); readers never need a key.
+- **No AI on Boekenwurm's budget.** There is no Boekenwurm key and no server that calls a model. Claude is used only on
+  the owner's account with her own key, while it's tested: page structure and words in their sentence (below).
 
 The playtest that came before is kept on the branch `playtest-v1` (also deployed from there if needed) as a reference
 for every behaviour the app must keep.
@@ -60,8 +60,9 @@ leaves one clear place to add a server later (a Supabase Edge Function) if a fea
 ## Who pays for AI
 
 Boekenwurm never spends its owner's money on AI, and readers need no AI key. Claude did more for readers with their
-own key (grading books, Match my level, words in their sentence, reading covers); that was removed on 2026-11-27
-(DESIGN.md, Decided). What is left is page reading, on the admin account only, with the owner's own key from the
+own key (grading books, Match my level, reading covers); that was removed on 2026-11-27
+(DESIGN.md, Decided). What is left, on the admin account only: words explained in their sentence (and, by choice, Claude before Google
+Translate for words the dictionary doesn't know; `lib/lookuporder.ts`), and page reading, with the owner's own key from the
 Claude Console (console.anthropic.com), stored on her device (not synced) and sent only to Anthropic:
 
 | Who reads a page (`lib/pagereader.ts`) | What happens |

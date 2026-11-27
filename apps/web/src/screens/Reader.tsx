@@ -1,19 +1,25 @@
 /**
  * The reader, ported from the playtest (branch playtest-v1): tap-to-reveal, strikes, streaks, streak tokens,
- * the level-up offer and badges, and the end-of-session study list. The text is always the book's own: Claude no
- * longer rewrites paragraphs or explains words (removed 2026-11-27, DESIGN.md).
+ * the level-up offer and badges, and the end-of-session study list. The text is always the book's own (Claude no
+ * longer rewrites paragraphs: DESIGN.md, 2026-11-27). With Claude access (the owner's admin account and her own key
+ * for now), a tapped word is also explained in its sentence, and Claude can look up meanings before Google.
  */
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type ReactNode, type RefObject } from "react";
 import * as E from "@boekenwurm/engine";
+import * as AI from "@boekenwurm/ai";
 import { pagesFinished } from "@boekenwurm/books";
 import { bookById, getState, loadText, recordFinished, saveBook, saveMeaning, updateProfile, useStore } from "../lib/store.ts";
 import { fetchRemoteText } from "../lib/sync.ts";
-import { nameTest, sentenceAround, type Token } from "../lib/text.ts";
+import { hash, nameTest, sentenceAround, type Token } from "../lib/text.ts";
+import { claude, AiError } from "../lib/claude.ts";
+import { db } from "../lib/db.ts";
+import { claudeAllowed } from "../lib/pagereader.ts";
+import { explainsWords, lookupOrder } from "../lib/lookuporder.ts";
 import { compoundMeaning, lookup } from "../lib/words.ts";
 import { reportTranslation, translateWord, type TranslateResult } from "../lib/translate.ts";
 import { bookFinished, checkAchievements, pagesRead as pagesReadMilestone, paragraphRead, rankNow, streakBonus } from "../lib/play.ts";
 import { DAILY_TRANSLATIONS } from "../lib/usage.ts";
-import { usePhotoPages } from "../lib/features.ts";
+import { ADMIN, usePhotoPages } from "../lib/features.ts";
 import { FONTS, TEXT_SIZES, fontOf, sizeOf } from "../lib/fonts.ts";
 import { canPrompt, isStandalone, promptInstall } from "../lib/install.ts";
 import { close, open, setTab } from "../nav.ts";
@@ -21,6 +27,8 @@ import { SECTION_SIZE } from "../lib/pages.ts";
 import type { Book, BookText, Meaning, Paragraph } from "../lib/types.ts";
 import { Icon, Sheet, toast } from "../ui.tsx";
 import { t as tt, useT } from "../lib/i18n.ts";
+
+type Explained = { status: "pending" } | { status: "done"; data: AI.Explanation } | { status: "error"; error: string };
 
 interface RS {
   book: Book | null;
@@ -35,6 +43,9 @@ interface RS {
   summary: { kind: "complete" | "ended" | "lookup"; streakLength: number; list: E.StudyItem[]; paragraphs: number } | null;
   /** Words being looked up (no dictionary meaning yet), or found to have none: base form -> state. */
   lookups: Map<string, "pending" | "none" | "offline" | "limit" | "signin">;
+  /** Words explained in their sentence by Claude (Claude access only), by paragraph and token. */
+  explained: Map<string, Explained>;
+  explaining: Map<string, Promise<AI.Explanation | null>>;
   modal: { kind: "offer" } | { kind: "badge"; badge: E.Badge } | { kind: "goto" } | { kind: "font" } | null;
   /**
    * Looking at a paragraph without penalty: one before the current one ("Previous"), or the one just finished, from
@@ -63,7 +74,7 @@ export function Reader({ bookId }: { bookId: string }) {
   const wordbook = useStore((s) => s.wordbook);
   const r = useRef<RS>({
     book: bookById(bookId), text: null, loadError: null, isName: () => false, pos: 0, session: null, startedAt: Date.now(),
-    sel: null, sentences: {}, summary: null, lookups: new Map(), modal: null, look: null, lastRead: null, xp: 0, lookupMode: false,
+    sel: null, sentences: {}, summary: null, lookups: new Map(), explained: new Map(), explaining: new Map(), modal: null, look: null, lastRead: null, xp: 0, lookupMode: false,
     clock: E.startClock(Date.now()),
   }).current;
 
@@ -174,9 +185,12 @@ export function Reader({ bookId }: { bookId: string }) {
       const d = look(tok.t);
       // Looking back: the meaning is shown, nothing counts.
       if (r.look) {
-        if (!d.meaning) void findMeaning(d.lemma, tok.t, { free: true });
-      } else if (d.meaning) countTap(d.lemma, tok.t);
-      else void findMeaning(d.lemma, tok.t);
+        if (d.meaning) void explainIfOn(i);
+        else void findMeaning(i, d.lemma, tok.t, { free: true });
+      } else if (d.meaning) {
+        countTap(d.lemma, tok.t);
+        void explainIfOn(i);
+      } else void findMeaning(i, d.lemma, tok.t);
     }
     bump();
   }
@@ -217,7 +231,11 @@ export function Reader({ bookId }: { bookId: string }) {
     if (E.status(r.session).used > before) r.sentences[lemma] ??= sentenceAround(para().text, surface);
   }
 
-  async function findMeaning(lemma: string, surface: string, opts: { free?: boolean } = {}) {
+  /**
+   * A word the dictionary doesn't know: looked for in order (lib/lookuporder.ts). Everyone: Google Translate, then
+   * compound parts. With Claude access, Claude last, or first if the reader chose it.
+   */
+  async function findMeaning(i: number, lemma: string, surface: string, opts: { free?: boolean } = {}) {
     const state = r.lookups.get(lemma);
     if (state === "pending" || state === "none") return; // "offline" tries again
     r.lookups.set(lemma, "pending");
@@ -225,18 +243,27 @@ export function Reader({ bookId }: { bookId: string }) {
     const where = r.session?.current?.paragraphId;
     const word = surface.toLowerCase();
     let meaning: Meaning | null = null;
-    // Saved meanings (this reader's, from any device) were already checked by look(); Google is next.
-    const t = await translateWord(surface).catch((): TranslateResult => ({ ok: false, reason: "offline" }));
-    if (t.ok) meaning = { en: t.text, nl: null, from: "translation", word, ...(t.shared ? { shared: true } : {}) };
-    meaning ??= compoundMeaning(surface);
+    // Saved meanings (this reader's, from any device) were already checked by look().
+    let t: TranslateResult | null = null;
+    for (const step of lookupOrder(getState().profile.settings.meaningsFirst, hasClaude())) {
+      if (meaning) break;
+      if (step === "translate") {
+        t = await translateWord(surface).catch((): TranslateResult => ({ ok: false, reason: "offline" }));
+        if (t.ok) meaning = { en: t.text, nl: null, from: "translation", word, ...(t.shared ? { shared: true } : {}) };
+      } else if (step === "compound") meaning = compoundMeaning(surface);
+      else {
+        const x = await explain(i);
+        if (x && (x.meaningEn || x.meaningNl)) meaning = { en: x.meaningEn || null, nl: x.meaningNl || null, from: "claude", word };
+      }
+    }
     if (meaning) {
       r.lookups.delete(lemma);
       // Saved for this reader (device and account), so the word is never looked up again.
       await saveMeaning(lemma, meaning);
       // Count it only if the reader is still on the paragraph they tapped in (never when looking back).
       if (!opts.free && !r.look && r.session?.current?.paragraphId === where) countTap(lemma, surface);
-    } else if (!t.ok && (t.reason === "limit" || t.reason === "signin")) r.lookups.set(lemma, t.reason);
-    else r.lookups.set(lemma, !t.ok && t.reason === "offline" && !navigator.onLine ? "offline" : "none");
+    } else if (t && !t.ok && (t.reason === "limit" || t.reason === "signin")) r.lookups.set(lemma, t.reason);
+    else r.lookups.set(lemma, t && !t.ok && t.reason === "offline" && !navigator.onLine ? "offline" : "none");
     bump();
   }
 
@@ -365,6 +392,52 @@ export function Reader({ bookId }: { bookId: string }) {
     const withCurrent = s.current ? { ...s, reveals: [...s.reveals, ...s.current.reveals], current: null } : s;
     await recordFinished({ session: withCurrent, book: r.book, startedAt: r.startedAt, endedBy: "left", sentences: r.sentences, lookupMode: r.lookupMode, ...sessionExtras() });
     void checkAchievements();
+  }
+
+  // ---------------------------------------------------------------- Claude: a word in its sentence
+  /** Claude access: the owner's admin account with her own key on this device (lib/pagereader.ts). */
+  function hasClaude() {
+    return claudeAllowed({ admin: getState().features.includes(ADMIN), hasKey: getState().hasKey, google: false });
+  }
+
+  /** A tapped word with a meaning is explained in its sentence too, when the reader has Claude and the setting is on. */
+  function explainIfOn(i: number) {
+    return explainsWords(getState().profile.settings.explainWords, hasClaude()) ? explain(i) : Promise.resolve(null);
+  }
+
+  /** Only the word and its sentence are sent. Explanations are cached on this device, by sentence, word, level and model. */
+  function explain(i: number): Promise<AI.Explanation | null> {
+    const tok = para().tokens[i];
+    const k = `${at()}|${i}`;
+    if (!hasClaude() || tok.k !== "word") return Promise.resolve(null);
+    const have = r.explaining.get(k);
+    if (have) return have;
+    const sentence = sentenceAround(para().text, tok.t);
+    const level = getState().profile.progress.level;
+    const model = getState().profile.settings.models.words;
+    const cacheKey = `x|${hash(sentence)}|${tok.t.toLowerCase()}|${level}|${model}`;
+    const lemma = look(tok.t).lemma;
+    r.explained.set(k, { status: "pending" });
+    const job = (async () => {
+      const cached = await db.get<AI.Explanation>("cache", cacheKey);
+      if (cached) return cached;
+      const data = AI.parseExplanation(await claude(AI.explainPrompt(tok.t, sentence, level as AI.Cefr), model), tok.t);
+      await db.put("cache", data, cacheKey);
+      return data;
+    })()
+      .then((data) => {
+        r.explained.set(k, { status: "done", data });
+        // The meaning in this sentence becomes the back of the word's flashcard.
+        void saveMeaning(lemma, { en: data.meaningEn || null, nl: data.meaningNl || null, from: "claude" });
+        return data;
+      })
+      .catch((e) => {
+        r.explained.set(k, { status: "error", error: e instanceof AiError ? e.message : "Couldn't explain this word." });
+        return null;
+      })
+      .finally(bump);
+    r.explaining.set(k, job);
+    return job;
   }
 
   // ---------------------------------------------------------------- keys and swipes
@@ -660,6 +733,7 @@ export function Reader({ bookId }: { bookId: string }) {
     const lifetime = wordbook[d.lemma]?.reveals ?? 0;
     const why = lang === "nl" ? tr(onStreak ? "reader.dutchStreak" : "reader.dutchB1") : "";
     const lookup = r.lookups.get(d.lemma);
+    const x = r.explained.get(`${at()}|${r.sel}`);
     return (
       <>
         <div className="head">
@@ -668,7 +742,7 @@ export function Reader({ bookId }: { bookId: string }) {
           {lifetime > 0 && <span className="lemma">{tr("reader.revealedBefore", { n: lifetime })}</span>}
           {canUndo && <button className="btn small ghost undo" type="button" onClick={undo}>{tr("reader.undo")}</button>}
         </div>
-        {m ? (
+        {m && !(m.from === "claude" && x?.status === "done") ? (
           lang === "nl" && m.nl ? <div className="meaning nl" lang="nl" dir="ltr">{m.nl}</div> : m.en ? (
             <>
               <div className="meaning" lang="en" dir="ltr">{m.en}</div>
@@ -694,13 +768,25 @@ export function Reader({ bookId }: { bookId: string }) {
             onSave={(text) => void typedMeaning(d.lemma, tok.t, text)}
             onSignIn={() => setTab("me", "account")}
           />
-        ) : lookup === "none" ? (
+        ) : lookup === "none" && x?.status !== "done" ? (
           <>
             <span className="note">{tr("reader.noMeaning")}</span>
             <TypeMeaning word={tok.t} onSave={(text) => void typedMeaning(d.lemma, tok.t, text)} />
           </>
         ) : null}
         {why && <span className="note">{why}</span>}
+        {x?.status === "pending" && <span className="note">{tr("reader.checkingSentence")}</span>}
+        {x?.status === "error" && <span className="note">{x.error}</span>}
+        {x?.status === "done" && (
+          <div className="ctx">
+            <span className="label">{tr("reader.inSentence")}</span>
+            <div className={`meaning ${lang === "nl" && x.data.meaningNl ? "nl" : ""}`}>
+              {x.data.lemma && <b lang="nl">{x.data.lemma}: </b>}
+              {lang === "nl" && x.data.meaningNl ? <span lang="nl">{x.data.meaningNl}</span> : x.data.meaningEn || x.data.meaningNl}
+            </div>
+            {x.data.note && <span className="note">{x.data.note}</span>}
+          </div>
+        )}
       </>
     );
   }

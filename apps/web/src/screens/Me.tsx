@@ -659,14 +659,18 @@ function AccessCodeSection() {
 // ---------------------------------------------------------------- Claude
 
 /**
- * Claude reads page photos for the owner's admin account only, with her own key (lib/pagereader.ts). It does nothing
- * else since 2026-11-27 (DESIGN.md). Anyone else who saved a key earlier is told it is no longer used, and can remove it.
+ * Claude access: the owner's admin account only for now, with her own key (lib/pagereader.ts). Claude explains tapped
+ * words in their sentence, can look up meanings before Google (lib/lookuporder.ts), and can read pages. Anyone else who
+ * saved a key earlier is told it isn't used, and can remove it.
  */
 function ClaudeSection() {
   const hasKey = useStore((s) => s.hasKey);
   const admin = useStore((s) => s.features.includes(ADMIN));
   const google = useStore((s) => s.features.includes(GOOGLE_PAGES));
-  const model = useStore((s) => s.profile.settings.models.vision);
+  const models = useStore((s) => s.profile.settings.models);
+  const model = models.vision;
+  const explainWords = useStore((s) => s.profile.settings.explainWords !== false);
+  const claudeFirst = useStore((s) => s.profile.settings.meaningsFirst === "claude");
   const choice = useStore((s) => s.profile.settings.pageReader ?? "google");
   const [key, setKey] = useState("");
   const [testing, setTesting] = useState(false);
@@ -682,11 +686,11 @@ function ClaudeSection() {
   const effective = pageReaderFor(choice, { admin, hasKey, google });
   return (
     <section className="panel" id="claude">
-      <h2>Claude: reading pages</h2>
+      <h2>Claude</h2>
       <p>
-        For your account only, while it's being tested: Claude can help Google read photographed and scanned pages, with
-        your own Claude API key. The key stays on this device (never synced) and is sent only to Anthropic. Claude is used
-        for nothing else.
+        For your account only, while it's being tested: with your own Claude API key, Claude explains words in their
+        sentence, can look up words before Google, and can help read photographed and scanned pages. The key stays on
+        this device (never synced) and is sent only to Anthropic, with the word and its sentence, or the page photo.
       </p>
       <form className="row" onSubmit={(e) => (e.preventDefault(), setClaudeKey(key.trim()), setKey(""), toast(key.trim() ? "Key saved on this device." : "Key removed."))}>
         <input
@@ -724,6 +728,23 @@ function ClaudeSection() {
         </div>
       )}
       <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }} disabled={!hasKey}>
+        <legend className="label">Words</legend>
+        <label style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10, alignItems: "start" }}>
+          <input type="checkbox" checked={explainWords} onChange={(e) => setSetting({ explainWords: e.target.checked })} style={{ marginTop: 4 }} />
+          <span><b>Explain tapped words in their sentence</b><br /><span className="small muted">The base form as used here, the meaning in this sentence, a simple Dutch explanation and a note for idioms. One request per word tapped (cached after).</span></span>
+        </label>
+        <label style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10, alignItems: "start" }}>
+          <input type="checkbox" checked={claudeFirst} onChange={(e) => setSetting({ meaningsFirst: e.target.checked ? "claude" : "google" })} style={{ marginTop: 4 }} />
+          <span><b>Ask Claude before Google Translate</b><br /><span className="small muted">For words the dictionary doesn't know. Costs more on your key, but Google's {DAILY_TRANSLATIONS} a day are only used when Claude can't answer.</span></span>
+        </label>
+        <label className="field">
+          <span>Claude model for words</span>
+          <select value={models.words} onChange={(e) => setSetting({ models: { ...models, words: e.target.value } })}>
+            {MODELS.map(([id, name, note]) => <option key={id} value={id}>{name}: {note}</option>)}
+          </select>
+        </label>
+      </fieldset>
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }} disabled={!hasKey}>
         <legend className="label">Who reads pages</legend>
         {(
           [
@@ -738,11 +759,11 @@ function ClaudeSection() {
           </label>
         ))}
       </fieldset>
-      {!hasKey && <p className="small">Save your key to choose Claude. Until then Google reads every page.</p>}
+      {!hasKey && <p className="small">Save your key to use Claude. Until then Google looks up words and reads every page.</p>}
       {hasKey && choice === "google+claude" && effective !== choice && <p className="small">Google + Claude needs Google page reading (an access code), so Google alone reads pages for now.</p>}
       <label className="field">
         <span>Claude model for pages</span>
-        <select value={model} onChange={(e) => setSetting({ models: { vision: e.target.value } })}>
+        <select value={model} onChange={(e) => setSetting({ models: { ...models, vision: e.target.value } })}>
           {MODELS.map(([id, name, note]) => <option key={id} value={id}>{name}: {note}</option>)}
         </select>
       </label>

@@ -121,18 +121,20 @@ export interface WordListInfo {
 const infoOf = (l: WordList): WordListInfo => ({ id: l.id ?? "textbook", name: l.name, source: l.source ?? "textbook", added: l.added ?? 0, size: Object.keys(l.entries).length });
 
 /**
- * Settings saved by an older version, brought up to date: the Claude models for grading, matching and words, and the
- * "read on this device even with a key" switch, are gone with those features (2026-11-27).
+ * Settings saved by an older version, brought up to date: the Claude model for grading and matching, and the "read on
+ * this device even with a key" switch, are gone with those features (2026-11-27).
  */
 export function cleanSettings(saved: Partial<Settings> | undefined): Settings {
   const { preferFreeReading: _free, ...rest } = (saved ?? {}) as Partial<Settings> & { preferFreeReading?: boolean };
-  return { ...DEFAULT_SETTINGS, ...rest, models: { vision: saved?.models?.vision ?? DEFAULT_SETTINGS.models.vision } };
+  const models = { words: saved?.models?.words ?? DEFAULT_SETTINGS.models.words, vision: saved?.models?.vision ?? DEFAULT_SETTINGS.models.vision };
+  return { ...DEFAULT_SETTINGS, ...rest, models };
 }
 
 export async function init(): Promise<void> {
-  // Replies kept from Claude features that were removed (grades, matched paragraphs, word explanations): nothing reads
-  // them any more, so they leave the device (2026-11-27).
-  void db.clear("cache");
+  // Replies kept from Claude features that were removed (grades, matched paragraphs): nothing reads them any more, so
+  // they leave the device (2026-11-27). Words explained in their sentence ("x|") stay cached.
+  void db.delPrefix("cache", "g|");
+  void db.delPrefix("cache", "m|");
   const [profile, stored, wordbook, meanings, examples, cards, oldList, savedLists] = await Promise.all([
     db.get<Profile>("kv", "profile"),
     db.all<Book>("books"),
@@ -316,12 +318,12 @@ export async function recordToken(s: Session): Promise<boolean> {
 
 // ---------------------------------------------------------------- words and cards
 
-/** Meanings the reader's account keeps (word_meanings): found by Google, given by Claude before 2026-11-27, or typed by the reader. */
+/** Meanings the reader's account keeps (word_meanings): found by Google or Claude, or typed by the reader. */
 export const SAVED_SOURCES: ReadonlyArray<Meaning["from"]> = ["translation", "claude", "manual"];
 
 export async function saveMeaning(lemma: string, m: Meaning, opts: { sync?: boolean } = {}): Promise<void> {
   const have = state.meanings[lemma];
-  // A meaning the reader typed is theirs; one Claude gave earlier (in a sentence, before 2026-11-27) beats a bare translation.
+  // A meaning the reader typed is theirs; Claude's (in a sentence) beats a bare translation.
   if (have?.from === "manual" && m.from !== "manual") return;
   if (have?.from === "claude" && m.from !== "claude" && m.from !== "manual") return;
   const meanings = { ...state.meanings, [lemma]: m };

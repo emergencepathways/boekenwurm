@@ -1,5 +1,6 @@
 import type { CefrLevel, Preset, Progress, ReviewCard, WordBook } from "@boekenwurm/engine";
 import type { PageReaderChoice } from "./pagereader.ts";
+import type { MeaningSource } from "./lookuporder.ts";
 import type { Token, VerdictKind } from "./text.ts";
 
 /** "sample" is in the database enum from the playtest era; the app no longer creates it. */
@@ -62,8 +63,12 @@ export interface BookText {
 export interface Settings {
   preset: Preset;
   defPref: "en" | "nl";
-  /** The Claude model that reads pages (the owner's admin account only, lib/pagereader.ts). */
-  models: { vision: string };
+  /** Claude models (Claude access only: the owner's admin account for now): words in their sentence, and pages. */
+  models: { words: string; vision: string };
+  /** Claude access: explain every tapped word in its sentence (on unless turned off; lib/lookuporder.ts). */
+  explainWords?: boolean;
+  /** Claude access: where a word the dictionary doesn't know is looked up first (Google by default). */
+  meaningsFirst?: MeaningSource;
   /** Who reads photographed pages: Google by default; Claude only for the admin account with a key (lib/pagereader.ts). */
   pageReader?: PageReaderChoice;
   /** Colour-coded text: words coloured by how often they were revealed in the last 14 days. Off by default. */
@@ -87,7 +92,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   preset: "standard",
   defPref: "en",
-  models: { vision: "claude-sonnet-5-5" },
+  models: { words: "claude-sonnet-5-5", vision: "claude-sonnet-5-5" },
 };
 
 export interface Profile {
@@ -114,7 +119,7 @@ export interface WordDelta {
 
 /**
  * A meaning shown on a tapped word or a flashcard: from the reader's word list, the open dictionary, Google Translate,
- * a compound, or the reader. "claude" marks meanings Claude gave before 2026-11-27; they are kept and shown like the rest.
+ * a compound, Claude (in a sentence, for readers with Claude access), or the reader.
  */
 export interface Meaning {
   en: string | null;

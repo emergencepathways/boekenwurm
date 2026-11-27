@@ -76,9 +76,9 @@ const DICT = {
 };
 
 // ---------------------------------------------------------------- Claude, mocked
-// Claude only reads page structure now, on the owner's account (lib/pagereader.ts). Any other request is counted, so
-// the test can say Claude was never asked for anything else.
-const calls = { page: 0, structure: 0, other: 0, blocks: "" };
+// Claude is used only on the owner's account (lib/pagereader.ts): page structure and words in their sentence. Any
+// other request is counted, so the test can say Claude was never asked for anything else.
+const calls = { page: 0, structure: 0, explain: 0, other: 0, blocks: "", explained: [] };
 async function mockClaude(route) {
   const body = JSON.parse(route.request().postData() || "{}");
   const sys = body.system || "";
@@ -92,6 +92,11 @@ async function mockClaude(route) {
     // leaves the number out and joins the two, as printed; the words are Google's.
     const blocks = [...textPart.matchAll(/^\[\d+\] (.*)$/gm)].map((m) => m[1]).filter((b) => !/^\d+$/.test(b));
     text = JSON.stringify({ page_number: 5, paragraphs: [blocks.join(" ")], starts_mid_paragraph: false, ends_mid_paragraph: false, ends_with_hyphen: false });
+  } else if (/explain one Dutch word/i.test(sys)) {
+    calls.explain++;
+    const word = textPart.match(/Word: (.*)/)[1];
+    calls.explained.push(textPart);
+    text = JSON.stringify({ lemma: word.toLowerCase(), meaning_en: word === "strand" ? "beach" : `meaning of ${word}`, meaning_nl: `uitleg van ${word}`, note: "" });
   } else if (/read a photograph of one printed page/i.test(sys)) {
     calls.page++;
     text = JSON.stringify({ page_number: null, paragraphs: [], problems: [] });
@@ -99,7 +104,7 @@ async function mockClaude(route) {
   await route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
     body: JSON.stringify({ content: [{ type: "text", text }] }) });
 }
-const claudeCalls = () => calls.page + calls.structure + calls.other;
+const claudeCalls = () => calls.page + calls.structure + calls.explain + calls.other;
 
 // ---------------------------------------------------------------- the run
 const browser = await chromium.launch({ executablePath: existsSync("/usr/bin/google-chrome") ? "/usr/bin/google-chrome" : undefined });
@@ -1110,6 +1115,9 @@ await page.getByLabel("Claude API key").fill("sk-ant-test-key");
 await page.locator("#claude").getByRole("button", { name: "Save" }).click();
 await page.getByRole("radio", { name: /Google, with Claude for the paragraphs/ }).check();
 check(await page.getByRole("radio", { name: /Google, with Claude for the paragraphs/ }).isChecked(), "she chooses Google with Claude for the paragraphs");
+check(await page.getByRole("checkbox", { name: /Explain tapped words in their sentence/ }).isChecked(), "words in their sentence are on with Claude");
+await page.getByRole("checkbox", { name: /Ask Claude before Google Translate/ }).check();
+check(await page.getByRole("checkbox", { name: /Ask Claude before Google Translate/ }).isChecked(), "and she asks Claude before Google Translate");
 await shot("17b-owner-page-reader");
 
 step("Google page reading: the page number at the foot; a new book shares today's 20; nothing read on the device");
@@ -1167,6 +1175,14 @@ await page.locator(".para").first().waitFor();
 // arranging the page, it is left out and the page's two blocks are one paragraph, as printed.
 const firstPara = (await page.locator(".para").first().textContent()).trim();
 check(firstPara.startsWith("De bus naar het strand") && firstPara.includes("Hij had zijn emmer"), "Claude's layout is what's read: no chapter number, one printed paragraph");
+const translatedBefore = translated.length;
+await tapWord(page.locator(".para .w", { hasText: /^strand$/ }));
+await page.getByText("In this sentence").waitFor({ timeout: 10000 });
+check(await page.locator(".def .ctx", { hasText: "beach" }).isVisible(), "a word the dictionary doesn't know: Claude explains it in its sentence");
+check(translated.length === translatedBefore, "Claude first: Google Translate isn't asked, so none of the daily 200 is used");
+check(calls.explained.some((t) => t === "Word: strand\nSentence: De bus naar het strand vertrok om negen uur precies, en Sem zat helemaal achterin bij het raam."),
+  "only the word and its sentence were sent");
+await shot("19b-word-in-sentence");
 
 step("20 pages read: a milestone unlocks with 100 XP (books without page numbers: 250 words a page)");
 {

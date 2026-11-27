@@ -1,7 +1,7 @@
 {
   "name": "@boekenwurm/ai",
   "version": "0.1.0",
-  "description": "Model-agnostic page reading for Boekenwurm: a page photo into paragraphs, or Google's reading into the page's printed paragraphs.",
+  "description": "Model-agnostic Claude work for Boekenwurm: page photos into paragraphs, Google's reading into the printed paragraphs, a word explained in its sentence.",
   "type": "module",
   "private": true,
   "exports": { ".": "./src/index.ts" },
